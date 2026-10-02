@@ -134,6 +134,22 @@ export class Days {
     return events.sort((a, b) => a.at.localeCompare(b.at))
   }
 
+  // The tasks with a commit on one of their branches, deleted ones included, in the window git is read over (35 days) up to
+  // the day's end: the work on them began, whatever the day shown has. Without the day's own signals the Time Log's line
+  // that an hand wrote still gets its answer.
+  async #started(day: string, branches: Map<string, BranchInfo> | null): Promise<string[]> {
+    const since = dayStart(addDays(day, -LOG_WINDOW_DAYS)).toISOString()
+    const until = dayStart(addDays(day, 1)).toISOString()
+    const events = await (await this.deps.git()).events(since, until)
+    const tasks = new Set<string>()
+    for (const e of events) {
+      if (e.kind !== 'commit') continue
+      const taskId = branches?.get(placeKey(e.repo, e.branch))?.taskId ?? e.taskId
+      if (taskId) tasks.add(taskId)
+    }
+    return [...tasks].sort()
+  }
+
   async #input(day: string, s: TempsSettings): Promise<DayInput> {
     const git = await this.deps.git()
     const [branches, repos, events] = await Promise.all([git.branches(), git.repos(), this.#signals(day, day)])
@@ -342,6 +358,7 @@ export class Days {
         detail: e.detail,
       }
     })
+    const started = await this.#started(day, input?.branches ?? null).catch((): string[] => [])
     const fields = await this.#fields()
     // The labels offered for a line: the Time Log's; without them, those already used, the default and absence ones.
     const used = fields.labels.length ? [] : await this.#store.usedLabels()
@@ -366,6 +383,7 @@ export class Days {
           .at(-1) ?? null,
       lines,
       signals,
+      started,
       labels,
       defaultLabel: s.defaultLabel,
       extras: fields.extras,

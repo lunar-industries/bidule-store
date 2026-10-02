@@ -47,6 +47,17 @@ describe('Day', () => {
     expect((await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])).toEqual(before)
   })
 
+  test('a task whose branch had commits over the last weeks counts as begun, branch deleted or not', async () => {
+    const { git, days } = setup({ now: FRIDAY_EVENING })
+    git.branch('r', 'id-1-a', { taskId: 't1' })
+    git.event(at(MON, 9), 'commit', 'r', 'id-1-a', 'work')
+    git.event(at(MON, 10), 'checkout', 'r', 'other', 'no commit')
+    expect((await days.view(TUE)).started).toEqual(['t1'])
+    git.branchRows = []
+    for (const e of git.eventRows) e.taskId = null
+    expect((await days.view(TUE)).started).toEqual(['t1'])
+  })
+
   test('a branch unlinked from its task is no longer the task’s', async () => {
     const { git, days } = setup({ now: FRIDAY_EVENING })
     git.branch('r', 'id-1-a', { taskId: 't1' })

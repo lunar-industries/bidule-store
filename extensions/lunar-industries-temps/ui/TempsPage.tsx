@@ -319,8 +319,9 @@ export function TempsPage() {
         orphan,
         plain: !l.taskId && !orphan,
         kept: !l.taskId && Boolean(l.branch) && l.confirmed,
-        // Commits on a task the source still lists as to do: the status was probably forgotten.
-        start: toDo && evidence.some((s) => s.kind === 'commit') ? startColumn : null,
+        // Commits on a task the source still lists as to do (today's, or those of the last weeks): the status was probably
+        // forgotten.
+        start: toDo && (evidence.some((s) => s.kind === 'commit') || (l.taskId !== null && (view?.started.includes(l.taskId) ?? false))) ? startColumn : null,
         evidence: evidence.map((s) => ({ time: hm(s.minute), kind: s.kind, detail: s.detail })),
       }
     })

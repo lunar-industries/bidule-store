@@ -70,6 +70,9 @@ export type DayView = {
   sentAt: string | null
   lines: DayLine[]
   signals: DaySignal[]
+  // The tasks with a commit on one of their branches (deleted ones too) over the last weeks: work begun, whatever the day
+  // shown has.
+  started: string[]
   // The labels a line takes, and the one a line added by hand starts with.
   labels: string[]
   defaultLabel: string
