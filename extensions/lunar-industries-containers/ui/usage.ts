@@ -19,7 +19,7 @@ export function useUsage(on: boolean): Usage | null {
       if (asking) return
       asking = true
       try {
-        const u = (await api.usage({})) as Usage
+        const u: Usage = await api.usage({})
         keptUsage = u
         if (live) setUsage(u)
       } catch {

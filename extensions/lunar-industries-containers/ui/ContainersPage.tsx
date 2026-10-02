@@ -40,7 +40,7 @@ export function ContainersPage() {
     api
       .index({})
       .then((l) => {
-        keptList = l as ContainerList
+        keptList = l
         setList(keptList)
         setError(null)
       })

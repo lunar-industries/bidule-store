@@ -151,7 +151,7 @@ export class ContainerService {
     const file = join(await this.dataDir(), 'selection.json')
     if (!existsSync(file)) return []
     try {
-      const keys = JSON.parse(await readFile(file, 'utf8')) as unknown
+      const keys: unknown = JSON.parse(await readFile(file, 'utf8'))
       return Array.isArray(keys) ? keys.filter((k) => typeof k === 'string') : []
     } catch {
       return []

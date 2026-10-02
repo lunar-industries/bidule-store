@@ -50,7 +50,7 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
     api
       .show({ params: { engine, id } })
       .then((d) => {
-        setC(d as ContainerDetail)
+        setC(d)
         setError(null)
       })
       .catch((err) => setError(message(err)))

@@ -6,7 +6,10 @@ export const api = createTuyau({ baseUrl: location.origin, registry, headers: { 
   .ext.lunarIndustriesContainers
 
 // What to tell the user: the API's `error`, else what went wrong.
-export const message = (err: unknown) =>
-  err instanceof TuyauHTTPError
-    ? ((err.response as { error?: string })?.error ?? `Erreur ${err.status}`)
-    : (err as Error).message
+export const message = (err: unknown): string => {
+  if (err instanceof TuyauHTTPError) {
+    const body: { error?: string } | undefined = err.response
+    return body?.error ?? `Erreur ${err.status}`
+  }
+  return err instanceof Error ? err.message : String(err)
+}

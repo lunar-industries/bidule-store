@@ -95,7 +95,7 @@ export function ContainerMenu({
   useEffect(() => {
     if (!at) return
     menu.current?.querySelector('button')?.focus()
-    const away = (e: Event) => !menu.current?.contains(e.target as Node) && setAt(null)
+    const away = (e: Event) => e.target instanceof Node && !menu.current?.contains(e.target) && setAt(null)
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && setAt(null)
     addEventListener('mousedown', away)
     addEventListener('keydown', esc)
