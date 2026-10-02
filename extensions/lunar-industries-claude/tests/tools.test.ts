@@ -241,6 +241,22 @@ describe('Claude tools', () => {
     expect(forge.writes).toEqual(['ready team/app 3', 'merge team/app 3'])
   })
 
+  it('what a tool wrote on the forge is read again by git, so the marks of the other pages follow', async () => {
+    const forge = new FakeForge({ '7-ajout': { number: 3, state: 'open', draft: false, url: 'https://gl/mr/3', description: '' } })
+    const { git, call } = setup({ forge })
+    let reads = 0
+    git.reviewsRead = async () => void reads++
+    await call('merge_review', { repo: 'app', branch: '7-ajout' })
+    await call('play_job', { repo: 'app', branch: '7-ajout', job: 1 })
+    expect(reads).toBe(2)
+  })
+
+  it('a git provider that cannot read again (older) does not fail the tool', async () => {
+    const forge = new FakeForge({ '7-ajout': { number: 3, state: 'open', draft: false, url: 'https://gl/mr/3', description: '' } })
+    const { call } = setup({ forge })
+    expect((await call('merge_review', { repo: 'app', branch: '7-ajout' })).isError).toBe(false)
+  })
+
   it('an MCP client sees the tools and calls them as Claude would', async () => {
     const { tools, tasks, ctx } = setup()
     const server = workspaceServer(tools, ctx())

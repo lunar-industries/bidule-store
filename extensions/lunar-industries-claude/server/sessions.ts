@@ -554,11 +554,24 @@ export class SessionService {
     return id
   }
 
-  // The sessions' tasks, by id: those of the user's board (the list names them even when the board hides them).
-  async #taskNames(): Promise<Map<string, { ref: string | null; title: string }>> {
+  #namedElsewhere = new Map<string, { ref: string | null; title: string }>()
+
+  // The sessions' tasks, by id: those of the user's board, and for the others (done and no longer on the board, someone
+  // else's) the source's own search, once for each.
+  async #taskNames(wanted: (string | null)[]): Promise<Map<string, { ref: string | null; title: string }>> {
     const tasks = await this.deps.tasks().catch(() => null)
     const board = tasks ? await tasks.board().catch(() => null) : null
-    return new Map((board?.tasks ?? []).map((t) => [t.id, { ref: t.ref, title: t.title }]))
+    const names = new Map((board?.tasks ?? []).map((t) => [t.id, { ref: t.ref, title: t.title }]))
+    for (const id of new Set(wanted)) {
+      if (!id || names.has(id)) continue
+      let found = this.#namedElsewhere.get(id)
+      if (!found && tasks) {
+        const task = (await tasks.search(id).catch(() => [])).find((t) => t.id === id)
+        if (task) this.#namedElsewhere.set(id, (found = { ref: task.ref, title: task.title }))
+      }
+      if (found) names.set(id, found)
+    }
+    return names
   }
 
   // The app's sessions (running or saved), then those Claude Code saved for these repos (from the terminal or VS
@@ -567,7 +580,7 @@ export class SessionService {
     const { store } = this.deps
     const rows = await store.all()
     const archived = await store.archived()
-    const tasks = await this.#taskNames()
+    const tasks = await this.#taskNames(rows.map((r) => r.taskId))
     const taskOf = (id: string | null) => {
       if (!id) return null
       return tasks.get(id) ?? null

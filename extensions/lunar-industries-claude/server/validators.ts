@@ -19,7 +19,8 @@ export const startValidator = vine.create({
   mode: vine.enum(PERMISSION_MODES),
   model: vine.string().trim().minLength(1).nullable().optional(),
   effort: vine.enum(EFFORT_LEVELS).nullable().optional(),
-  resume: vine.string().trim().minLength(1).optional(),
+  // A session's id is Claude Code's own: a uuid, which also names its transcript's file.
+  resume: vine.string().trim().uuid().optional(),
   taskId: vine.string().trim().minLength(1).nullable().optional(),
   cwd: vine.string().trim().minLength(1).optional(),
   ...attachments,

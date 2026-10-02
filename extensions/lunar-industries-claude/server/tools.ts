@@ -196,6 +196,18 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
     })
   }
 
+  // What a tool changed on the forge or on origin, git reads again (and tells it: `git.reviewed`, `git.changed`), so that
+  // the Kanban's and Branches' marks (review, CI, pushed) do not stay as they were until the next read. A failed read
+  // does not undo the write.
+  const readAgain = async (branches = false) => {
+    try {
+      const git = await deps.git()
+      await (branches ? git.sync() : git.reviewsRead())
+    } catch {
+      // An older git provider has no reviewsRead, or the read failed: the next read of git tells it.
+    }
+  }
+
   const hostOf = (ctx: ToolContext) => lockHost(deps.env, ctx.root)
   const lockNames = async (repos: string[]) => (await Promise.all(repos.map(findRepo))).map((r) => lockName(r.path))
   // The session holds the repo's executable slot: only then may it touch the main checkout.
@@ -454,6 +466,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const task = known?.taskId ? await findTask(known.taskId).catch(() => null) : null
         const text = [description ?? '', reviewDescription(issueOf(templateOf(s), branch), task?.url ?? null)].filter(Boolean).join('\n\n')
         const review = await client.createReview({ source: branch, target: into, title: title ?? task?.title ?? branch, description: text, draft })
+        await readAgain()
         return { created: true, review }
       },
     }),
@@ -488,6 +501,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       detail: ({ repo, branch, job }) => `Lancer le job ${job} du pipeline de ${branch} (${repo})`,
       run: async ({ repo, job }) => {
         await (await forgeOf(await findRepo(repo))).playJob(job)
+        await readAgain()
         return { ok: true }
       },
     }),
@@ -549,6 +563,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
           if (changes) throw new ToolError(`Modifications non committées dans ${path} :\n${changes}`)
         }
         await out(r.path, ['push', '-u', 'origin', branch], 120_000)
+        await readAgain(true)
         return { pushed: branch, commit: await headOf(r.path, branch), committedMerge }
       },
     }),
@@ -567,6 +582,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         if (review.draft && !ready) throw new ToolError(`La MR ${review.url} est en brouillon : la sortir du brouillon avec ready: true`)
         if (review.draft) await client.markReady(review.number)
         await client.mergeReview(review.number)
+        await readAgain()
         return { merged: review.url }
       },
     }),
