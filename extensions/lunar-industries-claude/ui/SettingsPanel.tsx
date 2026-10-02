@@ -2,14 +2,27 @@ import { useEffect, useState } from 'react'
 import { react, saveSettingValues, useSettingValues } from '@bidule/sdk'
 import type { ClaudePlace, RepoOverrides, RepoSettings } from '../contract.ts'
 import { api, errorMessage } from './api.ts'
+import { ChipField } from './ChipField.tsx'
 import { Places } from './ClaudePage.tsx'
 import { useEnabled } from './state.ts'
 
 const REPOS = 'lunar-industries-claude.repos'
 
+// The values of the two settings drawn as chips (see bidule.json: `hidden`, since they are not written as text here).
+const SOURCES = [
+  { value: 'user', label: 'Les miens (~/.claude)' },
+  { value: 'project', label: 'Ceux du dépôt' },
+  { value: 'local', label: 'Ceux du dépôt propres à ce poste' },
+]
+const NOTIFICATIONS = [
+  { value: 'decision', label: 'Claude attend une décision' },
+  { value: 'turn', label: 'Claude a terminé' },
+  { value: 'error', label: 'Session Claude en erreur' },
+  { value: 'slot', label: 'Créneau exécutable pris' },
+]
+
 // A repo's own settings, as the panel asks them (empty: the module's, above).
 const FIELDS: { key: keyof RepoOverrides; title: string; placeholder?: string; hint?: string }[] = [
-  { key: 'reviewTarget', title: 'Branche cible des MR', placeholder: 'develop' },
   { key: 'stagingBranch', title: 'Branche de staging' },
   { key: 'productionBranch', title: 'Branche de production' },
   { key: 'stagingJob', title: 'Job de staging', hint: '{env} : l’environnement.' },
@@ -69,6 +82,22 @@ export function SettingsPanel() {
 
   return (
     <>
+      <div className="fields">
+        <ChipField
+          settingKey="lunar-industries-claude.settingSources"
+          label="Réglages chargés par une session"
+          choices={SOURCES}
+          fallback="user, project, local"
+          hint="Réglages, hooks, skills et CLAUDE.md, comme dans le terminal. Les skills de l’application sont toujours chargés."
+        />
+        <ChipField
+          settingKey="lunar-industries-claude.notify"
+          label="Me prévenir par une notification du système"
+          choices={NOTIFICATIONS}
+          fallback="decision, error, slot"
+          hint="Seulement quand la fenêtre n’est pas au premier plan."
+        />
+      </div>
       <section className="lc-settings-block" aria-labelledby="lc-settings-places">
         <div className="row">
           <h3 id="lc-settings-places" className="grow">

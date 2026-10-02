@@ -9,7 +9,9 @@ export type Settings = {
   defaultMode: string
   defaultModel: string
   defaultEffort: string
+  // The suite's (Branches module): the review target of every repo, and of each one in particular.
   reviewTarget: string
+  repoTargets: Record<string, string>
   branchNaming: string
   branchTemplate: string
   createIssue: boolean
@@ -35,15 +37,31 @@ export const list = (value: unknown) =>
     .map((v) => v.trim())
     .filter(Boolean)
 
+// What the suite's modules share is the Branches module's (Réglages › Lunar Industries - Branches): the integration
+// branches, the review target, the naming of the branches, the issue created at the start, the checkout. Without that
+// module, these defaults.
+const BRANCHES = 'lunar-industries-branches'
+const DEFAULT_INTEGRATION = 'main, master, develop, launchpad, factory, orbit'
+
 export async function readSettings(ctx: ServerContext): Promise<Settings> {
   const get = async (key: string) => ctx.settings.get(`${K}.${key}`)
   const text = async (key: string) => String((await get(key)) ?? '').trim()
+  const shared = async (key: string) => ctx.settings.get(`${BRANCHES}.${key}`)
+  const sharedText = async (key: string) => String((await shared(key)) ?? '').trim()
   let repos: Record<string, RepoOverrides> = {}
   try {
     const parsed: Record<string, RepoOverrides> | null = JSON.parse((await text('repos')) || '{}')
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) repos = parsed
   } catch {
     // Unreadable: no repo has settings of its own.
+  }
+  // Each repo's review target, as the Branches page keeps them.
+  let repoTargets: Record<string, string> = {}
+  try {
+    const parsed: Record<string, string> | null = JSON.parse((await sharedText('targets')) || '{}')
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) repoTargets = parsed
+  } catch {
+    // Unreadable: no repo has a target of its own.
   }
   return {
     enabled: (await get('enabled')) === true,
@@ -52,11 +70,12 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
     defaultMode: (await text('defaultMode')) || 'default',
     defaultModel: await text('defaultModel'),
     defaultEffort: await text('defaultEffort'),
-    reviewTarget: await text('reviewTarget'),
-    branchNaming: (await text('branchNaming')) || 'issue',
-    branchTemplate: (await text('branchTemplate')) || '{ref}-{slug}',
-    createIssue: (await get('createIssue')) === true,
-    integrationBranches: list(await get('integrationBranches')),
+    reviewTarget: await sharedText('reviewTarget'),
+    repoTargets,
+    branchNaming: (await sharedText('naming')) || 'issue',
+    branchTemplate: (await sharedText('template')) || '{ref}-{slug}',
+    createIssue: (await sharedText('createIssue')) === '1',
+    integrationBranches: list((await shared('hidden')) ?? DEFAULT_INTEGRATION),
     deploy: {
       stagingBranch: await text('stagingBranch'),
       productionBranch: await text('productionBranch'),
@@ -73,8 +92,8 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
 // What a repo overrides of the module's settings (empty: nothing).
 export const overridesOf = (s: Settings, repo: string): RepoOverrides => s.repos[repo] ?? {}
 
-// The branch a repo's reviews go to: its own, else the module's; null when nobody said.
-export const reviewTargetOf = (s: Settings, repo: string) => overridesOf(s, repo).reviewTarget?.trim() || s.reviewTarget || null
+// The branch a repo's reviews go to: the one chosen for it on the Branches page, else the suite's; null when nobody said.
+export const reviewTargetOf = (s: Settings, repo: string) => s.repoTargets[repo]?.trim() || s.reviewTarget || null
 
 // Taken from quack-board (domain/deploy.ts): how a repo is deployed, its own values else the module's; null: nobody
 // said (the skills ask).
