@@ -34,6 +34,30 @@ describe('Day', () => {
     expect(lines).toHaveLength(3)
   })
 
+  test('the commits of a branch git forgot (merged, then deleted) keep the task the branch had', async () => {
+    const { git, days } = setup({ now: FRIDAY_EVENING })
+    git.branch('r', 'id-1-a', { taskId: 't1' })
+    git.event(at(TUE, 9), 'commit', 'r', 'id-1-a', 'work')
+    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    const before = (await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])
+    expect(before).toEqual([['t1', null]])
+    // Git drops the branch, and with it its events' task (its join finds no branch).
+    git.branchRows = []
+    for (const e of git.eventRows) e.taskId = null
+    expect((await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])).toEqual(before)
+  })
+
+  test('a branch unlinked from its task is no longer the task’s', async () => {
+    const { git, days } = setup({ now: FRIDAY_EVENING })
+    git.branch('r', 'id-1-a', { taskId: 't1' })
+    git.event(at(TUE, 9), 'commit', 'r', 'id-1-a', 'work')
+    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    await days.proposal(TUE, settings)
+    git.branchRows[0].taskId = null
+    git.eventRows[0].taskId = null
+    expect((await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])).toEqual([[null, 'id-1-a']])
+  })
+
   test('the proposal reuses the task’s last label, else the default one', async () => {
     const { git, store, days } = setup({ now: FRIDAY_EVENING })
     git.branch('r', 'id-1-a', { taskId: 't1' })

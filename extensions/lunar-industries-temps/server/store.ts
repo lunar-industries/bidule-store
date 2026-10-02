@@ -48,9 +48,14 @@ export interface TempsStore {
   // Makes the mirror match what the Time Log has for a period: entries read are stored as they are, the period's
   // others hidden (archived, moved to another day).
   recordLog(entries: LogRow[], from: string, to: string): Promise<void>
+  // The task of each branch seen linked to one. Git forgets a branch deleted, and with it its events' task: the past
+  // commits of a merged branch would turn into « a branch without a task » (and a day not edited would change).
+  rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]): Promise<void>
+  rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]>
 }
 
 const DRAFTS = 'lunar_industries_temps_drafts'
+const BRANCH_TASKS = 'lunar_industries_temps_branch_tasks'
 const DAYS = 'lunar_industries_temps_days'
 const LOG = 'lunar_industries_temps_log'
 
@@ -194,5 +199,23 @@ export class DbStore implements TempsStore {
         )
         .update({ deleted_at: new Date().toISOString() })
     })
+  }
+
+  async rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]): Promise<void> {
+    const known = new Map((await this.rememberedBranches()).map((r) => [`${r.repo}\u0000${r.branch}`, r.taskId]))
+    const changes = live.filter((b) => (known.get(`${b.repo}\u0000${b.branch}`) ?? null) !== b.taskId)
+    if (!changes.length) return
+    await this.db.transaction(async (trx) => {
+      for (const { repo, branch, taskId } of changes) {
+        // A branch still there and no longer linked is not one of the task: what git says now wins.
+        if (taskId === null) await trx.from(BRANCH_TASKS).where({ repo, branch }).delete()
+        else await trx.table(BRANCH_TASKS).insert({ repo, branch, task_id: taskId }).onConflict(['repo', 'branch']).merge()
+      }
+    })
+  }
+
+  async rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]> {
+    const rows: Record<string, unknown>[] = await this.db.from(BRANCH_TASKS)
+    return rows.map((r) => ({ repo: String(r.repo), branch: String(r.branch), taskId: String(r.task_id) }))
   }
 }

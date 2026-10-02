@@ -12,6 +12,17 @@ export class MemoryStore implements TempsStore {
   log: (LogRow & { deleted: boolean })[] = []
   #id = 1
 
+  remembered = new Map<string, { repo: string; branch: string; taskId: string }>()
+  async rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]) {
+    for (const { repo, branch, taskId } of live) {
+      const key = `${repo}\u0000${branch}`
+      if (taskId === null) this.remembered.delete(key)
+      else this.remembered.set(key, { repo, branch, taskId })
+    }
+  }
+  async rememberedBranches() {
+    return [...this.remembered.values()]
+  }
   async drafts(day: string) {
     return this.draftRows.filter((r) => r.day === day).sort((a, b) => b.share - a.share || a.id - b.id)
   }

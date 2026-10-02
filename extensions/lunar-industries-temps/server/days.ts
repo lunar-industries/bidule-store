@@ -138,9 +138,14 @@ export class Days {
     const git = await this.deps.git()
     const [branches, repos, events] = await Promise.all([git.branches(), git.repos(), this.#signals(day, day)])
     const labels = new Map(repos.map((r) => [r.path, r.label]))
+    // The branches git has, and, for the ones it forgot (merged, then deleted), the task they had when it knew them.
+    await this.#store.rememberBranches(branches.map((b) => ({ repo: b.repo, branch: b.name, taskId: b.taskId })))
+    const known = new Map<string, BranchInfo>()
+    for (const r of await this.#store.rememberedBranches()) known.set(placeKey(r.repo, r.branch), { taskId: r.taskId, isDefault: false })
+    for (const b of branches) known.set(placeKey(b.repo, b.name), { taskId: b.taskId, isDefault: b.isDefault })
     return {
       events,
-      branches: new Map<string, BranchInfo>(branches.map((b) => [placeKey(b.repo, b.name), { taskId: b.taskId, isDefault: b.isDefault }])),
+      branches: known,
       repoLabel: (repo) => labels.get(repo) ?? repo,
       integration: integrationOf(s.integrationBranches, s.deployBranches),
     }
@@ -182,20 +187,22 @@ export class Days {
     // mirror (the day would show as « to validate » while the Time Log has it).
     const going = this.#reading.get(key)
     if (going && !force) return going
-    const read = (async () => {
-      try {
-        const entries = await log.read(a, b)
-        await this.#store.recordLog(entries.map(logRowOf), a, b)
-        this.#readAt.set(key, Date.now())
-        this.#readProblem = null
-      } catch (err) {
-        this.#readProblem = `Time Log non relu : ${err instanceof Error ? err.message : String(err)}`
-      } finally {
-        if (this.#reading.get(key) === read) this.#reading.delete(key)
-      }
-    })()
+    const read = this.#readInto(log, a, b, key).finally(() => {
+      if (this.#reading.get(key) === read) this.#reading.delete(key)
+    })
     this.#reading.set(key, read)
     return read
+  }
+
+  async #readInto(log: RichLog, from: string, to: string, key: string): Promise<void> {
+    try {
+      const entries = await log.read(from, to)
+      await this.#store.recordLog(entries.map(logRowOf), from, to)
+      this.#readAt.set(key, Date.now())
+      this.#readProblem = null
+    } catch (err) {
+      this.#readProblem = `Time Log non relu : ${err instanceof Error ? err.message : String(err)}`
+    }
   }
 
   // ---------- the proposal
