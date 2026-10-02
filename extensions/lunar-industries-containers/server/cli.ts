@@ -1,7 +1,7 @@
 // Taken from quack-board (apps/api/app/connectors/containers/container_cli.ts, Simon's latest), on the base of
 // Bidule's official containers extension (its Flatpak handling).
+import type { Environment } from '@bidule/api/extensions'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { homedir } from 'node:os'
 import type {
   Container,
   ContainerAction,
@@ -11,11 +11,6 @@ import type {
   ContainerState,
   UsageRow,
 } from '../contract.ts'
-
-// Inside the Flatpak sandbox, the engines live on the host. They run from the home folder: flatpak-spawn starts a
-// command in the current folder, and the API's (inside /app) does not exist on the host.
-const HOST = process.env['FLATPAK_ID'] ? ['flatpak-spawn', '--host'] : []
-const HOME = homedir()
 
 // A failed command, with what it printed before failing (inspect prints the containers it found).
 class CommandError extends Error {
@@ -27,20 +22,28 @@ class CommandError extends Error {
   }
 }
 
-// What a command prints on stdout, and on stderr too (a container's logs come out of both).
-function run(cli: string, args: string[], timeout = 15_000): Promise<{ stdout: string; stderr: string }> {
-  const [file, ...pre] = [...HOST, cli]
+// What a command prints on stdout, and on stderr too (a container's logs come out of both). The engines run where
+// the outside tools run (ctx.env): inside WSL on Windows, in the toolbox or on the Flatpak's host, or here; from the
+// home folder there. The environment builds the command, so that it never runs somewhere else.
+function run(
+  env: Environment,
+  cli: string,
+  args: string[],
+  timeout = 15_000
+): Promise<{ stdout: string; stderr: string }> {
+  const { file, args: argv, cwd } = env.command({ argv: [cli, ...args] })
   return new Promise((resolve, reject) => {
     execFile(
       file,
-      [...pre, ...args],
-      { timeout, maxBuffer: 64 * 1024 * 1024, cwd: HOME },
+      argv,
+      { timeout, maxBuffer: 64 * 1024 * 1024, cwd, windowsHide: true },
       (err, stdout, stderr) =>
         err ? reject(new CommandError(stderr.trim() || err.message, stdout)) : resolve({ stdout, stderr })
     )
   })
 }
-const exec = async (cli: string, args: string[], timeout?: number) => (await run(cli, args, timeout)).stdout
+const exec = async (env: Environment, cli: string, args: string[], timeout?: number) =>
+  (await run(env, cli, args, timeout)).stdout
 
 // What `docker inspect` and `podman inspect` both give (Podman follows Docker's format), as far as the page needs.
 type Bindings = Record<string, { HostIp?: string; HostPort?: string }[] | null> | null
@@ -185,7 +188,8 @@ export class ContainerCli {
 
   constructor(
     readonly cli: 'docker' | 'podman',
-    readonly name: string
+    readonly name: string,
+    protected env: Environment
   ) {}
 
   get id(): string {
@@ -196,7 +200,7 @@ export class ContainerCli {
   // already shown as Podman, so it counts as no Docker. Checked once a minute at most.
   version(): Promise<string | null> {
     if (this.#version && Date.now() - this.#version.at < 60_000) return this.#version.value
-    const value = exec(this.cli, ['--version'], 5_000).then(
+    const value = exec(this.env, this.cli, ['--version'], 5_000).then(
       (out) => (this.cli === 'docker' && /podman/i.test(out) ? null : out.trim()),
       () => null
     )
@@ -209,11 +213,11 @@ export class ContainerCli {
   }
 
   async list(): Promise<Container[]> {
-    const out = await exec(this.cli, ['ps', '-a', '-q', '--no-trunc'])
+    const out = await exec(this.env, this.cli, ['ps', '-a', '-q', '--no-trunc'])
     const ids = out.split(/\s+/).filter(Boolean)
     if (!ids.length) return []
     // A container removed between the two commands makes inspect fail, but the others are still in its output.
-    const json = await exec(this.cli, ['inspect', '--type', 'container', ...ids]).catch((err: unknown) => {
+    const json = await exec(this.env, this.cli, ['inspect', '--type', 'container', ...ids]).catch((err: unknown) => {
       if (err instanceof CommandError && err.stdout.trim()) return err.stdout
       throw err
     })
@@ -221,18 +225,18 @@ export class ContainerCli {
   }
 
   async detail(id: string): Promise<Omit<ContainerDetail, 'engine'>> {
-    return parseDetail(await exec(this.cli, ['inspect', '--type', 'container', id]))
+    return parseDetail(await exec(this.env, this.cli, ['inspect', '--type', 'container', id]))
   }
 
   async act(id: string, action: ContainerAction): Promise<void> {
     // A running container is stopped before it goes (`rm -f`); its volumes stay.
-    await exec(this.cli, action === 'remove' ? ['rm', '-f', id] : [action, id], 60_000)
+    await exec(this.env, this.cli, action === 'remove' ? ['rm', '-f', id] : [action, id], 60_000)
   }
 
   // The machine's cores and memory, which do not change while the engine runs: asked once.
   host(): Promise<{ cpus: number; memory: number }> {
     const format = this.cli === 'docker' ? '{{.NCPU}}|{{.MemTotal}}' : '{{.Host.CPUs}}|{{.Host.MemTotal}}'
-    this.#host ??= exec(this.cli, ['info', '--format', format], 15_000).then(
+    this.#host ??= exec(this.env, this.cli, ['info', '--format', format], 15_000).then(
       (out) => {
         const [cpus, memory] = out.trim().split('|')
         return { cpus: Number(cpus) || 0, memory: Number(memory) || 0 }
@@ -245,20 +249,20 @@ export class ContainerCli {
   async usage(): Promise<{ cpus: number; memory: number; containers: Omit<UsageRow, 'engine'>[] }> {
     const [host, out] = await Promise.all([
       this.host(),
-      exec(this.cli, ['stats', '--no-stream', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'], 30_000),
+      exec(this.env, this.cli, ['stats', '--no-stream', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'], 30_000),
     ])
     return { ...host, containers: parseStats(out) }
   }
 
   async files(id: string, path: string): Promise<ContainerFile[]> {
     // `ls` is given the path after `--`, so a folder named like an option is still a folder.
-    return parseListing(await exec(this.cli, ['exec', id, 'ls', '-1Ap', '--', path]))
+    return parseListing(await exec(this.env, this.cli, ['exec', id, 'ls', '-1Ap', '--', path]))
   }
 
   // The last `tail` lines, or those written after `since` (a line's own time: the page follows the logs so).
   async logs(id: string, options: { tail: number; since?: string }): Promise<string[]> {
     const from = options.since ? ['--since', options.since] : ['--tail', String(options.tail)]
-    const { stdout, stderr } = await run(this.cli, ['logs', '--timestamps', ...from, id])
+    const { stdout, stderr } = await run(this.env, this.cli, ['logs', '--timestamps', ...from, id])
     return mergeLogs(stdout, stderr)
   }
 
@@ -268,11 +272,10 @@ export class ContainerCli {
     let debounce: NodeJS.Timeout | undefined
     let retry: NodeJS.Timeout | undefined
     const start = () => {
-      const [file, ...pre] = [...HOST, this.cli]
-      child = spawn(file, [...pre, 'events', '--format', '{{json .}}', '--filter', 'type=container'], {
-        stdio: ['ignore', 'pipe', 'ignore'],
-        cwd: HOME,
+      const { file, args, cwd } = this.env.command({
+        argv: [this.cli, 'events', '--format', '{{json .}}', '--filter', 'type=container'],
       })
+      child = spawn(file, args, { stdio: ['ignore', 'pipe', 'ignore'], cwd, windowsHide: true })
       // One change often comes as several events (create, start, attach…): they count once.
       child.stdout?.on('data', () => {
         clearTimeout(debounce)
