@@ -16,7 +16,7 @@ export function issueOf(template: string, name: string): number | null {
     .split(/(\{issue\}|\{ref\}|\{slug\})/)
     .map((part) => PARTS[part] ?? escapeRegExp(part))
     .join('')
-  const found = new RegExp(`^${pattern}$`).exec(name)
+  const found = new RegExp(`^${pattern}$`, 'i').exec(name)
   return found?.[1] ? Number(found[1]) : null
 }
 

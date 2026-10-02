@@ -49,6 +49,21 @@ describe('on the forge', () => {
     expect(syncs()).toBe(1)
   })
 
+  test('a number in the name is no issue unless the forge has it: nothing is closed by mistake', async () => {
+    const forge = fakeForge({ issue: async () => null })
+    const { git } = fakeGit([branch({ name: '2024-cleanup' })], forge.client)
+    const { s } = service(git)
+    await s.review(app, '2024-cleanup', 'main')
+    expect(forge.reviews[0]?.description).toBe('')
+  })
+
+  test('the issue in a name is found whatever its case', async () => {
+    const forge = fakeForge()
+    const { git } = fakeGit([branch({ name: '42-Ecran' })], forge.client)
+    await service(git, { settings: { 'lunar-industries-branches.template': '{issue}-{slug}' } }).s.review(app, '42-Ecran', 'main')
+    expect(forge.reviews[0]?.description).toBe('Closes #42')
+  })
+
   test('without any target, the review is refused', async () => {
     const { git } = fakeGit(all(), fakeForge().client)
     await expect(service(git).s.review(app, 'tsk-7-paiement', null)).rejects.toThrow(/cible/)

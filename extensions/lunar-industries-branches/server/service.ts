@@ -168,10 +168,14 @@ export class BranchesService {
     if (!into) throw new BranchesError('Choisis la branche cible de la MR')
     const source = b.taskId ? await this.deps.tasks() : null
     const task = source && b.taskId ? ((await source.board()).tasks.find((t) => t.id === b.taskId) ?? null) : null
-    const description = reviewDescription(issueOf(await this.#template(), name), task?.url ?? null)
-    await this.#act(git, () =>
-      client.createReview({ source: name, target: into, title: task?.title ?? name, description, draft: true })
-    )
+    await this.#act(git, async () => {
+      // A number in the name is no proof of an issue (2024-cleanup): « Closes # » would close one the branch has nothing
+      // to do with, so it stays only when the forge has that issue.
+      const guess = issueOf(await this.#template(), name)
+      const issueNumber = guess !== null && (await client.issue(guess)) ? guess : null
+      const description = reviewDescription(issueNumber, task?.url ?? null)
+      await client.createReview({ source: name, target: into, title: task?.title ?? name, description, draft: true })
+    })
   }
 
   // Where the repo's reviews go by default; null to fall back on the settings'.
