@@ -83,6 +83,7 @@ const logRowOf = (e: LogEntry): LogRow => ({
 export class Days {
   // When each period was last read from the Time Log (`from|to`).
   #readAt = new Map<string, number>()
+  #reading = new Map<string, Promise<void>>()
   // Why the Time Log could not be read last time, if it could not.
   #readProblem: string | null = null
 
@@ -177,15 +178,24 @@ export class Days {
     const [a, b] = from >= start && to <= end ? [start, end] : [from, to]
     const key = `${a}|${b}`
     if (!force && Date.now() - (this.#readAt.get(key) ?? 0) < FRESH_MS) return
-    this.#readAt.set(key, Date.now())
-    try {
-      const entries = await log.read(a, b)
-      await this.#store.recordLog(entries.map(logRowOf), a, b)
-      this.#readProblem = null
-    } catch (err) {
-      this.#readAt.delete(key)
-      this.#readProblem = `Time Log non relu : ${err instanceof Error ? err.message : String(err)}`
-    }
+    // The page asks for a day, a week and the summary at once: they wait for the one read going on, not for an empty
+    // mirror (the day would show as « to validate » while the Time Log has it).
+    const going = this.#reading.get(key)
+    if (going && !force) return going
+    const read = (async () => {
+      try {
+        const entries = await log.read(a, b)
+        await this.#store.recordLog(entries.map(logRowOf), a, b)
+        this.#readAt.set(key, Date.now())
+        this.#readProblem = null
+      } catch (err) {
+        this.#readProblem = `Time Log non relu : ${err instanceof Error ? err.message : String(err)}`
+      } finally {
+        if (this.#reading.get(key) === read) this.#reading.delete(key)
+      }
+    })()
+    this.#reading.set(key, read)
+    return read
   }
 
   // ---------- the proposal

@@ -97,6 +97,28 @@ describe('Time log', () => {
     expect((await store.logged([DAY])).map((r) => [r.taskId, r.share])).toEqual([['t1', 20]])
   })
 
+  test('two readings asked together wait for the same one: nobody sees a mirror not yet filled', async () => {
+    class SlowTimeLog extends FakeTimeLog {
+      release: () => void = () => {}
+      #gate = new Promise<void>((resolve) => (this.release = resolve))
+      async read(from: string, to: string) {
+        await this.#gate
+        return super.read(from, to)
+      }
+    }
+    const log = new SlowTimeLog()
+    log.entries.push({ id: 'p1', day: DAY, taskId: 't1', label: 'Développement', share: 1, url: null, props: {}, lastEdited: '', archived: false })
+    const { store, days } = setup({ now: NEXT_DAY, log })
+    const first = days.readLog(DAY, DAY)
+    let second = false
+    const waiting = days.readLog(DAY, DAY).then(() => (second = true))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(second).toBe(false)
+    log.release()
+    await Promise.all([first, waiting])
+    expect((await store.logged([DAY])).map((r) => r.taskId)).toEqual(['t1'])
+  })
+
   test('« Modifier » makes a recorded day a draft again, sent back over the same entries', async () => {
     const log = new FakeTimeLog()
     const { store, days } = setup({ now: NEXT_DAY, log })
