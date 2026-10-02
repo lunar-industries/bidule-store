@@ -99,6 +99,20 @@ describe('branches', () => {
     expect(orphansOf(list, now).map((b) => b.name)).toEqual(['recent'])
   })
 
+  test('a branch linked to a task the board does not show is in the tray too', () => {
+    const now = Date.parse('2026-10-01T12:00:00Z')
+    const list = [
+      branch('shown', { lastCommitAt: '2026-09-30T12:00:00Z', taskId: 't1' }),
+      branch('hidden-task', { lastCommitAt: '2026-09-30T12:00:00Z', taskId: 'gone' }),
+    ]
+    expect(orphansOf(list, now, new Set(['t1'])).map((b) => b.name)).toEqual(['hidden-task'])
+  })
+
+  test('a review known by its number alone still has its mark', () => {
+    const marks = marksOf([branch('a', { reviewNumber: 12, ci: 'success' })])
+    expect(marks.map((m) => m.text)).toEqual(['#12'])
+  })
+
   test('one mark per branch with a review or a pipeline', () => {
     const marks = marksOf([
       branch('a', { reviewRef: 'MR !12', reviewNumber: 12, ci: 'fail' }),

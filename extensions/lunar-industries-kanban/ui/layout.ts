@@ -18,9 +18,16 @@ export const RECENT_DAYS = 14
 export const isRecent = (at: string | null, now = Date.now()) =>
   Boolean(at) && now - new Date(at!).getTime() < RECENT_DAYS * 864e5
 
-// Recent branches without a task, not merged: to drop on a card.
-export const orphansOf = (branches: KanbanBranch[], now = Date.now()) =>
-  branches.filter((b) => !b.taskId && isRecent(b.lastCommitAt, now) && b.reviewState !== 'merged' && b.ci !== 'merged')
+// Recent branches without a task, not merged: to drop on a card. A branch linked to a task the board does not show (done
+// and hidden, someone else's) has no card either: it counts as without a task, so that it can be found and moved.
+export const orphansOf = (branches: KanbanBranch[], now = Date.now(), onBoard?: ReadonlySet<string>) =>
+  branches.filter(
+    (b) =>
+      (!b.taskId || (onBoard !== undefined && !onBoard.has(b.taskId))) &&
+      isRecent(b.lastCommitAt, now) &&
+      b.reviewState !== 'merged' &&
+      b.ci !== 'merged'
+  )
 
 export interface Column extends TaskColumn {
   // A status the tasks have but the source no longer lists.
@@ -107,16 +114,18 @@ export type Mark = { key: string; repo: string; name: string; text: string; tone
 // One mark per branch with a review or a pipeline: « !12 », « #4 », or « CI »; a click opens it on the forge.
 export function marksOf(branches: KanbanBranch[]): Mark[] {
   return branches
-    .filter((b) => b.reviewRef || (b.ci && b.ci !== 'none'))
+    .filter((b) => b.reviewRef || b.reviewNumber !== null || (b.ci && b.ci !== 'none'))
     .map((b) => {
       const ci = b.ci ?? 'none'
+      // A provider may give the review's number without its reference (« !12 »).
+      const ref = b.reviewRef || (b.reviewNumber !== null ? `#${b.reviewNumber}` : '')
       return {
         key: branchKey(b),
         repo: b.repo,
         name: b.name,
-        text: b.reviewRef ? b.reviewRef.replace(/^[A-Z]+\s*/, '') : 'CI',
+        text: ref ? ref.replace(/^[A-Z]+\s*/, '') : 'CI',
         tone: CI_TONE[ci],
-        tip: [b.repoLabel, b.reviewRef, b.reviewRef && ci === 'merged' ? '' : CI_TEXT[ci]].filter(Boolean).join(' · '),
+        tip: [b.repoLabel, ref, ref && ci === 'merged' ? '' : CI_TEXT[ci]].filter(Boolean).join(' · '),
       }
     })
 }

@@ -123,7 +123,7 @@ export function Kanban() {
     for (const b of git.branches) if (b.taskId) map.set(b.taskId, [...(map.get(b.taskId) ?? []), b])
     return map
   }, [git])
-  const orphans = orphansOf(git.branches)
+  const orphans = orphansOf(git.branches, Date.now(), ready ? new Set(ready.tasks.map((t) => t.id)) : undefined)
   const today = dayKey(new Date())
   const doneStatus = new Set(ready?.columns.filter((c) => c.group === 'done').map((c) => c.name) ?? [])
 

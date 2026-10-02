@@ -48,6 +48,14 @@ describe('the cards’ branches', () => {
     expect(branches.map((b) => b.name)).toEqual(['feat/a'])
   })
 
+  test('the integration branches of the setting are left out too, whatever their case', async () => {
+    const { git } = fakeGit([branch('develop'), branch('Factory'), branch('feat/a')])
+    const { branches } = await new KanbanService(async () => git).branches()
+    expect(branches.map((b) => b.name)).toEqual(['feat/a'])
+    const own = await new KanbanService(async () => git, async () => 'feat/a').branches()
+    expect(own.branches.map((b) => b.name)).toEqual(['develop', 'Factory'])
+  })
+
   test('a task’s branches are exactly those given: others unlinked, new ones linked, kept ones untouched', async () => {
     const { git, links } = fakeGit([branch('kept', { taskId: 't' }), branch('dropped', { taskId: 't' }), branch('new', { taskId: 'x' })])
     const after = await new KanbanService(async () => git).setBranches('t', [

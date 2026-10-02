@@ -2,6 +2,8 @@ import type { GitBranch, GitSource } from '@bidule/ext-git/contract'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
 import { KanbanError } from './errors.ts'
 
+export const DEFAULT_HIDDEN = 'main, master, develop, launchpad, factory, orbit'
+
 const keyOf = (b: BranchRef) => `${b.repo}\u0000${b.name}`
 
 const shown = (b: GitBranch): KanbanBranch => ({
@@ -22,7 +24,11 @@ const shown = (b: GitBranch): KanbanBranch => ({
  * role. `git` is null when nobody holds the role: the board then shows no branch at all.
  */
 export class KanbanService {
-  constructor(protected git: () => Promise<GitSource | null>) {}
+  constructor(
+    protected git: () => Promise<GitSource | null>,
+    // The names of the integration branches (the setting: comma-separated), which belong to no task either.
+    protected hidden: () => Promise<string> = async () => DEFAULT_HIDDEN
+  ) {}
 
   async #git(): Promise<GitSource> {
     const git = await this.git()
@@ -30,11 +36,21 @@ export class KanbanService {
     return git
   }
 
-  // Every branch git knows but the repos' default ones (main…), which belong to no task.
+  // Every branch git knows but the repos' default ones (main…) and the integration ones (develop, factory…), which belong
+  // to no task.
   async branches(): Promise<Branches> {
     const git = await this.git()
     if (!git) return { available: false, branches: [] }
-    return { available: true, branches: (await git.branches()).filter((b) => !b.isDefault).map(shown) }
+    const hidden = new Set(
+      (await this.hidden())
+        .split(',')
+        .map((n) => n.trim().toLowerCase())
+        .filter(Boolean)
+    )
+    return {
+      available: true,
+      branches: (await git.branches()).filter((b) => !b.isDefault && !hidden.has(b.name.toLowerCase())).map(shown),
+    }
   }
 
   /**
