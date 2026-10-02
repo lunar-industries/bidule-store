@@ -10,6 +10,7 @@ export function activate(ctx: ServerContext) {
   // The git role is optional (`uses`): without it, the board shows no branch.
   service = new KanbanService(
     async () => (ctx.has('git') ? ctx.use('git') : null),
-    async () => String((await ctx.settings.get('lunar-industries-kanban.hiddenBranches')) ?? DEFAULT_HIDDEN)
+    // One setting for every module of the suite: the Branches module's « Branches d'intégration ».
+    async () => String((await ctx.settings.get('lunar-industries-branches.hidden')) ?? DEFAULT_HIDDEN)
   )
 }
