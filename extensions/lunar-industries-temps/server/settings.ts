@@ -42,7 +42,8 @@ export async function readSettings(ctx: ServerContext): Promise<TempsSettings> {
   const work = await get('workDays')
   return {
     workDays: work === undefined ? DEFAULT_SETTINGS.workDays : workDaysOf(work),
-    integrationBranches: list((await get('integrationBranches')) ?? DEFAULT_SETTINGS.integrationBranches.join(', ')),
+    // One setting for every module of the suite: the Branches module's « Branches d'intégration ».
+    integrationBranches: list((await ctx.settings.get('lunar-industries-branches.hidden')) ?? DEFAULT_SETTINGS.integrationBranches.join(', ')),
     deployBranches: list((await get('deployBranches')) ?? DEFAULT_SETTINGS.deployBranches.join(', ')),
     defaultLabel: await text('defaultLabel', DEFAULT_SETTINGS.defaultLabel),
     absentLabel: await text('absentLabel', DEFAULT_SETTINGS.absentLabel),
