@@ -113,7 +113,7 @@ describe('Claude tools', () => {
   })
 
   it('starts a task as « Démarrer… » does, from the repo’s review target', async () => {
-    const { git, forge, tasks, call } = setup({ settings: { repoTargets: { '/r/app': 'launchpad' } } })
+    const { git, forge, tasks, call } = setup({ settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
     const res = await call('start_task', { task: 'ID-7', repos: [{ repo: 'app' }] })
     expect(res.isError, res.text).toBe(false)
     expect(forge.writes).toEqual([
@@ -197,7 +197,7 @@ describe('Claude tools', () => {
 
   it('opens the draft MR of a branch pushed from a worktree, with its task’s title', async () => {
     const forge = new FakeForge({ '7-ajout-role': null })
-    const { git, call } = setup({ forge, settings: { repoTargets: { '/r/app': 'launchpad' } } })
+    const { git, call } = setup({ forge, settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
     git.branchList = [branch('/r/app', '7-ajout-role', { taskId: 't1' })]
     const res = await call('create_review', { repo: 'app', branch: '7-ajout-role' })
     expect(res.isError, res.text).toBe(false)
@@ -287,7 +287,7 @@ describe('Claude tools · git and forge', () => {
   })
 
   const withRepo = (repo: string) =>
-    setup({ git: new FakeGit(real), repos: [{ path: repo, label: 'app' }], settings: { repoTargets: { [repo]: 'launchpad' } } })
+    setup({ git: new FakeGit(real), repos: [{ path: repo, label: 'app' }], settings: { repos: { [repo]: { reviewTarget: 'launchpad' } } } })
 
   it('merges a branch into staging in its worktree, then commits the merge and pushes it', async () => {
     const { repo, origin } = await realRepo()

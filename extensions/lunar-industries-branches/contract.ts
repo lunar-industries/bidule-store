@@ -45,25 +45,7 @@ export type Links = {
 
 export type Job = { id: number; name: string; stage: string; status: string; manual: boolean }
 
-// What the suite's other modules (Kanban, Temps, Claude) share of this one's settings: an extension cannot read another's
-// settings, so they ask for them by this module's command `lunar-industries-branches.shared`.
-export type SharedSettings = {
-  // The integration branches (the setting « Branches d'intégration »).
-  integration: string[]
-  reviewTarget: string
-  // Each repo's review target, by its path.
-  targets: Record<string, string>
-  // How branches are named ('issue', 'ref' or 'template') and the template of 'template'.
-  naming: string
-  template: string
-  // An issue is always created when a task starts.
-  createIssue: boolean
-}
-
 declare module '@bidule/sdk/contracts' {
-  interface Commands {
-    'lunar-industries-branches.shared': (args: Record<string, never>) => SharedSettings
-  }
   interface Events {
     // A repo's review target changed (Réglages or the page).
     'lunar-industries-branches.changed': Record<string, never>

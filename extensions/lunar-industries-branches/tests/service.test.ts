@@ -125,31 +125,3 @@ describe('the task and the target', () => {
     await expect(s.setTarget('/elsewhere', 'main')).rejects.toMatchObject({ status: 404 })
   })
 })
-
-describe('what the suite’s other modules ask for', () => {
-  test('the shared settings, with the defaults of a new install', async () => {
-    const { git } = fakeGit(all(), null)
-    expect(await service(git).s.shared()).toEqual({
-      integration: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
-      reviewTarget: '',
-      targets: {},
-      naming: 'issue',
-      template: '{ref}-{slug}',
-      createIssue: false,
-    })
-  })
-
-  test('and what the user chose', async () => {
-    const { git } = fakeGit(all(), null)
-    const { s } = service(git, {
-      settings: {
-        'lunar-industries-branches.hidden': 'main, develop',
-        'lunar-industries-branches.reviewTarget': 'develop',
-        'lunar-industries-branches.naming': 'ref',
-        'lunar-industries-branches.createIssue': '1',
-        'lunar-industries-branches.targets': '{"/r/app":"main"}',
-      },
-    })
-    expect(await s.shared()).toMatchObject({ integration: ['main', 'develop'], reviewTarget: 'develop', targets: { '/r/app': 'main' }, naming: 'ref', createIssue: true })
-  })
-})

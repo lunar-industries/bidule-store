@@ -1,5 +1,4 @@
 import type { ServerContext } from '@bidule/api/extensions'
-import type { SharedSettings } from '@bidule/ext-lunar-industries-branches/contract'
 import type { RepoOverrides } from '../contract.ts'
 
 // The module's settings (bidule.json), read together: what the sessions and the tools need.
@@ -10,9 +9,7 @@ export type Settings = {
   defaultMode: string
   defaultModel: string
   defaultEffort: string
-  // The suite's (Branches module): the review target of every repo, and of each one in particular.
   reviewTarget: string
-  repoTargets: Record<string, string>
   branchNaming: string
   branchTemplate: string
   createIssue: boolean
@@ -38,30 +35,9 @@ export const list = (value: unknown) =>
     .map((v) => v.trim())
     .filter(Boolean)
 
-// What the suite's modules share is the Branches module's (Réglages › Lunar Industries - Branches): the integration
-// branches, the review target (and each repo's), the naming of the branches, the issue created at the start. An extension
-// cannot read another's settings, so it is asked by that module's command; without the module, these defaults.
-const SHARED_DEFAULTS: SharedSettings = {
-  integration: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
-  reviewTarget: '',
-  targets: {},
-  naming: 'issue',
-  template: '{ref}-{slug}',
-  createIssue: false,
-}
-
-async function sharedOf(ctx: ServerContext): Promise<SharedSettings> {
-  try {
-    return await ctx.commands.execute('lunar-industries-branches.shared', {})
-  } catch {
-    return SHARED_DEFAULTS
-  }
-}
-
 export async function readSettings(ctx: ServerContext): Promise<Settings> {
   const get = async (key: string) => ctx.settings.get(`${K}.${key}`)
   const text = async (key: string) => String((await get(key)) ?? '').trim()
-  const shared = await sharedOf(ctx)
   let repos: Record<string, RepoOverrides> = {}
   try {
     const parsed: Record<string, RepoOverrides> | null = JSON.parse((await text('repos')) || '{}')
@@ -76,12 +52,11 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
     defaultMode: (await text('defaultMode')) || 'default',
     defaultModel: await text('defaultModel'),
     defaultEffort: await text('defaultEffort'),
-    reviewTarget: shared.reviewTarget,
-    repoTargets: shared.targets,
-    branchNaming: shared.naming,
-    branchTemplate: shared.template,
-    createIssue: shared.createIssue,
-    integrationBranches: shared.integration,
+    reviewTarget: await text('reviewTarget'),
+    branchNaming: (await text('branchNaming')) || 'issue',
+    branchTemplate: (await text('branchTemplate')) || '{ref}-{slug}',
+    createIssue: (await get('createIssue')) === true,
+    integrationBranches: list(await get('integrationBranches')),
     deploy: {
       stagingBranch: await text('stagingBranch'),
       productionBranch: await text('productionBranch'),
@@ -98,8 +73,8 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
 // What a repo overrides of the module's settings (empty: nothing).
 export const overridesOf = (s: Settings, repo: string): RepoOverrides => s.repos[repo] ?? {}
 
-// The branch a repo's reviews go to: the one chosen for it on the Branches page, else the suite's; null when nobody said.
-export const reviewTargetOf = (s: Settings, repo: string) => s.repoTargets[repo]?.trim() || s.reviewTarget || null
+// The branch a repo's reviews go to: its own, else the module's; null when nobody said.
+export const reviewTargetOf = (s: Settings, repo: string) => overridesOf(s, repo).reviewTarget?.trim() || s.reviewTarget || null
 
 // Taken from quack-board (domain/deploy.ts): how a repo is deployed, its own values else the module's; null: nobody
 // said (the skills ask).

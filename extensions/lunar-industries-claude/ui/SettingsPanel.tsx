@@ -23,6 +23,7 @@ const NOTIFICATIONS = [
 
 // A repo's own settings, as the panel asks them (empty: the module's, above).
 const FIELDS: { key: keyof RepoOverrides; title: string; placeholder?: string; hint?: string }[] = [
+  { key: 'reviewTarget', title: 'Branche cible des MR', placeholder: 'develop' },
   { key: 'stagingBranch', title: 'Branche de staging' },
   { key: 'productionBranch', title: 'Branche de production' },
   { key: 'stagingJob', title: 'Job de staging', hint: '{env} : l’environnement.' },

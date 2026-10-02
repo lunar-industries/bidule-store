@@ -16,7 +16,6 @@ export function settingsWith(patch: Partial<Settings> = {}): Settings {
     defaultModel: '',
     defaultEffort: '',
     reviewTarget: '',
-    repoTargets: {},
     branchNaming: 'issue',
     branchTemplate: '{ref}-{slug}',
     createIssue: false,

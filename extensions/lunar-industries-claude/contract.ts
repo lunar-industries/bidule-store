@@ -176,6 +176,7 @@ export type Decision = { allow: boolean; always?: boolean; answers?: Record<stri
 
 // A repo's own settings for the sessions and their tools (Réglages; empty: the module's, see the settings).
 export type RepoOverrides = {
+  reviewTarget?: string
   // Untracked files to copy into a new worktree (globs relative to the repo) and the command that prepares it.
   worktreeSeed?: string
   worktreePrepare?: string

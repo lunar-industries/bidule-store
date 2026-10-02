@@ -1,5 +1,5 @@
 import type { ServerContext } from '@bidule/api/extensions'
-import '@bidule/ext-git/contract'
+import type {} from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { Days } from './days.ts'
 import { readSettings } from './settings.ts'

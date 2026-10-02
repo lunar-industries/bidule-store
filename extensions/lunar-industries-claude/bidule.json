@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "title": "Lunar Industries - Claude",
   "engine": "^0.1.1",
   "permissions": [
@@ -132,6 +132,53 @@
           "help": "decision (une décision attendue), turn (Claude a terminé), error, slot (le créneau est pris).",
           "default": "decision, error, slot",
           "hidden": true
+        },
+        {
+          "key": "lunar-industries-claude.reviewTarget",
+          "type": "text",
+          "title": "Branche cible des MR",
+          "help": "Celle des dépôts qui n’en ont pas une à eux ; les nouvelles branches en partent.",
+          "default": ""
+        },
+        {
+          "key": "lunar-industries-claude.branchNaming",
+          "type": "choice",
+          "title": "Nommage des branches",
+          "options": [
+            {
+              "value": "issue",
+              "label": "{issue}-{slug} : une issue d’abord"
+            },
+            {
+              "value": "ref",
+              "label": "{ref}-{slug} : la référence de la tâche"
+            },
+            {
+              "value": "template",
+              "label": "Le modèle ci-dessous"
+            }
+          ],
+          "default": "issue"
+        },
+        {
+          "key": "lunar-industries-claude.branchTemplate",
+          "type": "text",
+          "title": "Modèle de nom de branche",
+          "help": "{issue}, {ref} et {slug}.",
+          "default": "{ref}-{slug}"
+        },
+        {
+          "key": "lunar-industries-claude.createIssue",
+          "type": "toggle",
+          "title": "Toujours créer une issue",
+          "help": "Même quand le nom de la branche n’en a pas besoin.",
+          "default": false
+        },
+        {
+          "key": "lunar-industries-claude.integrationBranches",
+          "type": "text",
+          "title": "Branches d’intégration",
+          "default": "main, master, develop"
         },
         {
           "key": "lunar-industries-claude.stagingBranch",

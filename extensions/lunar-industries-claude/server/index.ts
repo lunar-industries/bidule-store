@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { ServerContext } from '@bidule/api/extensions'
-import '@bidule/ext-git/contract'
+import type {} from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { SessionError } from './errors.ts'
 import { list, readSettings, reviewTargetOf } from './settings.ts'
