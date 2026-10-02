@@ -41,7 +41,8 @@ export function Calendar({
   }, [cursor.y, cursor.m])
   useEffect(() => {
     const away = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('.lit-cal-toggle')) onClose()
+      const target = e.target
+      if (box.current && target instanceof Element && !box.current.contains(target) && !target.closest('.lit-cal-toggle')) onClose()
     }
     addEventListener('mousedown', away)
     return () => removeEventListener('mousedown', away)

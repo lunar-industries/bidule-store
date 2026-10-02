@@ -347,7 +347,8 @@ export class Days {
     // (a checkout of an integration branch) supports no line.
     const input = await this.#input(day, s).catch(() => null)
     const signals = (input?.events ?? []).flatMap((e) => {
-      const key = lineOf(e, input!.branches, input!.integration)
+      if (!input) return []
+      const key = lineOf(e, input.branches, input.integration)
       if (!key) return []
       return {
         minute: minuteOf(e.at),

@@ -75,6 +75,9 @@ function inPageOrder(data: DayView, shown: Pick<Line, 'key' | 'label'>[]): DayVi
   return { ...data, lines: [...data.lines].sort((a, b) => rank(a) - rank(b)) }
 }
 
+// A segment's colours, as the CSS variables its style sheet reads.
+const colors = (color: string, ink: string): Record<string, string> => ({ '--c': color, '--on-c': ink })
+
 const fail = (err: unknown) => react('panic', errorMessage(err), errorMessage(err))
 
 const EDITABLE: DayState[] = ['to_validate', 'modified', 'empty', 'to_fill', 'off']
@@ -505,6 +508,11 @@ export function TempsPage() {
       setBoard(await moveTask(taskId, status))
       react('quack', `${tasks.find((t) => t.id === taskId)?.title ?? 'La tâche'} passe en ${status}, coin !`)
     })
+  const startButton = (taskId: string, column: string) => (
+    <button type="button" className="btn lit-started" disabled={working} onClick={() => startTask(taskId, column)}>
+      Encore « à faire » malgré des commits : passer en {column}
+    </button>
+  )
   const send = () => {
     const n = lines.filter((l) => l.share > 0).length
     openDialog((close) => (
@@ -715,7 +723,7 @@ export function TempsPage() {
                       type="button"
                       className={`lit-seg${s.row.orphan ? ' orphan' : ''}`}
                       data-size={s.size}
-                      style={{ left: `${s.left}%`, width: `${s.width}%`, ['--c' as string]: s.row.color, ['--on-c' as string]: s.row.ink }}
+                      style={{ left: `${s.left}%`, width: `${s.width}%`, ...colors(s.row.color, s.row.ink) }}
                       title={`${s.row.name} · ${s.row.label} · ${fmtShare(s.row.share)} j`}
                       aria-label={`${s.row.name}, ${s.row.label}, ${fmtShare(s.row.share)} j`}
                       aria-pressed={selected === s.row.rowId}
@@ -833,11 +841,7 @@ export function TempsPage() {
                       <div className="lit-line-detail">
                         {r.taskId && r.title !== r.name && <span className="legend">{r.title}</span>}
                         {r.reason && <span className="legend">Proposé d'après {r.reason}</span>}
-                        {r.start && r.taskId && (
-                          <button type="button" className="btn lit-started" disabled={working} onClick={() => startTask(r.taskId!, r.start!.name)}>
-                            Encore « à faire » malgré des commits : passer en {r.start.name}
-                          </button>
-                        )}
+                        {r.start && r.taskId && startButton(r.taskId, r.start.name)}
                         {r.evidence.length > 0 && (
                           <ul className="lit-evidence">
                             {r.evidence.map((s, i) => (
@@ -871,7 +875,8 @@ export function TempsPage() {
                                     {x.name}
                                     <div className="row lit-chips" role="group" aria-label={x.name}>
                                       {(x.options ?? []).map((o) => {
-                                        const current = Array.isArray(r.props[x.name]) ? (r.props[x.name] as string[]) : []
+                                        const value = r.props[x.name]
+                                        const current = Array.isArray(value) ? value : []
                                         const on = current.includes(o)
                                         return (
                                           <button

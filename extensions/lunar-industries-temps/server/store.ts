@@ -59,54 +59,83 @@ const BRANCH_TASKS = 'lunar_industries_temps_branch_tasks'
 const DAYS = 'lunar_industries_temps_days'
 const LOG = 'lunar_industries_temps_log'
 
-type Raw = Record<string, unknown>
+// The columns of each table, as the database gives them back (the query builder answers untyped: the rows are
+// annotated where they are read).
+type DraftColumns = {
+  id: number
+  day: string
+  task_id: string | null
+  label: string | null
+  repo: string | null
+  branch: string | null
+  share: number | null
+  tiny: number | null
+  confirmed: number | null
+  reason: string | null
+  props: string | null
+}
+type LogColumns = {
+  id: string
+  day: string
+  task_id: string | null
+  label: string | null
+  share: number | null
+  url: string | null
+  props: string | null
+  last_edited: string | null
+}
+type DayColumns = { day: string; edited: number | null }
+type LabelColumns = { label: string | null }
+type BranchTaskColumns = { repo: string; branch: string; task_id: string }
 
-export function parseProps(json: unknown): Props {
+export function parseProps(json: string | null): Props {
   try {
-    const value: unknown = JSON.parse(String(json ?? '{}'))
-    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Props) : {}
+    const value: unknown = JSON.parse(json ?? '{}')
+    // A line's properties, as the Time Log's own (an object, never a list).
+    const props: Props = value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+    return props
   } catch {
     return {}
   }
 }
 
-const draftOf = (r: Raw): DraftRow => ({
-  id: Number(r.id),
-  day: String(r.day),
-  taskId: (r.task_id as string | null) ?? null,
-  label: String(r.label ?? ''),
-  repo: (r.repo as string | null) ?? null,
-  branch: (r.branch as string | null) ?? null,
-  share: Number(r.share ?? 0),
+const draftOf = (r: DraftColumns): DraftRow => ({
+  id: r.id,
+  day: r.day,
+  taskId: r.task_id,
+  label: r.label ?? '',
+  repo: r.repo,
+  branch: r.branch,
+  share: r.share ?? 0,
   tiny: Boolean(r.tiny),
   confirmed: Boolean(r.confirmed),
-  reason: String(r.reason ?? ''),
+  reason: r.reason ?? '',
   props: parseProps(r.props),
 })
 
-const logOf = (r: Raw): LogRow => ({
-  id: String(r.id),
-  day: String(r.day),
-  taskId: (r.task_id as string | null) ?? null,
-  label: String(r.label ?? ''),
-  share: Number(r.share ?? 0),
-  url: (r.url as string | null) ?? null,
+const logOf = (r: LogColumns): LogRow => ({
+  id: r.id,
+  day: r.day,
+  taskId: r.task_id,
+  label: r.label ?? '',
+  share: r.share ?? 0,
+  url: r.url,
   props: parseProps(r.props),
-  lastEdited: (r.last_edited as string | null) ?? null,
+  lastEdited: r.last_edited,
 })
 
 export class DbStore implements TempsStore {
   constructor(protected db: ServerContext['db']) {}
 
   async drafts(day: string): Promise<DraftRow[]> {
-    const rows = (await this.db.from(DRAFTS).where('day', day).orderBy('share', 'desc').orderBy('id')) as Raw[]
+    const rows: DraftColumns[] = await this.db.from(DRAFTS).where('day', day).orderBy('share', 'desc').orderBy('id')
     return rows.map(draftOf)
   }
 
   async daysWithDraft(days: string[]): Promise<Set<string>> {
     if (!days.length) return new Set()
-    const rows = (await this.db.from(DRAFTS).whereIn('day', days).distinct('day')) as Raw[]
-    return new Set(rows.map((r) => String(r.day)))
+    const rows: Pick<DayColumns, 'day'>[] = await this.db.from(DRAFTS).whereIn('day', days).distinct('day')
+    return new Set(rows.map((r) => r.day))
   }
 
   async writeDraft(day: string, rows: NewDraftRow[], edited?: boolean): Promise<void> {
@@ -135,14 +164,14 @@ export class DbStore implements TempsStore {
   }
 
   async edited(day: string): Promise<boolean> {
-    const row = (await this.db.from(DAYS).where('day', day).first()) as Raw | null
+    const row: DayColumns | null = await this.db.from(DAYS).where('day', day).first()
     return Boolean(row?.edited)
   }
 
   async editedDays(days: string[]): Promise<Set<string>> {
     if (!days.length) return new Set()
-    const rows = (await this.db.from(DAYS).whereIn('day', days).where('edited', 1)) as Raw[]
-    return new Set(rows.map((r) => String(r.day)))
+    const rows: DayColumns[] = await this.db.from(DAYS).whereIn('day', days).where('edited', 1)
+    return new Set(rows.map((r) => r.day))
   }
 
   async setEdited(day: string, edited: boolean): Promise<void> {
@@ -151,12 +180,12 @@ export class DbStore implements TempsStore {
 
   async logged(days: string[]): Promise<LogRow[]> {
     if (!days.length) return []
-    const rows = (await this.db.from(LOG).whereNull('deleted_at').whereIn('day', days).orderBy('share', 'desc')) as Raw[]
+    const rows: LogColumns[] = await this.db.from(LOG).whereNull('deleted_at').whereIn('day', days).orderBy('share', 'desc')
     return rows.map(logOf)
   }
 
   async lastLogged(): Promise<Map<string, { label: string; props: Props }>> {
-    const rows = (await this.db.from(LOG).whereNull('deleted_at').whereNotNull('task_id').orderBy('day', 'desc')) as Raw[]
+    const rows: LogColumns[] = await this.db.from(LOG).whereNull('deleted_at').whereNotNull('task_id').orderBy('day', 'desc')
     const out = new Map<string, { label: string; props: Props }>()
     for (const r of rows.map(logOf)) {
       if (r.taskId && !out.has(r.taskId)) out.set(r.taskId, { label: r.label, props: r.props })
@@ -165,8 +194,8 @@ export class DbStore implements TempsStore {
   }
 
   async usedLabels(): Promise<string[]> {
-    const rows = (await this.db.from(LOG).whereNull('deleted_at').distinct('label')) as Raw[]
-    return rows.map((r) => String(r.label)).filter(Boolean)
+    const rows: LabelColumns[] = await this.db.from(LOG).whereNull('deleted_at').distinct('label')
+    return rows.map((r) => r.label ?? '').filter(Boolean)
   }
 
   async recordLog(entries: LogRow[], from: string, to: string): Promise<void> {
@@ -215,7 +244,7 @@ export class DbStore implements TempsStore {
   }
 
   async rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]> {
-    const rows: Record<string, unknown>[] = await this.db.from(BRANCH_TASKS)
-    return rows.map((r) => ({ repo: String(r.repo), branch: String(r.branch), taskId: String(r.task_id) }))
+    const rows: BranchTaskColumns[] = await this.db.from(BRANCH_TASKS)
+    return rows.map((r) => ({ repo: r.repo, branch: r.branch, taskId: r.task_id }))
   }
 }

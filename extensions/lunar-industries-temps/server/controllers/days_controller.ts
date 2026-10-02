@@ -8,7 +8,7 @@ import {
   monthValidator,
   resolveValidator,
 } from '@bidule/ext-lunar-industries-temps/server/validators'
-import type { LineInput, Props } from '../../contract.ts'
+import type { LineInput } from '../../contract.ts'
 
 // A refused edit is the user's to fix: its message says what is wrong.
 async function edit(run: () => Promise<unknown>): Promise<void> {
@@ -53,7 +53,7 @@ export default class DaysController {
 
   async replace({ request }: HttpContext) {
     const { params, lines } = await request.validateUsing(draftValidator)
-    const input: LineInput[] = lines.map((l) => ({ ...l, props: (l.props ?? {}) as Props }))
+    const input: LineInput[] = lines.map((l) => ({ ...l, props: l.props ?? {} }))
     await edit(() => days.replace(params.day, input))
     return days.view(params.day)
   }
