@@ -41,6 +41,7 @@ export function rowOf(b: ListedBranch, tasks: Task[]) {
   const review = b.forge ? REVIEW[b.forge] : 'MR'
   const step = stepOf(b)
   const reached = step === 'done' ? STEPS.length : STEPS.findIndex((s) => s.id === step)
+  const stateAt = (i: number): StepState => (i < reached ? 'done' : i === reached ? 'current' : 'todo')
   return {
     ...b,
     key: branchKey(b),
@@ -51,7 +52,7 @@ export function rowOf(b: ListedBranch, tasks: Task[]) {
     status: statusOf(b, step, review),
     // The list's progress bar: the steps done so far.
     progress: STEPS.map((_, i) => i < reached),
-    steps: STEPS.map((s, i) => ({ ...s, state: (i < reached ? 'done' : i === reached ? 'current' : 'todo') as StepState })),
+    steps: STEPS.map((s, i) => ({ ...s, state: stateAt(i) })),
   }
 }
 export type Row = ReturnType<typeof rowOf>

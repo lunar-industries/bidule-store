@@ -6,9 +6,11 @@ const BASE = '/api/ext/lunar-industries-branches'
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Accept: 'application/json' } })
-  const body = (await res.json().catch(() => ({}))) as { error?: string; errors?: { message: string }[] }
+  // The server's answer (the routes' types are in contract.ts), or its error: `{ error }` here, `{ errors: [...] }` from
+  // the validators.
+  const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error ?? body.errors?.[0]?.message ?? `Erreur ${res.status}`)
-  return body as T
+  return body
 }
 
 const send = (method: string, path: string, body: unknown) => json<{ ok: true }>(`${BASE}/${path}`, { method, body: JSON.stringify(body) })
@@ -29,8 +31,8 @@ export const api = {
 
 // The core's board (the `tasks` role): the tasks a branch is linked to.
 export async function board(): Promise<Board | null> {
-  const b = await json<Board | { source: null }>('/api/board').catch(() => null)
-  return b && b.source ? (b as Board) : null
+  const b = await json<Board>('/api/board').catch(() => null)
+  return b && b.source ? b : null
 }
 
 export const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err))

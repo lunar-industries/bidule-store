@@ -533,7 +533,7 @@ function Floating({ x, y, close, children }: { x: number; y: number; close: () =
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     box.current?.querySelector<HTMLElement>('button')?.focus()
-    const away = (e: Event) => !box.current?.contains(e.target as Node) && close()
+    const away = (e: Event) => e.target instanceof Node && !box.current?.contains(e.target) && close()
     const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && close()
     addEventListener('mousedown', away)
     addEventListener('keydown', esc)
