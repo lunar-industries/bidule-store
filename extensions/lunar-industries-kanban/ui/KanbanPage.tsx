@@ -284,7 +284,7 @@ export function Kanban() {
               : `Aucune tâche ${board.source} où tu es responsable ou participant.`}
           {board.source !== null && board.configured && (
             <p>
-              <button type="button" className="btn" onClick={() => void busy(execute('notion.sync' as never, undefined as never))}>
+              <button type="button" className="btn" onClick={() => void busy(execute('notion.sync', undefined))}>
                 Synchroniser
               </button>
             </p>
@@ -437,6 +437,7 @@ function Card({
   const voice = useVoice()
   const badge = badgeOf(task, done, today)
   const marks = marksOf(branches)
+  const action = advice?.action ?? null
   const label = showBranches ? branchLabel(branches) : task.ref
   const open = () => task.url && window.open(task.url, '_blank', 'noopener')
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
@@ -459,7 +460,7 @@ function Card({
         e.dataTransfer.setData(TASK_TYPE, task.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
-      onClick={(e) => !(e.target as HTMLElement).closest('button') && open()}
+      onClick={(e) => !(e.target instanceof Element && e.target.closest('button')) && open()}
       onKeyDown={onKey}
       onContextMenu={(e) => {
         e.preventDefault()
@@ -489,9 +490,9 @@ function Card({
         <div className="advice">
           <MascotHead />
           <p>{voice(advice.text)}</p>
-          {advice.action && (
-            <button type="button" className="advice-btn" onClick={() => void advice.action!.run()}>
-              {advice.action.label}
+          {action && (
+            <button type="button" className="advice-btn" onClick={() => void action.run()}>
+              {action.label}
             </button>
           )}
         </div>

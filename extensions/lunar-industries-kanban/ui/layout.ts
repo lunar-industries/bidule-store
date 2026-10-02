@@ -16,7 +16,7 @@ export const branchKey = (b: { repo: string; name: string }) => `${b.repo}\u0000
 // A branch is recent for 14 days after its last commit.
 export const RECENT_DAYS = 14
 export const isRecent = (at: string | null, now = Date.now()) =>
-  Boolean(at) && now - new Date(at!).getTime() < RECENT_DAYS * 864e5
+  at !== null && now - new Date(at).getTime() < RECENT_DAYS * 864e5
 
 // Recent branches without a task, not merged: to drop on a card. A branch linked to a task the board does not show (done
 // and hidden, someone else's) has no card either: it counts as without a task, so that it can be found and moved.
@@ -50,10 +50,8 @@ export interface Group {
 export function groupsOf(board: Board, hidden: string[], toggled: ReadonlySet<string>): Group[] {
   const listed = new Set(board.columns.map((c) => c.name))
   const strays = [...new Set(board.tasks.map((t) => t.status).filter((s) => !listed.has(s)))]
-  const columns: Column[] = [
-    ...board.columns.map((c) => ({ ...c, unknown: false })),
-    ...strays.map((name) => ({ name, color: 'default', group: 'todo' as TaskGroup, unknown: true })),
-  ]
+  const stray = (name: string): TaskColumn & { unknown: boolean } => ({ name, color: 'default', group: 'todo', unknown: true })
+  const columns: Column[] = [...board.columns.map((c) => ({ ...c, unknown: false })), ...strays.map(stray)]
     .filter((c) => !hidden.includes(c.name))
     .map((c) => {
       const foldable = c.group === 'done'

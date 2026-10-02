@@ -6,9 +6,11 @@ export type Loaded = Board | { source: null }
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Accept: 'application/json' } })
-  const body = (await res.json().catch(() => ({}))) as { error?: string; errors?: { message: string }[] }
+  // The server's answer (the routes' types are in contract.ts), or its error: `{ error }` here, `{ errors: [...] }` from
+  // the validators.
+  const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error ?? body.errors?.[0]?.message ?? `Erreur ${res.status}`)
-  return body as T
+  return body
 }
 
 const BASE = '/api/ext/lunar-industries-kanban'

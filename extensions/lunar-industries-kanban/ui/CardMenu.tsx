@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { execute, react, type KanbanParts, type Task } from '@bidule/sdk'
+import { react, runOnApi, useCommands, type KanbanParts, type Task } from '@bidule/sdk'
+import { errorMessage } from './api.ts'
 
 export type MenuColumn = { name: string; label: string }
 
@@ -30,13 +31,13 @@ export function CardMenu({
   const menu = useRef<HTMLDivElement>(null)
   useEffect(() => {
     menu.current?.querySelector('button')?.focus()
-    const away = (e: Event) => !menu.current?.contains(e.target as Node) && close()
+    const away = (e: Event) => e.target instanceof Node && !menu.current?.contains(e.target) && close()
     const keys = (e: KeyboardEvent) => {
       if (e.key === 'Escape') return close()
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
       e.preventDefault()
       const items = [...(menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])]
-      const at = items.indexOf(document.activeElement as HTMLButtonElement)
+      const at = items.findIndex((item) => item === document.activeElement)
       items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
     }
     addEventListener('mousedown', away)
@@ -48,8 +49,16 @@ export function CardMenu({
   }, [close])
   const run = (fn: () => unknown) => {
     close()
-    void Promise.resolve(fn()).catch((err) => react('panic', (err as Error).message, (err as Error).message))
+    void Promise.resolve(fn()).catch((err: unknown) => react('panic', errorMessage(err), errorMessage(err)))
   }
+  // A command the other modules contribute to the menu: its id is known at run time only, so it is looked up (as `execute`
+  // does for a known one) rather than typed.
+  const commands = useCommands()
+  const runCommand = (id: string, args: unknown) => {
+    const command = commands.find((c) => c.id === id)
+    return command ? command.run(args) : runOnApi(id, args)
+  }
+  const url = task.url
   const targets = columns.filter((c) => c.name !== task.status)
   const rows = 1 + actions.length + (link ? 1 : 0) + targets.length
   // Kept inside the window.
@@ -57,8 +66,8 @@ export function CardMenu({
   const top = Math.max(8, Math.min(y, innerHeight - rows * 40 - 24))
   return (
     <div ref={menu} className="menu floating lik-menu" role="menu" style={{ left, top }}>
-      {task.url && (
-        <button type="button" role="menuitem" className="menu-item" onClick={() => run(() => window.open(task.url!, '_blank', 'noopener'))}>
+      {url && (
+        <button type="button" role="menuitem" className="menu-item" onClick={() => run(() => window.open(url, '_blank', 'noopener'))}>
           Ouvrir dans {source}
         </button>
       )}
@@ -68,7 +77,7 @@ export function CardMenu({
           type="button"
           role="menuitem"
           className="menu-item"
-          onClick={() => run(() => execute(a.command as never, { taskId: task.id } as never))}
+          onClick={() => run(() => runCommand(a.command, { taskId: task.id }))}
         >
           {a.title}
         </button>
