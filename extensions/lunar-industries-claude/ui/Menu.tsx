@@ -21,7 +21,7 @@ export function FloatingMenu({
   })
   useEffect(() => {
     menu.current?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')?.focus()
-    const away = (e: Event) => !menu.current?.contains(e.target as Node) && close.current()
+    const away = (e: Event) => e.target instanceof Node && !menu.current?.contains(e.target) && close.current()
     const esc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.stopPropagation()
@@ -33,7 +33,7 @@ export function FloatingMenu({
       const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? [])]
       if (!items.length) return
       e.preventDefault()
-      const at = items.indexOf(document.activeElement as HTMLElement)
+      const at = items.findIndex((item) => item === document.activeElement)
       items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus()
     }
     addEventListener('mousedown', away)

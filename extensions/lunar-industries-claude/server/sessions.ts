@@ -15,6 +15,7 @@ import type {
 import type { GitSource } from '@bidule/ext-git/contract'
 import type { TaskSource } from '@bidule/sdk/tasks'
 import {
+  EFFORT_LEVELS,
   PERMISSION_MODES,
   type Ask,
   type Attachments,
@@ -70,7 +71,7 @@ interface Watched {
 type NewEvent = SessionEvent extends infer E ? (E extends SessionEvent ? Omit<E, 'seq'> : never) : never
 
 // A line given its number in the conversation.
-const numbered = (event: NewEvent, seq: number): SessionEvent => ({ ...event, seq }) as SessionEvent
+const numbered = <E extends NewEvent>(event: E, seq: number): E & { seq: number } => ({ ...event, seq })
 
 // The SDK's messages that tell nothing the conversation shows: progress, hooks, counters, state already told another
 // way. `type`, or `type:subtype` for the system ones.
@@ -478,7 +479,7 @@ export class SessionService {
       known ??
       store.fresh({ id, cwd, taskId: input.taskId ?? null, repos, title: past?.title ?? clip(prompt, 80), mode, status: 'running' })
     const model = input.model !== undefined ? input.model : (known?.model ?? null)
-    const effort = input.effort !== undefined ? input.effort : ((known?.effort as SessionEffort | null) ?? null)
+    const effort = input.effort !== undefined ? input.effort : (known?.effort ?? null)
     Object.assign(row, { mode, model, effort, status: 'running' })
     await store.save(row)
     // Taken up again, an archived session is back in the list.
@@ -1019,7 +1020,7 @@ export class SessionService {
       value: m.value,
       label: m.displayName,
       description: m.description,
-      efforts: m.supportsEffort ? ((m.supportedEffortLevels ?? []) as SessionEffort[]) : [],
+      efforts: m.supportsEffort ? (m.supportedEffortLevels ?? []).filter((level): level is SessionEffort => EFFORT_LEVELS.some((e) => e === level)) : [],
     }))
   }
 

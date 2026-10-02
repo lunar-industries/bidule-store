@@ -22,9 +22,11 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
   })
-  const body = (await res.json().catch(() => ({}))) as { error?: string; errors?: { message: string }[] }
+  // The server's answer (the routes' types are in contract.ts), or its error: `{ error }` here, `{ errors: [...] }` from
+  // the validators.
+  const body = await res.json().catch(() => ({}))
   if (!res.ok) throw Object.assign(new Error(body.error ?? body.errors?.[0]?.message ?? `Erreur ${res.status}`), { status: res.status })
-  return body as T
+  return body
 }
 
 const send = <T = { ok: true }>(method: string, path: string, body?: unknown) =>
@@ -63,8 +65,8 @@ export const api = {
 
 // The core's board (the `tasks` role): the tasks a session starts from or gets attached to.
 export async function board(): Promise<Board | null> {
-  const b = await json<Board | { source: null }>('/api/board').catch(() => null)
-  return b && b.source ? (b as Board) : null
+  const b = await json<Board>('/api/board').catch(() => null)
+  return b && b.source ? b : null
 }
 
 // What to tell the user.

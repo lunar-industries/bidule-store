@@ -40,8 +40,8 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
   const text = async (key: string) => String((await get(key)) ?? '').trim()
   let repos: Record<string, RepoOverrides> = {}
   try {
-    const parsed = JSON.parse((await text('repos')) || '{}') as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) repos = parsed as Record<string, RepoOverrides>
+    const parsed: Record<string, RepoOverrides> | null = JSON.parse((await text('repos')) || '{}')
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) repos = parsed
   } catch {
     // Unreadable: no repo has settings of its own.
   }

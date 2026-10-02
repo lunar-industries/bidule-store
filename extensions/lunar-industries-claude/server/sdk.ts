@@ -10,7 +10,8 @@ let loaded: Sdk | null = null
  * every ES module turns into a syntax error; require() of an ES module does not go through such loaders.
  */
 export function sdk(): Sdk {
-  if (loaded) return loaded
-  loaded = createRequire(import.meta.url)('@anthropic-ai/claude-agent-sdk') as Sdk
-  return loaded
+  // require() answers untyped: the module is the SDK's (its types are `Sdk`).
+  const found: Sdk = loaded ?? createRequire(import.meta.url)('@anthropic-ai/claude-agent-sdk')
+  loaded = found
+  return found
 }

@@ -1,5 +1,5 @@
 import type { ServerContext } from '@bidule/api/extensions'
-import type { SessionStatus } from '../contract.ts'
+import type { SessionEffort, SessionStatus } from '../contract.ts'
 
 // A permission asked by Claude Code and the user's answer: Claude Code's history does not keep them.
 export type DecisionRow = { id: string; tool: string; detail: string; allow: boolean; at: string }
@@ -32,7 +32,7 @@ export type SessionRow = {
   title: string
   decisions: DecisionRow[]
   model: string | null
-  effort: string | null
+  effort: SessionEffort | null
   usage: UsageByModel
   costUsd: number | null
   turns: number | null
@@ -46,37 +46,61 @@ export type SessionRow = {
 const SESSIONS = 'lunar_industries_claude_sessions'
 const ARCHIVES = 'lunar_industries_claude_archives'
 
-const json = <T>(text: unknown, fallback: T): T => {
+// A JSON column, as the type the module wrote it from; the fallback when it is empty or unreadable.
+const json = <T>(text: string | null, fallback: T): T => {
   try {
-    return text ? (JSON.parse(String(text)) as T) : fallback
+    const value: T = text ? JSON.parse(text) : fallback
+    return value
   } catch {
     return fallback
   }
 }
 
 type Db = ServerContext['db']
-type Raw = Record<string, unknown>
 
-function toRow(r: Raw): SessionRow {
+// The sessions table's columns, as the database gives them back (the query builder answers untyped: the rows are
+// annotated where they are read).
+type SessionColumns = {
+  id: string
+  task_id: string | null
+  cwd: string
+  repos: string | null
+  worktrees: string | null
+  mode: string
+  status: SessionStatus
+  title: string
+  decisions: string | null
+  model: string | null
+  effort: SessionRow['effort']
+  usage: string | null
+  cost_usd: number | null
+  turns: number | null
+  login: SessionRow['login']
+  origin: SessionRow['origin']
+  created_at: string
+  updated_at: string
+}
+
+function toRow(r: SessionColumns): SessionRow {
   return {
-    id: String(r.id),
-    taskId: (r.task_id as string | null) ?? null,
-    cwd: String(r.cwd),
+    id: r.id,
+    taskId: r.task_id,
+    cwd: r.cwd,
     repos: json<string[]>(r.repos, []),
     worktrees: json<string[]>(r.worktrees, []),
-    mode: String(r.mode),
-    status: r.status as SessionStatus,
-    title: String(r.title),
+    mode: r.mode,
+    status: r.status,
+    title: r.title,
     decisions: json<DecisionRow[]>(r.decisions, []),
-    model: (r.model as string | null) ?? null,
-    effort: (r.effort as string | null) ?? null,
+    model: r.model,
+    effort: r.effort,
     usage: json<UsageByModel>(r.usage, {}),
-    costUsd: (r.cost_usd as number | null) ?? null,
-    turns: (r.turns as number | null) ?? null,
-    login: (r.login as SessionRow['login']) ?? null,
-    origin: (r.origin as SessionRow['origin']) ?? null,
-    createdAt: String(r.created_at),
-    updatedAt: String(r.updated_at),
+    costUsd: r.cost_usd,
+    turns: r.turns,
+    login: r.login,
+    origin: r.origin,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }
 }
 
@@ -105,12 +129,13 @@ export class SessionStore {
   constructor(protected db: Db) {}
 
   async find(id: string): Promise<SessionRow | null> {
-    const r = (await this.db.from(SESSIONS).where('id', id).first()) as Raw | null
+    const r: SessionColumns | null = await this.db.from(SESSIONS).where('id', id).first()
     return r ? toRow(r) : null
   }
 
   async all(): Promise<SessionRow[]> {
-    return ((await this.db.from(SESSIONS).orderBy('created_at', 'desc')) as Raw[]).map(toRow)
+    const rows: SessionColumns[] = await this.db.from(SESSIONS).orderBy('created_at', 'desc')
+    return rows.map(toRow)
   }
 
   // A new row, or the same one written again (its last change now).
@@ -147,7 +172,8 @@ export class SessionStore {
   }
 
   async archived(): Promise<Set<string>> {
-    return new Set(((await this.db.from(ARCHIVES).select('session_id')) as Raw[]).map((r) => String(r.session_id)))
+    const rows: { session_id: string }[] = await this.db.from(ARCHIVES).select('session_id')
+    return new Set(rows.map((r) => r.session_id))
   }
 
   async archive(id: string, archived: boolean): Promise<void> {

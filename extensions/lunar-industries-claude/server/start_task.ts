@@ -1,4 +1,4 @@
-import type { ForgeFailure, GitSource } from '@bidule/ext-git/contract'
+import type { GitSource } from '@bidule/ext-git/contract'
 import type { Task, TaskSource } from '@bidule/sdk/tasks'
 import { branchName } from './settings.ts'
 
@@ -52,7 +52,7 @@ export async function startTask(task: Task, input: StartInput, git: GitSource): 
           result.steps.push({ step: name, ok: true, detail: done(value) })
           return value
         } catch (err) {
-          result.steps.push({ step: name, ok: false, detail: shortError(err as ForgeFailure) })
+          result.steps.push({ step: name, ok: false, detail: shortError(err) })
           throw new StepFailed()
         }
       }

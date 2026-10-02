@@ -27,8 +27,8 @@ const FIELDS: { key: keyof RepoOverrides; title: string; placeholder?: string; h
 // The overrides kept in the hidden setting, by repo path.
 function overridesOf(raw: unknown): Record<string, RepoOverrides> {
   try {
-    const parsed: unknown = JSON.parse(String(raw ?? '{}'))
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, RepoOverrides>) : {}
+    const parsed: Record<string, RepoOverrides> | null = JSON.parse(String(raw ?? '{}'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     return {}
   }
