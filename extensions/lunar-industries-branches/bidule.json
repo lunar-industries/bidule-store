@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-branches",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "title": "Lunar Industries - Branches",
   "engine": "^0.1.1",
   "contributes": {
@@ -29,33 +29,33 @@
           "key": "lunar-industries-branches.hidden",
           "type": "text",
           "title": "Branches d'intégration",
-          "help": "Masquées de la liste, proposées comme cibles des MR (avec la branche par défaut du dépôt).",
+          "help": "Séparées par des virgules, absentes de la page Branches (la branche par défaut de chaque dépôt l'est toujours) et des autres pages du module Lunar Industries (Kanban, Temps, Claude). Dans la page Temps, un merge vers l'une d'elles compte pour la tâche fusionnée, et un checkout ne compte pas.",
           "default": "main, master, develop, launchpad, factory, orbit"
         },
         {
           "key": "lunar-industries-branches.reviewTarget",
           "type": "text",
           "title": "Branche cible des MR",
-          "help": "Celle d'un dépôt qui n'en a pas choisi une à lui, s'il a cette branche.",
+          "help": "Pour un dépôt qui a cette branche et pas de cible à lui (réglable dans la page Branches). Les nouvelles branches partent aussi de celle-ci.",
           "default": ""
         },
         {
           "key": "lunar-industries-branches.naming",
           "type": "choice",
           "title": "Nommage des branches",
-          "help": "Pour retrouver l'issue d'une branche (« Closes #… » dans la MR).",
+          "help": "Sert à retrouver l'issue d'une branche (« Closes #… » dans la MR), puis la tâche que l'issue ou la MR cite. Une référence de tâche dans le nom lie toujours la branche, quel que soit ce choix.",
           "options": [
             {
               "value": "issue",
-              "label": "{issue}-{slug} : une issue d’abord"
+              "label": "Numéro d’issue, puis titre (488-ajout-role)"
             },
             {
               "value": "ref",
-              "label": "{ref}-{slug} : la référence de la tâche"
+              "label": "Référence de la tâche, puis titre (id-101-ajout-role)"
             },
             {
               "value": "template",
-              "label": "Le modèle ci-dessous"
+              "label": "Modèle libre"
             }
           ],
           "default": "issue"
@@ -63,9 +63,27 @@
         {
           "key": "lunar-industries-branches.template",
           "type": "text",
-          "title": "Modèle de nom de branche",
-          "help": "{issue}, {ref} et {slug}.",
+          "title": "Modèle",
+          "placeholder": "{ref}-{slug}",
+          "help": "Variables : {issue} (numéro d’issue), {ref} (référence de la tâche), {slug} (titre de la tâche). Utilisé avec « Modèle libre ».",
           "default": "{ref}-{slug}"
+        },
+        {
+          "key": "lunar-industries-branches.createIssue",
+          "type": "choice",
+          "title": "Créer une issue au démarrage",
+          "help": "Au démarrage d’une tâche par une session Claude (outil start_task).",
+          "options": [
+            {
+              "value": "0",
+              "label": "Seulement si le nom de la branche en a besoin"
+            },
+            {
+              "value": "1",
+              "label": "Toujours"
+            }
+          ],
+          "default": "0"
         },
         {
           "key": "lunar-industries-branches.targets",
