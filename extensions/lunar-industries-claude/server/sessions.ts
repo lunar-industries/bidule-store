@@ -434,6 +434,19 @@ export class SessionService {
     return this.deps.store.recover()
   }
 
+  /**
+   * Whether a folder is somewhere a session may run: the workspace's root, a repo the app knows, or a folder inside one,
+   * never any folder of the machine (a session can be given the right to edit anything, so where it starts matters).
+   */
+  async allowsFolder(folder: string, repos: string[]): Promise<boolean> {
+    const clean = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
+    const path = clean(folder)
+    if (!path || path.split('/').includes('..')) return false
+    const root = await this.#root(repos).catch(() => null)
+    if (root && clean(root) === path) return true
+    return repos.some((r) => path === clean(r) || path.startsWith(`${clean(r)}/`))
+  }
+
   async #root(repos: string[]): Promise<string> {
     const settings = await this.deps.settings()
     return workspaceRoot(settings.root, repos, await this.deps.git())
@@ -933,7 +946,8 @@ export class SessionService {
   async setEffort(id: string, effort: SessionEffort | null): Promise<boolean> {
     const s = this.#sessions.get(id)
     if (!s || s.closed) return this.#keepSaved(id, { effort })
-    await s.query?.applyFlagSettings({ effortLevel: effort ?? undefined })
+    // null, not undefined: an undefined is dropped from the message, and Claude Code would keep the effort it has.
+    await s.query?.applyFlagSettings({ effortLevel: effort })
     s.effort = effort
     this.#save(s, (row) => (row.effort = effort))
     this.#push(s, { kind: 'info', text: `Effort : ${effort ?? 'par défaut'}` })

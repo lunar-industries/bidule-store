@@ -50,6 +50,14 @@ async function findTask(id: string) {
   return (await source.search(id).catch(() => [])).find((t) => t.id === id) ?? null
 }
 
+// A folder the window names (the session of the terminal's own): the workspace's root, a repo the app knows or a folder
+// in one, never another.
+async function knownFolder(folder: string | undefined): Promise<void> {
+  if (folder !== undefined && !(await sessions.allowsFolder(folder, await repoPaths()))) {
+    throw new SessionError('Dossier inconnu', 404)
+  }
+}
+
 const ok = { ok: true as const }
 const done = (found: boolean, message = 'Session terminée') => {
   if (!found) throw new SessionError(message, 404)
@@ -83,10 +91,14 @@ export default class SessionsController {
     await enabled()
     const { prompt, mode, model, effort, resume, taskId, cwd, images, files, ...asked } = await request.validateUsing(startValidator)
     const known = await repoPaths()
-    if (asked.repos.some((r) => !known.includes(r))) throw new SessionError('Dépôt inconnu', 404)
+    await knownFolder(cwd)
+    // A session of the terminal started at the workspace's root lists that root as its « repo »: taken up again, it
+    // is given the repos the app knows, and its folder (`cwd`) says where it goes on.
+    const wanted = resume ? asked.repos.filter((r) => known.includes(r)) : asked.repos
+    if (wanted.some((r) => !known.includes(r))) throw new SessionError('Dépôt inconnu', 404)
     const ofTask = taskId && !resume ? await (await git()).branchesOf(taskId) : []
     // None chosen: the repos of the task's branches, else every repo the app knows.
-    const repos = asked.repos.length ? asked.repos : ofTask.length ? [...new Set(ofTask.map((b) => b.repo))] : known
+    const repos = wanted.length ? wanted : ofTask.length ? [...new Set(ofTask.map((b) => b.repo))] : known
     const branches = ofTask.filter((b) => repos.includes(b.repo))
     // The next new session starts with the same model and effort, even after the app restarts. Not the mode: it is a
     // setting of its own, and a session started in Plan mode once must not change it.
@@ -114,6 +126,7 @@ export default class SessionsController {
   async context({ params, request }: HttpContext): Promise<SessionContext> {
     await enabled()
     const { cwd: folder } = await request.validateUsing(contextValidator)
+    await knownFolder(folder)
     const row = await store.find(params.id)
     // A session of the terminal has no row until a task is attached to it: the panel still shows what can be known.
     if (!row) {
@@ -186,6 +199,7 @@ export default class SessionsController {
   async events({ params, request }: HttpContext) {
     await enabled()
     const { after, cwd } = await request.validateUsing(eventsValidator)
+    await knownFolder(cwd)
     const data = await sessions.eventsOf(params.id, after ?? 0, cwd)
     if (!data) throw new SessionError('Session inconnue', 404)
     return data
@@ -234,6 +248,7 @@ export default class SessionsController {
   async task({ params, request }: HttpContext) {
     await enabled()
     const { taskId, cwd } = await request.validateUsing(taskValidator)
+    await knownFolder(cwd)
     if (taskId && !(await findTask(taskId))) throw new SessionError('Tâche inconnue', 404)
     return done(await sessions.setTask(params.id, taskId, cwd), 'Session inconnue')
   }
@@ -252,6 +267,7 @@ export default class SessionsController {
   async watch({ params, request }: HttpContext) {
     await enabled()
     const { cwd } = await request.validateUsing(watchValidator)
+    await knownFolder(cwd)
     sessions.watch(params.id, cwd)
     return ok
   }
