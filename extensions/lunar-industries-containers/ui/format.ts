@@ -85,3 +85,25 @@ export function parseLine(line: string): LogLine {
     level: /\b(ERROR|FATAL|PANIC|CRITICAL)\b/.test(text) ? 'error' : /\b(WARN|WARNING)\b/.test(text) ? 'warn' : null,
   }
 }
+
+// What the page has shown of the logs: the time of the last line (as the engine wrote it, to ask for what follows, and as
+// an instant, to compare) and the texts shown at that very time.
+export type LogCursor = { stamp: string; at: number; seen: ReadonlySet<string> }
+export const NO_LOGS: LogCursor = { stamp: '', at: Number.NEGATIVE_INFINITY, seen: new Set() }
+
+/**
+ * The lines of a reading not shown yet, and where the page is now: those later than the last shown, those at its very
+ * time that were not shown (an engine gives the lines from that time on, the last one again; several lines may share a
+ * time), and those without a time. Times are compared as instants, so an offset (`+02:00`) or a fraction of another length
+ * does not mislead.
+ */
+export function followLogs(lines: LogLine[], cursor: LogCursor): { fresh: LogLine[]; cursor: LogCursor } {
+  const at = (l: LogLine) => Date.parse(l.stamp)
+  const fresh = lines.filter((l) => !l.stamp || at(l) > cursor.at || (at(l) === cursor.at && !cursor.seen.has(l.text)))
+  const stamped = fresh.filter((l) => l.stamp)
+  if (!stamped.length) return { fresh, cursor }
+  const latest = Math.max(...stamped.map(at))
+  const last = stamped.filter((l) => at(l) === latest)
+  const seen = new Set([...(latest === cursor.at ? cursor.seen : []), ...last.map((l) => l.text)])
+  return { fresh, cursor: { stamp: last[last.length - 1].stamp, at: latest, seen } }
+}

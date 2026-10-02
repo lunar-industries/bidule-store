@@ -3,7 +3,7 @@ import { BannerTools, ToolSearch, useHint, useOn } from '@bidule/sdk'
 import type { ContainerDetail, ContainerFile } from '../contract.ts'
 import { act, ContainerMenu, copyId, openTerminal } from './actions.tsx'
 import { api, message } from './api.ts'
-import { fmtBytes, fmtPercent, fold, isUp, parseLine, portLabel, portUrl, relTime, statusOf, usageRowOf, type LogLine } from './format.ts'
+import { fmtBytes, fmtPercent, fold, followLogs, isUp, NO_LOGS, parseLine, portLabel, portUrl, relTime, statusOf, usageRowOf, type LogCursor, type LogLine } from './format.ts'
 import { Icon } from './Icon.tsx'
 import { useUsage } from './usage.ts'
 
@@ -66,10 +66,10 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
   const [lines, setLines] = useState<LogLine[]>([])
   const [query, setQuery] = useState('')
   const [follow, setFollow] = useState(true)
-  const last = useRef('')
+  const last = useRef<LogCursor>(NO_LOGS)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    last.current = ''
+    last.current = NO_LOGS
     setLines([])
   }, [engine, id])
   useEffect(() => {
@@ -80,12 +80,11 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
       if (asking) return
       asking = true
       try {
-        const { lines: raw } = await api.logs({ params: { engine, id }, query: last.current ? { since: last.current } : {} })
-        // A line at the very time of the last one already shown came with it.
-        const fresh = raw.map(parseLine).filter((l) => !last.current || !l.stamp || l.stamp > last.current)
-        const stamped = fresh.filter((l) => l.stamp).at(-1)
-        if (stamped) last.current = stamped.stamp
-        if (live && fresh.length) setLines((now) => [...now, ...fresh].slice(-KEPT_LINES))
+        const { lines: raw } = await api.logs({ params: { engine, id }, query: last.current.stamp ? { since: last.current.stamp } : {} })
+        // The line at the very time of the last one already shown came with the others: only what is new is kept.
+        const next = followLogs(raw.map(parseLine), last.current)
+        last.current = next.cursor
+        if (live && next.fresh.length) setLines((now) => [...now, ...next.fresh].slice(-KEPT_LINES))
       } catch {
         // A stopped engine or a removed container: the view's own reading says so.
       } finally {

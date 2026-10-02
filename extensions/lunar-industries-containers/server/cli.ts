@@ -86,7 +86,7 @@ function ports(bindings: Bindings | undefined): ContainerPort[] {
 function toContainer(c: Inspected): Container {
   const labels = c.Config?.Labels ?? {}
   const status = c.State?.Status ?? ''
-  const state: ContainerState = STATES.includes(status as ContainerState) ? (status as ContainerState) : 'other'
+  const state: ContainerState = STATES.find((s) => s === status) ?? 'other'
   // A running container has its actual ports (random ones included); a stopped one, only what it asks for.
   const live = state === 'running' ? ports(c.NetworkSettings?.Ports) : []
   return {
@@ -104,7 +104,24 @@ function toContainer(c: Inspected): Container {
 }
 
 // The containers of an inspect output, a pod's infra container (Podman) left out.
-const inspected = (json: string) => (JSON.parse(json || '[]') as Inspected[]).filter((c) => !c.IsInfra)
+// What the engine printed, checked: a reply that is not a list of containers (an error text, another format) is said, not
+// read into a crash further on.
+function inspectedOf(json: string): Inspected[] {
+  let value: unknown
+  try {
+    value = JSON.parse(json || '[]')
+  } catch {
+    throw new Error('Réponse inattendue du moteur')
+  }
+  if (!Array.isArray(value)) throw new Error('Réponse inattendue du moteur')
+  if (!value.every(isInspected)) throw new Error('Réponse inattendue du moteur')
+  return value
+}
+// A container the page can read: an object with its id (the rest is optional, and read as such).
+function isInspected(item: unknown): item is Inspected {
+  return typeof item === 'object' && item !== null && typeof Reflect.get(item, 'Id') === 'string'
+}
+const inspected = (json: string) => inspectedOf(json).filter((c) => !c.IsInfra)
 
 export function parseInspect(json: string): Container[] {
   return inspected(json).map(toContainer)
@@ -162,6 +179,8 @@ export function parseListing(text: string): ContainerFile[] {
     .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name))
 }
 
+const instantOf = (line: string) => Date.parse(line.slice(0, Math.max(line.indexOf(' '), 0)))
+
 // A line of a container's logs begins with its time (`--timestamps`), which orders what came out of stdout and
 // stderr.
 export function mergeLogs(...outputs: string[]): string[] {
@@ -170,9 +189,14 @@ export function mergeLogs(...outputs: string[]): string[] {
     .filter((l) => l.length > 0)
     .map((line, i) => ({ line, i }))
     .sort((a, b) => {
-      const x = a.line.slice(0, 30)
-      const y = b.line.slice(0, 30)
-      return x < y ? -1 : x > y ? 1 : a.i - b.i
+      // As instants first (an engine may write an offset, or a fraction of another length), then as written (the
+      // nanoseconds), then as they came.
+      const x = instantOf(a.line)
+      const y = instantOf(b.line)
+      if (x !== y && !Number.isNaN(x) && !Number.isNaN(y)) return x - y
+      const s = a.line.slice(0, 35)
+      const t = b.line.slice(0, 35)
+      return s < t ? -1 : s > t ? 1 : a.i - b.i
     })
     .map((l) => l.line)
 }

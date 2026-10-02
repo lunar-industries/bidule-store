@@ -18,7 +18,7 @@ export const filesValidator = vine.create({
 export const logsValidator = vine.create({
   since: vine
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/)
+    .regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/)
     .optional(),
 })
 
