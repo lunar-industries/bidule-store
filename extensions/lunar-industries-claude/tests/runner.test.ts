@@ -1,36 +1,63 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { bundledCandidates, parseAuthStatus, pathInWsl, placeOf, sessionEnv, wslArgs, type ClaudeWsl } from '../server/runner.ts'
+import { bundledCandidates, forwardedEnv, parseAuthStatus, pathInWsl, placeOf, sessionEnv, spawnIn } from '../server/runner.ts'
+import { fakeEnv } from './fakes.ts'
 
-// Taken from quack-board (tests/unit/claude_runner.spec.ts, Simon's).
+// Taken from quack-board (tests/unit/claude_runner.spec.ts, Simon's), on a fake of the tools' environment.
 
-const ubuntu: ClaudeWsl = { distro: 'Ubuntu', home: '/home/me', claude: '/home/me/.local/bin/claude' }
+const CLAUDE = '/home/me/.local/bin/claude'
+const claudeIs = async () => CLAUDE
+const claudeMissing = async () => {
+  throw new Error('Claude Code introuvable')
+}
 
 describe('Claude runner · where Claude Code runs', () => {
-  it('a folder of this machine runs the SDK’s own Claude Code', async () => {
-    const place = await placeOf('/home/me/app', 'linux', async () => {
-      throw new Error('WSL must not be asked')
-    })
-    expect(place).toEqual({ cwd: '/home/me/app', configDir: undefined, wsl: null, options: {} })
+  it('on this machine, a folder runs the SDK’s own Claude Code', async () => {
+    const place = await placeOf('/home/me/app', fakeEnv('local'), claudeMissing)
+    expect(place).toEqual({ cwd: '/home/me/app', configDir: undefined, remote: null, options: {} })
   })
 
-  it('on Windows, a repo inside WSL runs the distro’s, in its Linux path', async () => {
-    const place = await placeOf('\\\\wsl.localhost\\Ubuntu\\home\\me\\app', 'win32', async () => ubuntu)
+  it('in PowerShell, too: the Claude Code installed on Windows is the SDK’s', async () => {
+    const place = await placeOf('C:\\dev\\app', fakeEnv('powershell'), claudeMissing)
+    expect(place).toEqual({ cwd: 'C:\\dev\\app', configDir: undefined, remote: null, options: {} })
+  })
+
+  it('in WSL, a repo of the distro runs the distro’s, in its Linux path', async () => {
+    const env = fakeEnv('wsl', { home: '\\\\wsl.localhost\\Ubuntu\\home\\me' })
+    const place = await placeOf('\\\\wsl.localhost\\Ubuntu\\home\\me\\app', env, claudeIs)
     expect(place.cwd).toBe('/home/me/app')
-    expect(place.configDir).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\.claude')
-    expect(place.options.pathToClaudeCodeExecutable).toBe(ubuntu.claude)
+    // Joined as the platform joins (with backslashes on Windows, where this path is real).
+    expect(place.configDir).toBe(join('\\\\wsl.localhost\\Ubuntu\\home\\me', '.claude'))
+    expect(place.remote).toEqual({ label: 'WSL (Ubuntu)', claude: CLAUDE })
+    expect(place.options.pathToClaudeCodeExecutable).toBe(CLAUDE)
     expect(place.options.spawnClaudeCodeProcess).toBeTypeOf('function')
   })
 
-  it('on Windows, a repo on the Windows side is refused', async () => {
-    await expect(placeOf('C:\\dev\\app', 'win32', async () => ubuntu)).rejects.toThrow(/doivent être dans WSL/)
+  it('in WSL, a repo on the Windows side is refused', async () => {
+    await expect(placeOf('C:\\dev\\app', fakeEnv('wsl'), claudeIs)).rejects.toThrow(/doivent être dans WSL/)
   })
 
-  it('wsl.exe runs the distro’s claude with the SDK’s arguments and its variables only', () => {
-    const args = wslArgs(ubuntu, '/home/me/app', {
-      args: ['--output-format', 'stream-json'],
-      env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-ts', PATH: 'C:\\Windows', APPDATA: 'C:\\x', DEBUG: '1' },
+  it('in a toolbox, the toolbox’s Claude Code runs, and keeps its sessions in the home folder it shares', async () => {
+    const env = fakeEnv('toolbox', { home: '/home/me' })
+    const place = await placeOf('/home/me/app', env, claudeIs)
+    expect(place.cwd).toBe('/home/me/app')
+    expect(place.configDir).toBe('/home/me/.claude')
+    expect(place.remote).toEqual({ label: 'Toolbox (fedora)', claude: CLAUDE })
+  })
+
+  it('without Claude Code in the environment, the folder has no place (and the reason is said)', async () => {
+    await expect(placeOf('/home/me/app', fakeEnv('toolbox'), claudeMissing)).rejects.toThrow(/introuvable/)
+  })
+
+  it('the environment starts the claude it found, with the SDK’s arguments and its variables only', () => {
+    const wsl = fakeEnv('wsl', { distro: 'Ubuntu' })
+    const command = wsl.command({
+      argv: [CLAUDE, '--output-format', 'stream-json'],
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\app',
+      env: forwardedEnv({ CLAUDE_CODE_ENTRYPOINT: 'sdk-ts', PATH: 'C:\\Windows', APPDATA: 'C:\\x', DEBUG: '1' }),
     })
-    expect(args).toEqual([
+    expect(command.file).toBe('wsl.exe')
+    expect(command.args).toEqual([
       '-d',
       'Ubuntu',
       '--cd',
@@ -39,10 +66,11 @@ describe('Claude runner · where Claude Code runs', () => {
       'env',
       'CLAUDE_CODE_ENTRYPOINT=sdk-ts',
       'DEBUG=1',
-      '/home/me/.local/bin/claude',
+      CLAUDE,
       '--output-format',
       'stream-json',
     ])
+    expect(spawnIn(wsl, CLAUDE, '\\\\wsl.localhost\\Ubuntu\\home\\me\\app')).toBeTypeOf('function')
   })
 })
 

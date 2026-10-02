@@ -1,8 +1,7 @@
-import { exec, execFile } from 'node:child_process'
 import { appendFile, copyFile, glob, mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, parse, sep } from 'node:path'
+import type { Environment } from '@bidule/api/extensions'
 import type { GitSource } from '@bidule/ext-git/contract'
-import { parseWslPath } from './wsl.ts'
 
 /**
  * Taken from quack-board (domain/worktrees.ts, Simon's): git worktrees, one folder per branch, so that several
@@ -31,8 +30,9 @@ export interface AddOptions {
   base?: string
   // Untracked files to copy from the main checkout: globs relative to the repo.
   seed?: string[]
-  // A command to run in the new worktree (`npm ci`).
+  // A command to run in the new worktree (`npm ci`), and how to run it (see shellVia).
   prepare?: string | null
+  shell?: Shell
 }
 
 export interface Added {
@@ -125,18 +125,17 @@ async function seed(repo: string, target: string, patterns: string[]): Promise<s
 // Installing dependencies takes minutes.
 const PREPARE_MS = 15 * 60_000
 
-// Runs a command line in a folder, where its tools live: inside its WSL distro on Windows (a login shell: the user's
-// PATH), else here.
-export function shellIn(folder: string, command: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const inWsl = process.platform === 'win32' ? parseWslPath(folder) : null
-    const done = (err: Error | null) => (err ? reject(err) : resolve())
-    if (inWsl) {
-      execFile('wsl.exe', ['-d', inWsl.distro, '--cd', inWsl.linux, '-e', 'sh', '-lc', command], { timeout: PREPARE_MS, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, done)
-    } else {
-      exec(command, { cwd: folder, timeout: PREPARE_MS, maxBuffer: 16 * 1024 * 1024 }, done)
-    }
-  })
+// A command line run in a folder.
+export type Shell = (folder: string, command: string) => Promise<void>
+
+// Runs a command line in a folder where the tools' environment has its tools: a login shell inside WSL, a toolbox or on the
+// host (the user's PATH), Windows' command interpreter in PowerShell, else this machine's shell.
+export function shellVia(env: Environment): Shell {
+  return async (folder, command) => {
+    const { kind } = await env.info()
+    const argv = kind === 'powershell' ? ['cmd.exe', '/c', command] : kind === 'local' ? ['sh', '-c', command] : ['sh', '-lc', command]
+    await env.run({ argv, cwd: folder, timeout: PREPARE_MS })
+  }
 }
 
 /**
@@ -178,7 +177,8 @@ export async function addWorktree(git: GitSource, repo: string, branch: string, 
   await excludeWorktrees(git, repo)
   added.seeded = await seed(repo, path, options.seed ?? [])
   if (options.prepare) {
-    await shellIn(path, options.prepare).catch((err: Error) => {
+    const { prepare, shell } = options
+    await (shell ? shell(path, prepare) : Promise.reject(new Error('Aucun environnement où lancer la commande'))).catch((err: Error) => {
       added.prepareError = err.message.split('\n')[0]
     })
   }

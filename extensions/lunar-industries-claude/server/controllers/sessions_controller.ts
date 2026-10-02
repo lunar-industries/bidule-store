@@ -70,7 +70,7 @@ export default class SessionsController {
   // Whether the sessions are on, and the Claude Code they run (on Windows, the one of WSL's default distro).
   async status() {
     const on = (await settings()).enabled
-    return { enabled: on, places: on ? await detect() : [] }
+    return { enabled: on, places: on ? await detect(ctx.env) : [] }
   }
 
   // The repos the app knows, with what the module's settings say of each.
@@ -131,14 +131,14 @@ export default class SessionsController {
     // A session of the terminal has no row until a task is attached to it: the panel still shows what can be known.
     if (!row) {
       if (!folder) throw new SessionError('Session inconnue', 404)
-      const where = await placeOf(folder).catch(() => null)
+      const where = await placeOf(folder, ctx.env).catch(() => null)
       return {
         id: params.id,
         cwd: folder,
         task: null,
         repos: [],
         worktrees: [],
-        where: where?.wsl ? `WSL (${where.wsl.distro})` : 'Ce poste',
+        where: where?.remote?.label ?? 'Ce poste',
         login: null,
         slot: [],
         costUsd: null,
@@ -163,17 +163,17 @@ export default class SessionsController {
         return { path, repo: repo?.label ?? null, branch, files }
       })
     )
-    const place = await placeOf(row.cwd).catch(() => null)
+    const place = await placeOf(row.cwd, ctx.env).catch(() => null)
     // The executable slot of the session's repos, held by this session or another.
     const pid = await pidOfSession(place?.configDir ?? localConfigDir(), row.id)
-    const locks = await lockStatus(lockHost(row.cwd, place?.wsl?.home), repos.map((r) => lockName(r.path))).catch(() => [])
+    const locks = await lockStatus(await lockHost(ctx.env, row.cwd), repos.map((r) => lockName(r.path))).catch(() => [])
     return {
       id: row.id,
       cwd: row.cwd,
       task: task ? { id: task.id, ref: task.ref, title: task.title, status: task.status, url: task.url } : null,
       repos: repos.map((r) => ({ label: r.label, path: r.path })),
       worktrees,
-      where: place?.wsl ? `WSL (${place.wsl.distro})` : 'Ce poste',
+      where: place?.remote?.label ?? 'Ce poste',
       // What the session is telling now, else what its last turn left on its row.
       login: sessions.loginOf(row.id) ?? row.login,
       slot: locks.map((l) => ({ repo: l.repo, session: l.session, alive: l.alive, mine: pid !== null && l.pid === pid })),

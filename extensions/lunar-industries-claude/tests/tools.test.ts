@@ -8,7 +8,7 @@ import type { GitBranch } from '@bidule/ext-git/contract'
 import { LOCKS_DIR } from '../server/slot_lock.ts'
 import type { Settings } from '../server/settings.ts'
 import { pipelineVerdict, workspaceServer, workspaceTools, type ToolContext } from '../server/tools.ts'
-import { FakeForge, FakeGit, FakeTasks, MemoryStore, real, recording, settingsWith } from './fakes.ts'
+import { FakeForge, FakeGit, FakeTasks, MemoryStore, fakeEnv, real, recording, settingsWith } from './fakes.ts'
 import { IDENTITY, realRepo, sh } from './repos.ts'
 
 // Taken from quack-board (tests/unit/claude_tools.spec.ts, Simon's). The tools reach the tasks, git and the forges
@@ -47,7 +47,7 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
   const tasks = new FakeTasks()
   const store = new MemoryStore()
   const settings = settingsWith(options.settings)
-  const tools = workspaceTools({ git: async () => git, tasks: async () => tasks, settings: async () => settings, store }, async () => {})
+  const tools = workspaceTools({ env: fakeEnv(), git: async () => git, tasks: async () => tasks, settings: async () => settings, store }, async () => {})
   const asked: string[] = []
   const ctx = (allow = true, extra: Partial<ToolContext> = {}): ToolContext => ({
     sessionId: 's1',

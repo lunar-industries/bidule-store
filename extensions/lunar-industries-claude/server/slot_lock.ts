@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process'
 import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { parseWslPath, wslPath } from './wsl.ts'
+import type { Environment } from '@bidule/api/extensions'
 
 /**
  * Taken from quack-board (domain/slot_lock.ts, Simon's): the executable slot. A repo's main checkout is the only
@@ -53,18 +52,21 @@ function isRunning(pid: string): boolean {
   }
 }
 
-// Where a workspace's locks are, and how to tell a live holder: here, or inside the WSL distro of a workspace in WSL.
-export function lockHost(root: string, wslHome?: string): LockHost {
+// Where a workspace's locks are, and how to tell a live holder: here, or in the tools' environment (inside the WSL distro,
+// the toolbox, on the Flatpak's host) where the session's Claude Code runs. Without an environment, here.
+export async function lockHost(env: Environment | null, root: string): Promise<LockHost> {
   const dir = join(root, LOCKS_DIR)
-  const inWsl = process.platform === 'win32' ? parseWslPath(root) : null
-  if (inWsl && wslHome) {
-    const registry = wslPath(inWsl.distro, `${wslHome}/.claude/sessions`)
+  const info = env ? await env.info() : null
+  if (env && info && info.kind !== 'local' && info.kind !== 'powershell') {
+    // The registry Claude Code writes, as this process reaches it; its process, asked there.
+    const registry = join(info.home, '.claude', 'sessions')
     return {
       dir,
       alive: async (pid) =>
         (await exists(join(registry, `${pid}.json`))) &&
-        new Promise((resolve) =>
-          execFile('wsl.exe', ['-d', inWsl.distro, '-e', 'kill', '-0', pid], { windowsHide: true }, (err) => resolve(!err))
+        env.run({ argv: ['kill', '-0', pid], timeout: 10_000 }).then(
+          () => true,
+          () => false
         ),
     }
   }

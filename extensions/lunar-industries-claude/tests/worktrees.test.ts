@@ -2,8 +2,8 @@ import { access, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { addWorktree, parseWorktrees, removeWorktree, workspaceRoot, WorktreeError, worktreePath } from '../server/worktrees.ts'
-import { FakeGit, real, recording } from './fakes.ts'
+import { addWorktree, parseWorktrees, removeWorktree, shellVia, workspaceRoot, WorktreeError, worktreePath } from '../server/worktrees.ts'
+import { FakeGit, fakeEnv, real, recording } from './fakes.ts'
 import { cloned } from './repos.ts'
 
 // Taken from quack-board (tests/unit/worktrees.spec.ts, Simon's). git runs through the `git` role: a fake one that
@@ -93,10 +93,11 @@ describe('Worktrees · the commands', () => {
 
 describe('Worktrees · with git', () => {
   const git = new FakeGit(real)
+  const shell = shellVia(fakeEnv())
 
   it('creates, excludes, copies the untracked files, prepares, then removes', async () => {
     const { repo } = await cloned()
-    const added = await addWorktree(git, repo, '42-ajout', { base: 'launchpad', seed: ['src/env/*.ts'], prepare: 'touch prepared' })
+    const added = await addWorktree(git, repo, '42-ajout', { base: 'launchpad', seed: ['src/env/*.ts'], prepare: 'touch prepared', shell })
     const path = worktreePath(repo, '42-ajout')
     expect(added).toMatchObject({ path, from: 'new', base: 'launchpad', seeded: ['src/env/dev.ts'], prepareError: null })
     await access(join(path, 'prepared'))
@@ -117,7 +118,7 @@ describe('Worktrees · with git', () => {
 
   it('a failed preparation leaves the worktree, saying why', async () => {
     const { repo } = await cloned()
-    const added = await addWorktree(git, repo, '44-prep', { base: 'launchpad', prepare: 'exit 3' })
+    const added = await addWorktree(git, repo, '44-prep', { base: 'launchpad', prepare: 'exit 3', shell })
     expect(added.prepareError).toBeTruthy()
     await access(added.path)
   })

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
+import type { Environment, EnvironmentKind } from '@bidule/api/extensions'
 import type { ForgeClient, ForgeIssue, ForgeJob, ForgePipeline, ForgeReview, GitBranch, GitSource, NewReview } from '@bidule/ext-git/contract'
 import type { Board, TaskColumn, TaskPage, TaskSource } from '@bidule/sdk/tasks'
 import type { Settings } from '../server/settings.ts'
@@ -232,4 +233,48 @@ export class MemoryStore extends SessionStore {
     if (archived) this.archives.add(id)
     else this.archives.delete(id)
   }
+}
+
+/**
+ * The tools' environment (ctx.env), as far as the module uses it. `run` runs the command on this machine, in its folder
+ * (a fake of the environment's, which would run it inside WSL, a toolbox or on the host); `command` builds it as WSL's
+ * go-between does (wsl.exe) when the kind says so.
+ */
+export function fakeEnv(
+  kind: EnvironmentKind = 'local',
+  options: { home?: string; distro?: string; run?: Environment['run'] } = {}
+): Environment {
+  const home = options.home ?? homedir()
+  const distro = options.distro ?? 'Ubuntu'
+  const toEnv = (path: string) => (kind === 'wsl' ? (path.match(/^\\\\wsl(?:\.localhost|\$)\\[^\\]+(\\.*)?$/i)?.[1] ?? '/').replace(/\\/g, '/') : path)
+  const env = {
+    info: async () => ({
+      kind,
+      label: kind === 'wsl' ? `WSL (${distro})` : kind === 'toolbox' ? 'Toolbox (fedora)' : 'Ce poste',
+      distro: kind === 'wsl' ? distro : null,
+      toolbox: kind === 'toolbox' ? 'fedora' : null,
+      home,
+      problem: null,
+      live: true,
+    }),
+    run:
+      options.run ??
+      ((command) =>
+        new Promise<string>((resolve, reject) => {
+          const [file = '', ...args] = command.argv
+          const child = execFile(file, args, { cwd: command.cwd ?? home, timeout: command.timeout }, (err, stdout, stderr) =>
+            err ? reject(Object.assign(err, { stdout, stderr })) : resolve(stdout)
+          )
+          child.stdin?.end(command.stdin)
+        })),
+    command: ({ argv, cwd, env: vars }: { argv: string[]; cwd?: string | null; env?: Record<string, string> }) => {
+      const pairs = Object.entries(vars ?? {}).map(([k, v]) => `${k}=${v}`)
+      if (kind === 'wsl') return { file: 'wsl.exe', args: ['-d', distro, '--cd', toEnv(cwd ?? home), '-e', 'env', ...pairs, ...argv], cwd: homedir() }
+      const [file = '', ...args] = argv
+      return { file, args, cwd: cwd ?? home }
+    },
+    toEnv,
+    direct: kind !== 'wsl',
+  }
+  return Object.assign(env, { host: env }) as unknown as Environment
 }

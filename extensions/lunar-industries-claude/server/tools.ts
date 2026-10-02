@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import type { Environment } from '@bidule/api/extensions'
 import type { ForgeClient, ForgeJob, GitSource } from '@bidule/ext-git/contract'
 import type { Task, TaskSource } from '@bidule/sdk/tasks'
 import { sdk } from './sdk.ts'
@@ -8,7 +9,7 @@ import { deployOf, issueOf, list, reviewTargetOf, slugify, templateOf, type Sett
 import { acquire, lockHost, lockName, lockStatus, pidOfSession, release } from './slot_lock.ts'
 import { moveToInProgress, startTask } from './start_task.ts'
 import type { SessionStore } from './store.ts'
-import { addWorktree, baseOf, listWorktrees, removeWorktree, worktreePath } from './worktrees.ts'
+import { addWorktree, baseOf, listWorktrees, removeWorktree, shellVia, worktreePath } from './worktrees.ts'
 
 /**
  * Taken from quack-board (services/claude_tools.ts, Simon's): the workspace's own tools, given to each Claude session
@@ -32,8 +33,6 @@ export interface ToolContext {
   root: string
   // The session's Claude Code folder (~/.claude), as this process reaches it: its registry gives the pid holding locks.
   configDir: string
-  // The home folder inside WSL, for a workspace in WSL.
-  wslHome?: string
   // Asks the user; true when allowed.
   confirm(tool: string, detail: string): Promise<boolean>
   // The executable slot is held by another session (`by`): the user is told.
@@ -41,6 +40,8 @@ export interface ToolContext {
 }
 
 export interface ToolDeps {
+  // Where the outside tools run: a worktree's preparation, and the pids of the executable slot's holders.
+  env: Environment
   git: () => Promise<GitSource>
   // null without a source of tasks.
   tasks: () => Promise<TaskSource | null>
@@ -191,16 +192,17 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       base: base ?? (await baseOf(git, r.path, reviewTargetOf(s, r.path))),
       seed: list((own.worktreeSeed ?? '').replace(/\s+/g, ',')),
       prepare: own.worktreePrepare || null,
+      shell: shellVia(deps.env),
     })
   }
 
-  const hostOf = (ctx: ToolContext) => lockHost(ctx.root, ctx.wslHome)
+  const hostOf = (ctx: ToolContext) => lockHost(deps.env, ctx.root)
   const lockNames = async (repos: string[]) => (await Promise.all(repos.map(findRepo))).map((r) => lockName(r.path))
   // The session holds the repo's executable slot: only then may it touch the main checkout.
   const holdsSlot = async (ctx: ToolContext, repo: string) => {
     const pid = await pidOfSession(ctx.configDir, ctx.sessionId)
     if (!pid) return false
-    return (await lockStatus(hostOf(ctx), [lockName(repo)])).some((l) => l.pid === pid)
+    return (await lockStatus(await hostOf(ctx), [lockName(repo)])).some((l) => l.pid === pid)
   }
 
   const keepWorktree = async (sessionId: string, change: (paths: string[]) => string[]) => {
@@ -362,7 +364,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const pid = await pidOfSession(ctx.configDir, ctx.sessionId)
         if (!pid) throw new ToolError('Session introuvable dans le registre de Claude Code')
         const row = await deps.store.find(ctx.sessionId)
-        const taken = await acquire(hostOf(ctx), names, { pid, session: row?.title ?? ctx.sessionId })
+        const taken = await acquire(await hostOf(ctx), names, { pid, session: row?.title ?? ctx.sessionId })
         if (!taken.ok) {
           const holder = taken.busy.alive ? taken.busy.session || `le pid ${taken.busy.pid}` : null
           ctx.slotBusy?.(holder ? `le créneau de ${taken.busy.repo}, tenu par ${holder}` : `le créneau de ${taken.busy.repo}`)
@@ -395,7 +397,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
           restored.push(`${r.label} : ${base}`)
         }
         const pid = await pidOfSession(ctx.configDir, ctx.sessionId)
-        return { released: await release(hostOf(ctx), await lockNames(repos), pid ?? undefined), restored }
+        return { released: await release(await hostOf(ctx), await lockNames(repos), pid ?? undefined), restored }
       },
     }),
 
@@ -404,7 +406,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       description: 'Les créneaux exécutables pris, par quelle session, et si elle tourne encore.',
       schema: {},
       write: false,
-      run: async (_args, ctx) => lockStatus(hostOf(ctx)),
+      run: async (_args, ctx) => lockStatus(await hostOf(ctx)),
     }),
 
     define({

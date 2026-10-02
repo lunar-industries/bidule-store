@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { SessionService } from '../server/sessions.ts'
 import type { SessionStore } from '../server/store.ts'
-import { FakeGit, settingsWith } from './fakes.ts'
+import { FakeGit, fakeEnv, settingsWith } from './fakes.ts'
 
 // Where a session may run: the workspace's root, a repo the app knows or a folder in one, never any other.
 const service = (root = '/home/simon/code') =>
   new SessionService({
+    env: fakeEnv(),
     store: {} as unknown as SessionStore,
     settings: async () => settingsWith({ root }),
     git: async () => new FakeGit(),

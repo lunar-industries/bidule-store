@@ -7,7 +7,7 @@ import { list, readSettings, reviewTargetOf } from './settings.ts'
 import { SessionService } from './sessions.ts'
 import { SessionStore } from './store.ts'
 import { workspaceTools } from './tools.ts'
-import { addWorktree, baseOf } from './worktrees.ts'
+import { addWorktree, baseOf, shellVia } from './worktrees.ts'
 
 // For the controller, once started (its page's first request starts it).
 export let ctx: ServerContext
@@ -44,6 +44,7 @@ export async function repoWorktree(repo: string, branch: string) {
     base: await baseOf(g, repo, reviewTargetOf(s, repo)),
     seed: list((own.worktreeSeed ?? '').replace(/\s+/g, ',')),
     prepare: own.worktreePrepare || null,
+    shell: shellVia(ctx.env),
   })
 }
 
@@ -51,6 +52,7 @@ export async function activate(context: ServerContext) {
   ctx = context
   store = new SessionStore(ctx.db)
   sessions = new SessionService({
+    env: ctx.env,
     store,
     settings,
     git,
@@ -59,7 +61,7 @@ export async function activate(context: ServerContext) {
       sessions: (id, status) => void ctx.events.emit('lunar-industries-claude.sessions', { id, status }),
       session: (id, message) => void ctx.events.emit('lunar-industries-claude.session', { id, message }),
     },
-    tools: workspaceTools({ git, tasks, settings, store }),
+    tools: workspaceTools({ env: ctx.env, git, tasks, settings, store }),
     worktree: repoWorktree,
     plugins: [PLUGIN],
   })
