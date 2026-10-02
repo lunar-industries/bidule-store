@@ -1,4 +1,5 @@
 import type { ServerContext } from '@bidule/api/extensions'
+import '@bidule/ext-lunar-industries-branches/contract'
 
 // The module's settings (bidule.json), read together.
 export type TempsSettings = {
@@ -36,14 +37,23 @@ export const DEFAULT_SETTINGS: TempsSettings = {
   deployLabel: 'Déploiement',
 }
 
+// One setting for every module of the suite: the Branches module's « Branches d'intégration ». An extension cannot read
+// another's settings, so it is asked by that module's command; without the module, the defaults.
+async function integrationOf(ctx: ServerContext): Promise<string[]> {
+  try {
+    return (await ctx.commands.execute('lunar-industries-branches.shared', {})).integration
+  } catch {
+    return DEFAULT_SETTINGS.integrationBranches
+  }
+}
+
 export async function readSettings(ctx: ServerContext): Promise<TempsSettings> {
   const get = (key: string) => ctx.settings.get(`${K}.${key}`)
   const text = async (key: keyof TempsSettings, fallback: string) => String((await get(key)) ?? '').trim() || fallback
   const work = await get('workDays')
   return {
     workDays: work === undefined ? DEFAULT_SETTINGS.workDays : workDaysOf(work),
-    // One setting for every module of the suite: the Branches module's « Branches d'intégration ».
-    integrationBranches: list((await ctx.settings.get('lunar-industries-branches.hidden')) ?? DEFAULT_SETTINGS.integrationBranches.join(', ')),
+    integrationBranches: await integrationOf(ctx),
     deployBranches: list((await get('deployBranches')) ?? DEFAULT_SETTINGS.deployBranches.join(', ')),
     defaultLabel: await text('defaultLabel', DEFAULT_SETTINGS.defaultLabel),
     absentLabel: await text('absentLabel', DEFAULT_SETTINGS.absentLabel),

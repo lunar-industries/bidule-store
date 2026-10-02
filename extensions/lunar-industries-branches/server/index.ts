@@ -14,4 +14,6 @@ export async function activate(ctx: ServerContext) {
     save: (key, value) => ctx.settings.set(key, value),
     changed: () => void ctx.events.emit('lunar-industries-branches.changed', {}),
   })
+  // The suite's other modules cannot read these settings (each reads its own): they ask for them here.
+  ctx.commands.register('lunar-industries-branches.shared', () => service.shared())
 }

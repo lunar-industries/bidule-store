@@ -1,10 +1,11 @@
 import type { ForgeClient, GitBranch, GitSource } from '@bidule/ext-git/contract'
 import type { TaskSource } from '@bidule/sdk/tasks'
-import type { Job, Links, ListedRepo, Listing } from '../contract.ts'
+import type { Job, Links, ListedRepo, Listing, SharedSettings } from '../contract.ts'
 import { BranchesError } from './errors.ts'
 import { issueOf, list, reviewDescription, templateOf } from './names.ts'
 
 const K = 'lunar-industries-branches'
+const DEFAULT_INTEGRATION = 'main, master, develop, launchpad, factory, orbit'
 
 export interface BranchesDeps {
   git: () => Promise<GitSource>
@@ -86,6 +87,18 @@ export class BranchesService {
         .map((b) => ({ ...b, forge: forges.get(b.repo) ?? null, issueNumber: issueOf(template, b.name) })),
       repos: listed,
       defaultTarget: (await this.#text('reviewTarget')) || null,
+    }
+  }
+
+  // What the other modules of the suite ask for (see SharedSettings), with this module's defaults.
+  async shared(): Promise<SharedSettings> {
+    return {
+      integration: list((await this.deps.setting(`${K}.hidden`)) ?? DEFAULT_INTEGRATION),
+      reviewTarget: await this.#text('reviewTarget'),
+      targets: await this.#targets(),
+      naming: (await this.#text('naming')) || 'issue',
+      template: (await this.#text('template')) || '{ref}-{slug}',
+      createIssue: (await this.#text('createIssue')) === '1',
     }
   }
 

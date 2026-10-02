@@ -1,4 +1,5 @@
 import type { ServerContext } from '@bidule/api/extensions'
+import type { SharedSettings } from '@bidule/ext-lunar-industries-branches/contract'
 import type { RepoOverrides } from '../contract.ts'
 
 // The module's settings (bidule.json), read together: what the sessions and the tools need.
@@ -38,30 +39,35 @@ export const list = (value: unknown) =>
     .filter(Boolean)
 
 // What the suite's modules share is the Branches module's (Réglages › Lunar Industries - Branches): the integration
-// branches, the review target, the naming of the branches, the issue created at the start, the checkout. Without that
-// module, these defaults.
-const BRANCHES = 'lunar-industries-branches'
-const DEFAULT_INTEGRATION = 'main, master, develop, launchpad, factory, orbit'
+// branches, the review target (and each repo's), the naming of the branches, the issue created at the start. An extension
+// cannot read another's settings, so it is asked by that module's command; without the module, these defaults.
+const SHARED_DEFAULTS: SharedSettings = {
+  integration: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
+  reviewTarget: '',
+  targets: {},
+  naming: 'issue',
+  template: '{ref}-{slug}',
+  createIssue: false,
+}
+
+async function sharedOf(ctx: ServerContext): Promise<SharedSettings> {
+  try {
+    return await ctx.commands.execute('lunar-industries-branches.shared', {})
+  } catch {
+    return SHARED_DEFAULTS
+  }
+}
 
 export async function readSettings(ctx: ServerContext): Promise<Settings> {
   const get = async (key: string) => ctx.settings.get(`${K}.${key}`)
   const text = async (key: string) => String((await get(key)) ?? '').trim()
-  const shared = async (key: string) => ctx.settings.get(`${BRANCHES}.${key}`)
-  const sharedText = async (key: string) => String((await shared(key)) ?? '').trim()
+  const shared = await sharedOf(ctx)
   let repos: Record<string, RepoOverrides> = {}
   try {
     const parsed: Record<string, RepoOverrides> | null = JSON.parse((await text('repos')) || '{}')
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) repos = parsed
   } catch {
     // Unreadable: no repo has settings of its own.
-  }
-  // Each repo's review target, as the Branches page keeps them.
-  let repoTargets: Record<string, string> = {}
-  try {
-    const parsed: Record<string, string> | null = JSON.parse((await sharedText('targets')) || '{}')
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) repoTargets = parsed
-  } catch {
-    // Unreadable: no repo has a target of its own.
   }
   return {
     enabled: (await get('enabled')) === true,
@@ -70,12 +76,12 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
     defaultMode: (await text('defaultMode')) || 'default',
     defaultModel: await text('defaultModel'),
     defaultEffort: await text('defaultEffort'),
-    reviewTarget: await sharedText('reviewTarget'),
-    repoTargets,
-    branchNaming: (await sharedText('naming')) || 'issue',
-    branchTemplate: (await sharedText('template')) || '{ref}-{slug}',
-    createIssue: (await sharedText('createIssue')) === '1',
-    integrationBranches: list((await shared('hidden')) ?? DEFAULT_INTEGRATION),
+    reviewTarget: shared.reviewTarget,
+    repoTargets: shared.targets,
+    branchNaming: shared.naming,
+    branchTemplate: shared.template,
+    createIssue: shared.createIssue,
+    integrationBranches: shared.integration,
     deploy: {
       stagingBranch: await text('stagingBranch'),
       productionBranch: await text('productionBranch'),
