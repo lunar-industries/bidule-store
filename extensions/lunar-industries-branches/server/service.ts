@@ -98,7 +98,8 @@ export class BranchesService {
     return { git, b, client }
   }
 
-  // A write on the forge, then git read again (its review and CI follow): the page reloads on `git.changed`.
+  // A write on the forge, then git read again (its review and CI follow), before the answer: the page reloads from it, and
+  // would show the state before the write otherwise. A read that fails does not undo the write.
   async #act<T>(git: GitSource, work: () => Promise<T>): Promise<T> {
     let done: T
     try {
@@ -106,7 +107,7 @@ export class BranchesService {
     } catch (err) {
       throw refused(err)
     }
-    void git.sync().catch(() => undefined)
+    await git.sync().catch(() => undefined)
     return done
   }
 
