@@ -1,0 +1,62 @@
+{
+  "id": "lunar-industries-plane",
+  "version": "0.1.0",
+  "title": "Plane",
+  "engine": "^0.1.6",
+  "activation": [
+    "onStartup"
+  ],
+  "contributes": {
+    "provides": [
+      "tasks"
+    ],
+    "uses": [
+      "tasks"
+    ],
+    "commands": [
+      {
+        "id": "lunar-industries-plane.sync",
+        "title": "Synchroniser les tâches Plane",
+        "group": "Plane"
+      }
+    ],
+    "events": [
+      "tasks.changed"
+    ],
+    "settings": {
+      "title": "Plane",
+      "fields": [
+        {
+          "key": "lunar-industries-plane.url",
+          "type": "text",
+          "title": "Adresse de l'instance",
+          "placeholder": "plane.exemple.fr",
+          "help": "L'adresse de l'interface web de Plane, sans /api/v1.",
+          "default": ""
+        },
+        {
+          "key": "lunar-industries-plane.workspace",
+          "type": "text",
+          "title": "Workspace",
+          "placeholder": "mon-equipe",
+          "help": "Le premier segment des adresses de Plane (https://…/mon-equipe/…).",
+          "default": ""
+        },
+        {
+          "key": "lunar-industries-plane.token",
+          "type": "secret",
+          "title": "Clé d'API",
+          "help": "Une clé personnelle (Plane › Profil › Paramètres › Jetons d'accès personnels) : elle dit à Bidule qui tu es."
+        },
+        {
+          "key": "lunar-industries-plane.projects",
+          "type": "text",
+          "title": "Projets lus",
+          "placeholder": "ACC, WEB",
+          "help": "Les identifiants des projets, séparés par des virgules ; vide : tous ceux que la clé voit.",
+          "default": ""
+        }
+      ]
+    }
+  }
+}

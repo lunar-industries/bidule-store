@@ -3,7 +3,8 @@
 Ce dépôt public est le store de Lunar Industries pour [Bidule](https://github.com/verhaegheteddy/bidule). Il propose
 les modules `lunar-industries-*`, qui concurrencent des modules officiels de Bidule (Kanban, Branches, Temps, Claude,
 Conteneurs) avec leur propre id. Ce n'est pas le store de Bidule : ses paquets sont signés par la clé de ce store, et
-Bidule les marque « Communautaire · Lunar Industries ».
+Bidule les marque « Communautaire · Lunar Industries ». Plane (`lunar-industries-plane`) n'en remplace aucun : il
+fournit les tâches Plane à côté de celles de Notion.
 
 - `index.json`, sur la branche `main` : l'index du store, que Bidule lit.
 - Les releases `<id>-<version>` : les paquets signés de chaque version d'un module.
