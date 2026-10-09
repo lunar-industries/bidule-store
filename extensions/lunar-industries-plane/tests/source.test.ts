@@ -13,15 +13,13 @@ describe('the sync', () => {
     const { tasks, mirror } = source(plane)
     const read = await tasks.syncCount()
     expect(read).toMatchObject({ tasks: 2, who: 'Simon' })
-    const board = await tasks.board()
-    expect(board.source).toBe('Plane')
-    expect(board.configured).toBe(true)
-    expect(board.tasks.map((t) => [t.id, t.title, t.status, t.ref, t.due, t.role])).toEqual([
-      ['w1', 'À moi', 'À faire', 'ACC-7', '2026-10-31', 'owner'],
-      ['w3', 'À nous deux', 'En cours', 'ACC-9', null, 'owner'],
+    const mine = await mirror.tasks()
+    expect(mine.map((t) => [t.id, t.title, t.status, t.ref, t.due])).toEqual([
+      ['w1', 'À moi', 'À faire', 'ACC-7', '2026-10-31'],
+      ['w3', 'À nous deux', 'En cours', 'ACC-9', null],
     ])
-    expect(board.tasks[0].url).toBe('https://plane.test/accenta/browse/ACC-7/')
-    expect(board.columns.map((c) => [c.name, c.group])).toEqual([
+    expect(mine[0].url).toBe('https://plane.test/accenta/browse/ACC-7/')
+    expect((await mirror.columns()).map((c) => [c.name, c.group])).toEqual([
       ['Backlog', 'todo'],
       ['À faire', 'todo'],
       ['En cours', 'doing'],
@@ -41,20 +39,20 @@ describe('the sync', () => {
 
   test('a work item handed over or gone is hidden, and comes back when it is the user’s again', async () => {
     const plane = fakePlane([item('w1', 'Une'), item('w2', 'Deux')])
-    const { tasks } = source(plane)
+    const { tasks, mirror } = source(plane)
     await tasks.syncCount()
     plane.world.items = [item('w1', 'Une')]
     await tasks.syncCount()
-    expect((await tasks.board()).tasks.map((t) => t.id)).toEqual(['w1'])
+    expect((await mirror.tasks()).map((t) => t.id)).toEqual(['w1'])
     plane.world.items = [item('w1', 'Une'), item('w2', 'Deux')]
     await tasks.syncCount()
     // By title: « Deux » comes before « Une ».
-    expect((await tasks.board()).tasks.map((t) => t.id)).toEqual(['w2', 'w1'])
+    expect((await mirror.tasks()).map((t) => t.id)).toEqual(['w2', 'w1'])
   })
 
   test('a state change and an edit by the user are kept as activity, dated by the work item', async () => {
     const plane = fakePlane([item('w1', 'Une'), item('w2', 'Deux')])
-    const { tasks } = source(plane)
+    const { tasks, mirror } = source(plane)
     await tasks.syncCount()
     plane.world.items = [
       item('w1', 'Une', { state: 's-doing', updatedAt: '2026-10-06T10:00:00.000Z', updatedBy: 'u2' }),
@@ -62,11 +60,11 @@ describe('the sync', () => {
     ]
     const read = await tasks.syncCount()
     expect(read).toMatchObject({ moves: 1, edits: 1 })
-    expect(await tasks.statusChanges('2026-10-06T00:00:00Z', '2026-10-07T00:00:00Z')).toEqual([
+    expect(await mirror.statusChanges('2026-10-06T00:00:00Z', '2026-10-07T00:00:00Z')).toEqual([
       { at: '2026-10-06T10:00:00.000Z', taskId: 'w1', from: 'À faire', to: 'En cours', fromGroup: 'todo', toGroup: 'doing' },
     ])
-    expect(await tasks.edits('2026-10-06T00:00:00Z', '2026-10-07T00:00:00Z')).toEqual([
-      { at: '2026-10-06T11:00:00.000Z', taskId: 'w2' },
+    expect(await mirror.edits('2026-10-06T00:00:00Z', '2026-10-07T00:00:00Z')).toEqual([
+      { at: '2026-10-06T11:00:00.000Z', taskId: 'w2', detail: '« Deux renommée » modifiée dans Plane' },
     ])
     // An edit by someone else, the status unchanged: nothing for the user.
     plane.world.items[1] = item('w2', 'Deux encore', { updatedAt: '2026-10-06T12:00:00.000Z', updatedBy: 'u2' })
@@ -77,7 +75,6 @@ describe('the sync', () => {
     const none = source(fakePlane(), { config: { key: '' } })
     expect(await none.tasks.configured()).toBe(false)
     await expect(none.tasks.sync()).rejects.toThrow(/n’est pas configuré/)
-    expect((await none.tasks.board()).configured).toBe(false)
     const noWorkspace = source(fakePlane(), { config: { workspace: ' ' } })
     expect(await noWorkspace.tasks.configured()).toBe(false)
   })
@@ -86,31 +83,15 @@ describe('the sync', () => {
 describe('the tasks migrated from Notion', () => {
   const described = (id: string) => `<p>Migrée depuis Notion : https://notion.so/${id.replaceAll('-', '')}</p>`
 
-  test('a work item that names a Notion task the user has is its copy', async () => {
-    const plane = fakePlane([
-      item('w1', 'Migrée', { descriptionHtml: described(NOTION) }),
-      item('w2', 'Autre', { descriptionHtml: described('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee') }),
-      item('w3', 'Sans lien'),
-    ])
-    const { tasks } = source(plane, { others: new Map([[NOTION, NOTION]]) })
+  // The core joins the copy to the Notion task (server/index.ts says it is one, at each read): the mirror keeps the ids.
+  test('a work item keeps the Notion pages its description names', async () => {
+    const plane = fakePlane([item('w1', 'Migrée', { descriptionHtml: described(NOTION) }), item('w2', 'Sans lien')])
+    const { tasks, mirror } = source(plane)
     await tasks.syncCount()
-    const board = await tasks.board()
-    // The Notion page the description names is not one of the user's tasks for w2: nothing is guessed.
-    expect(board.tasks.map((t) => [t.title, t.copyOf])).toEqual([
-      ['Autre', undefined],
+    expect((await mirror.tasks()).map((t) => [t.title, t.notionIds])).toEqual([
       ['Migrée', [NOTION]],
-      ['Sans lien', undefined],
+      ['Sans lien', []],
     ])
-  })
-
-  test('the copy is told at each read: Notion’s task may arrive after the sync', async () => {
-    const plane = fakePlane([item('w1', 'Migrée', { descriptionHtml: described(NOTION) })])
-    const others = new Map<string, string>()
-    const { tasks } = source(plane, { others })
-    await tasks.syncCount()
-    expect((await tasks.board()).tasks[0].copyOf).toBeUndefined()
-    others.set(NOTION, NOTION)
-    expect((await tasks.board()).tasks[0].copyOf).toEqual([NOTION])
   })
 })
 
@@ -121,7 +102,7 @@ describe('moving a card', () => {
     await tasks.syncCount()
     await tasks.move('w1', 'En revue')
     expect(plane.calls).toEqual(['setState w1 s-review'])
-    expect((await tasks.board()).tasks[0].status).toBe('En revue')
+    expect((await mirror.task('w1'))?.status).toBe('En revue')
     expect(mirror.changes).toMatchObject([{ taskId: 'w1', from: 'À faire', to: 'En revue' }])
   })
 
@@ -133,7 +114,7 @@ describe('moving a card', () => {
     mirror.columnList.push({ name: 'En attente', color: '', group: 'doing' })
     await tasks.move('w1', 'En attente')
     expect(plane.calls).toEqual(['setState w1 s-doing'])
-    expect((await tasks.board()).tasks[0].status).toBe('En cours')
+    expect((await mirror.task('w1'))?.status).toBe('En cours')
   })
 
   test('a status with no state and no group is refused, and so is a work item that is not here', async () => {

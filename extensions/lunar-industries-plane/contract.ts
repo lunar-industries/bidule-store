@@ -1,4 +1,4 @@
-// What this extension offers the others, besides the `tasks` role (see @bidule/sdk/tasks).
+// What this extension offers the others, besides the tasks it provides to the core.
 declare module '@bidule/sdk/contracts' {
   interface Commands {
     // Mirrors the user's Plane work items now; says how many there are.

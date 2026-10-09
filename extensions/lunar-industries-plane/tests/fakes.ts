@@ -1,4 +1,3 @@
-import type { StatusChange, TaskColumn } from '@bidule/sdk/tasks'
 import type {
   PlaneApi,
   PlaneComment,
@@ -8,16 +7,17 @@ import type {
   PlaneUser,
   PlaneWorkItem,
 } from '../server/client.ts'
-import type { MirrorTask, PlaneMirror } from '../server/mirror.ts'
+import type { MirrorTask, PlaneMirror, StatusChange } from '../server/mirror.ts'
+import type { PlaneColumn } from '../server/states.ts'
 import { PlaneTasks, type PlaneConfig } from '../server/source.ts'
 
 export class MemoryMirror implements PlaneMirror {
-  columnList: TaskColumn[] = []
+  columnList: PlaneColumn[] = []
   rows = new Map<string, MirrorTask & { gone: boolean }>()
   changes: { at: string; taskId: string; from: string; to: string }[] = []
   editList: { at: string; taskId: string; detail: string }[] = []
 
-  async replaceColumns(columns: TaskColumn[]) {
+  async replaceColumns(columns: PlaneColumn[]) {
     this.columnList = columns
   }
   async columns() {
@@ -53,7 +53,7 @@ export class MemoryMirror implements PlaneMirror {
     this.editList.push({ at, taskId, detail })
   }
   async edits(since: string, until: string) {
-    return this.editList.filter((e) => e.at >= since && e.at < until).map((e) => ({ at: e.at, taskId: e.taskId }))
+    return this.editList.filter((e) => e.at >= since && e.at < until)
   }
 }
 
@@ -143,16 +143,12 @@ export function fakePlane(items: PlaneWorkItem[] = []) {
 
 export const CONFIG: PlaneConfig = { url: 'plane.test', workspace: 'accenta', projects: [], key: 'secret' }
 
-// The source over a fake Plane and an empty mirror; `others` is the Notion tasks it may be the copy of.
-export function source(
-  plane = fakePlane(),
-  options: { config?: Partial<PlaneConfig>; others?: Map<string, string> } = {}
-) {
+// The source over a fake Plane and an empty mirror.
+export function source(plane = fakePlane(), options: { config?: Partial<PlaneConfig> } = {}) {
   const mirror = new MemoryMirror()
   const tasks = new PlaneTasks(
     async () => ({ ...CONFIG, ...options.config }),
     mirror,
-    async () => options.others ?? new Map(),
     () => plane.api
   )
   return { tasks, mirror, plane }

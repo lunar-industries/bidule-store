@@ -1,4 +1,4 @@
-import type { Board, FoundTask, Task, TaskPage, TaskPerson, TaskSource } from '@bidule/sdk/tasks'
+import type { TaskPage, TaskPerson } from '@bidule/sdk/objects'
 import {
   PlaneClient,
   planeBase,
@@ -14,20 +14,16 @@ import { htmlToText, textToHtml } from './text.ts'
 /** What the settings say: the instance, the workspace, the projects to read, and the key (from the keychain). */
 export type PlaneConfig = { url: string; workspace: string; projects: string[]; key: string }
 
-/** The Notion tasks the user has, by lowercase id: what a work item's description may name as its original. */
-export type OtherTasks = () => Promise<Map<string, string>>
-
 type Access = { api: PlaneApi; base: string; workspace: string }
 
 /**
- * The work items assigned to the user in a Plane workspace, as a provider of the `tasks` role, beside Notion's. A task
- * is the work item's id; the board reads the mirror, which a sync fills.
+ * The work items assigned to the user in a Plane workspace, kept in the mirror a sync fills (server/index.ts puts
+ * them in the core as `task` objects, beside Notion's). A work item is named by its id in Plane here.
  */
-export class PlaneTasks implements TaskSource {
+export class PlaneTasks {
   constructor(
     protected config: () => Promise<PlaneConfig>,
     protected mirror: PlaneMirror,
-    protected others: OtherTasks = async () => new Map(),
     protected connect: (base: string, key: string) => PlaneApi = (base, key) => new PlaneClient(base, key)
   ) {}
 
@@ -55,37 +51,6 @@ export class PlaneTasks implements TaskSource {
     const task = await this.mirror.task(taskId)
     if (!task) throw new Error('Tâche Plane inconnue')
     return { ...access, project: task.project, workItem: task.id }
-  }
-
-  async board(): Promise<Board> {
-    const [configured, columns, tasks, known] = await Promise.all([
-      this.configured(),
-      this.mirror.columns(),
-      this.mirror.tasks(),
-      this.others().catch(() => new Map<string, string>()),
-    ])
-    return {
-      source: 'Plane',
-      configured,
-      columns,
-      tasks: tasks.map((task) => this.#task(task, known)),
-    }
-  }
-
-  // A work item that names a Notion task the user has is that task's copy: the board then shows only the copy.
-  #task(task: MirrorTask, known: Map<string, string>): Task {
-    const copyOf = task.notionIds.flatMap((id) => known.get(id) ?? [])
-    return {
-      id: task.id,
-      title: task.title,
-      status: task.status,
-      ref: task.ref,
-      url: task.url,
-      role: 'owner',
-      lastEdited: task.lastEdited,
-      due: task.due,
-      ...(copyOf.length ? { copyOf } : {}),
-    }
   }
 
   async sync(): Promise<void> {
@@ -148,14 +113,6 @@ export class PlaneTasks implements TaskSource {
     return { tasks: seen.size, edits, moves, who: me.displayName || me.email || 'toi' }
   }
 
-  edits(since: string, until: string) {
-    return this.mirror.edits(since, until)
-  }
-
-  statusChanges(since: string, until: string) {
-    return this.mirror.statusChanges(since, until)
-  }
-
   // Moves the work item to the state of that name in its project, else to the first of the same group (each project
   // has its own states).
   async move(taskId: string, status: string): Promise<void> {
@@ -172,11 +129,9 @@ export class PlaneTasks implements TaskSource {
   }
 
   // The user's own work items only: Plane's search is not read, so another person's work item is not found here.
-  async search(query: string): Promise<FoundTask[]> {
+  async search(query: string): Promise<MirrorTask[]> {
     const needle = query.trim().toLowerCase()
-    const known = await this.others().catch(() => new Map<string, string>())
-    const all = await this.mirror.tasks()
-    return all.filter((t) => t.title.toLowerCase().includes(needle)).map((t) => this.#task(t, known))
+    return (await this.mirror.tasks()).filter((t) => t.title.toLowerCase().includes(needle))
   }
 
   // Taking a work item on means being assigned to it, which only Plane's own interface does: one already in the

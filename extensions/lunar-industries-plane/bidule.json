@@ -7,21 +7,26 @@
     "onStartup"
   ],
   "contributes": {
-    "provides": [
-      "tasks"
-    ],
-    "uses": [
-      "tasks"
-    ],
+    "objects": {
+      "task": {
+        "actions": [
+          "move",
+          "comment",
+          "join",
+          "page",
+          "people",
+          "search",
+          "sync"
+        ]
+      },
+      "activity": {}
+    },
     "commands": [
       {
         "id": "lunar-industries-plane.sync",
         "title": "Synchroniser les tâches Plane",
         "group": "Plane"
       }
-    ],
-    "events": [
-      "tasks.changed"
     ],
     "settings": {
       "title": "Plane",

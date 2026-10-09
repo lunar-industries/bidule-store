@@ -1,5 +1,26 @@
-import type { TaskColumn, TaskGroup } from '@bidule/sdk/tasks'
+import type { ColumnColor, TaskGroup } from '@bidule/sdk/objects'
 import type { PlaneProject, PlaneState, PlaneWorkItem } from './client.ts'
+
+// A state as a column of the board: Plane's own colour (#rrggbb), turned into the app's palette when put in the core.
+export type PlaneColumn = { name: string; group: TaskGroup; color: string }
+
+// The app's colour nearest a state's (by its hue; a grey one is neutral).
+export function paletteOf(hex: string): ColumnColor {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim())
+  if (!m) return 'neutral'
+  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16) / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  if (max - min < 0.15) return 'neutral'
+  const d = max - min
+  const h = (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60
+  if (h < 20 || h >= 345) return 'coral'
+  if (h < 70) return 'butter'
+  if (h < 170) return 'mint'
+  if (h < 250) return 'blue'
+  if (h < 290) return 'violet'
+  return 'pink'
+}
 
 /** Where the work items are: the instance's address and the workspace, which the web addresses are made of. */
 export type PlaneSite = { base: string; workspace: string }
@@ -41,9 +62,9 @@ const rankOf = (group: string) => {
 const byOrder = (a: PlaneState, b: PlaneState) => rankOf(a.group) - rankOf(b.group) || (a.sequence ?? 0) - (b.sequence ?? 0)
 
 /** The board's columns for these states (of one project or several): one a name and group, in Plane's order. */
-export function columnsOf(states: readonly PlaneState[]): TaskColumn[] {
+export function columnsOf(states: readonly PlaneState[]): PlaneColumn[] {
   const seen = new Set<string>()
-  const out: TaskColumn[] = []
+  const out: PlaneColumn[] = []
   for (const state of [...states].sort(byOrder)) {
     const key = `${state.name}\u0000${groupOf(state.group)}`
     if (seen.has(key)) continue

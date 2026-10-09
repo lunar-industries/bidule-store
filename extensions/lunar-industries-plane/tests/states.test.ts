@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { columnsOf, groupOf, listOf, notionIdsOf, pickState, refOf, wantedProjects, webUrl } from '../server/states.ts'
+import { columnsOf, groupOf, listOf, notionIdsOf, paletteOf, pickState, refOf, wantedProjects, webUrl } from '../server/states.ts'
 import { item, state, STATES } from './fakes.ts'
 
 describe('the columns', () => {
@@ -78,5 +78,18 @@ describe('the work items', () => {
   test('a list typed in a setting', () => {
     expect(listOf('ACC, WEB;  API\nDOC')).toEqual(['ACC', 'WEB', 'API', 'DOC'])
     expect(listOf('')).toEqual([])
+  })
+})
+
+describe('colours', () => {
+  test("a state's colour becomes the app's nearest, a grey one neutral", () => {
+    expect(paletteOf('#F87171')).toBe('coral')
+    expect(paletteOf('#F59E0B')).toBe('butter')
+    expect(paletteOf('#22C55E')).toBe('mint')
+    expect(paletteOf('#3B82F6')).toBe('blue')
+    expect(paletteOf('#8B5CF6')).toBe('violet')
+    expect(paletteOf('#EC4899')).toBe('pink')
+    expect(paletteOf('#9CA3AF')).toBe('neutral')
+    expect(paletteOf('')).toBe('neutral')
   })
 })

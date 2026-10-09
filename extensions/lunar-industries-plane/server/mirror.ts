@@ -1,5 +1,16 @@
 import type { Database } from '@adonisjs/lucid/database'
-import type { StatusChange, TaskColumn, TaskGroup } from '@bidule/sdk/tasks'
+import type { TaskGroup } from '@bidule/sdk/objects'
+import type { PlaneColumn } from './states.ts'
+
+// A change of a work item's state the user made, with the groups of the columns as they are now.
+export type StatusChange = {
+  at: string
+  taskId: string
+  from: string
+  to: string
+  fromGroup: TaskGroup | null
+  toGroup: TaskGroup | null
+}
 
 // A work item as the mirror keeps it.
 export interface MirrorTask {
@@ -17,8 +28,8 @@ export interface MirrorTask {
 
 /** What the extension keeps of Plane between two syncs. */
 export interface PlaneMirror {
-  replaceColumns(columns: TaskColumn[]): Promise<void>
-  columns(): Promise<TaskColumn[]>
+  replaceColumns(columns: PlaneColumn[]): Promise<void>
+  columns(): Promise<PlaneColumn[]>
   // The user's work items, by title.
   tasks(): Promise<MirrorTask[]>
   task(id: string): Promise<MirrorTask | null>
@@ -30,7 +41,7 @@ export interface PlaneMirror {
   // The user's changes of their work items' states between two times, with the groups of the columns as they are now.
   statusChanges(since: string, until: string): Promise<StatusChange[]>
   addEdit(at: string, taskId: string, detail: string): Promise<void>
-  edits(since: string, until: string): Promise<{ at: string; taskId: string }[]>
+  edits(since: string, until: string): Promise<{ at: string; taskId: string; detail: string }[]>
 }
 
 type TaskRow = {
@@ -72,7 +83,7 @@ const taskOf = (row: TaskRow): MirrorTask => ({
 export class DbMirror implements PlaneMirror {
   constructor(protected db: Database) {}
 
-  async replaceColumns(columns: TaskColumn[]): Promise<void> {
+  async replaceColumns(columns: PlaneColumn[]): Promise<void> {
     await this.db.transaction(async (trx) => {
       await trx.from('lunar_industries_plane_columns').delete()
       if (columns.length) {
@@ -83,7 +94,7 @@ export class DbMirror implements PlaneMirror {
     })
   }
 
-  async columns(): Promise<TaskColumn[]> {
+  async columns(): Promise<PlaneColumn[]> {
     const rows = await this.db.from('lunar_industries_plane_columns').orderBy('position')
     return rows.map((r) => ({ name: r.name, color: r.color, group: groupIn(r.grp) }))
   }
@@ -158,8 +169,8 @@ export class DbMirror implements PlaneMirror {
     await this.db.table('lunar_industries_plane_edits').insert({ at, task_id: taskId, detail }).onConflict(['at', 'task_id']).ignore()
   }
 
-  async edits(since: string, until: string): Promise<{ at: string; taskId: string }[]> {
+  async edits(since: string, until: string): Promise<{ at: string; taskId: string; detail: string }[]> {
     const rows = await this.db.from('lunar_industries_plane_edits').where('at', '>=', since).where('at', '<', until).orderBy('at')
-    return rows.map((r) => ({ at: r.at, taskId: r.task_id }))
+    return rows.map((r) => ({ at: r.at, taskId: r.task_id, detail: r.detail }))
   }
 }
