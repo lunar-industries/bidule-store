@@ -41,13 +41,10 @@ function usageRows(usage: UsageByModel, priced: boolean): UsageRow[] {
 
 const repoPaths = async () => (await (await git()).repos()).map((r) => r.path)
 
-// A task by its id: the user's board first, else the whole source.
+// A task by its id, on the user's board or not (the core keeps those it was told of).
 async function findTask(id: string) {
   const source = await tasks()
-  if (!source) return null
-  const onBoard = (await source.board().catch(() => null))?.tasks.find((t) => t.id === id)
-  if (onBoard) return onBoard
-  return (await source.search(id).catch(() => [])).find((t) => t.id === id) ?? null
+  return source ? source.get(id).catch(() => null) : null
 }
 
 // A folder the window names (the session of the terminal's own): the workspace's root, a repo the app knows or a folder

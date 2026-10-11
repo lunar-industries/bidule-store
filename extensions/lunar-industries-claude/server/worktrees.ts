@@ -7,8 +7,8 @@ import type { GitSource } from '@bidule/ext-git/contract'
  * Taken from quack-board (domain/worktrees.ts, Simon's): git worktrees, one folder per branch, so that several
  * sessions work on a repo at once without taking each other's branch. They follow the team's `worktree` skill:
  * `<repo>/.claude/worktrees/<branch>/` (this module only: Bidule's own Claude extension keeps a folder per task). The
- * main checkout stays the only folder that runs the app (see slot_lock.ts). git runs through the `git` role (inside
- * WSL on Windows); paths given to git are relative to the repo.
+ * main checkout stays the only folder that runs the app (see slot_lock.ts). git runs through git's actions (`git.run`,
+ * inside WSL on Windows); paths given to git are relative to the repo.
  */
 
 export const WORKTREES_DIR = '.claude/worktrees'

@@ -63,7 +63,7 @@ export const api = {
   repos: () => get<{ repos: RepoSettings[] }>('repos'),
 }
 
-// The core's board (the `tasks` role): the tasks a session starts from or gets attached to.
+// The core's board (its `task` objects): the tasks a session starts from or gets attached to.
 export async function board(): Promise<Board | null> {
   const b = await json<Board>('/api/board').catch(() => null)
   return b && b.source ? b : null

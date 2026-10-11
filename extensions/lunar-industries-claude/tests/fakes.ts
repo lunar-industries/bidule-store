@@ -1,8 +1,10 @@
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import type { Environment, EnvironmentKind } from '@bidule/api/extensions'
-import type { ForgeClient, ForgeIssue, ForgeJob, ForgePipeline, ForgeReview, GitBranch, GitSource, NewReview } from '@bidule/ext-git/contract'
-import type { Board, TaskColumn, TaskPage, TaskSource } from '@bidule/sdk/tasks'
+import type { GitBranch, GitSource } from '@bidule/ext-git/contract'
+import type { ForgeClient, ForgeIssue, ForgeJob, ForgePipeline, ForgeReview, NewReview } from '@bidule/sdk/forges'
+import type { Board, Task, TaskColumn, TaskPage } from '@bidule/sdk/tasks'
+import type { TaskAccess } from '../server/objects.ts'
 import type { Settings } from '../server/settings.ts'
 import { SessionStore, type SessionRow } from '../server/store.ts'
 
@@ -27,9 +29,9 @@ export function settingsWith(patch: Partial<Settings> = {}): Settings {
 }
 
 /**
- * The git role: the repos and branches given, the forge given for every repo. `run` is the command answer: by
- * default it records the commands, answers the refs listed and lets every other command succeed (see recording());
- * real() runs git for real.
+ * git's actions: the repos and branches given, and the forge given for every repo (`review.forge`, see forgeOf).
+ * `run` is the command answer: by default it records the commands, answers the refs listed and lets every other
+ * command succeed (see recording()); real() runs git for real.
  */
 export class FakeGit implements GitSource {
   readonly commands: string[] = []
@@ -53,14 +55,12 @@ export class FakeGit implements GitSource {
     this.linked.push(`${repo} ${name} ${taskId}`)
     return true
   }
-  async forgeOf() {
-    return this.forge
-  }
+  // The forge serving every repo (the core's `review.forge`).
+  forgeOf = async () => this.forge
   async resolvePath(path: string) {
     return path === '~' ? homedir() : path
   }
-  async sync() {}
-  registerForge() {}
+  sync = async () => {}
   events = unused
   status = unused
   createBranch = unused
@@ -71,9 +71,6 @@ export class FakeGit implements GitSource {
   worktrees = unused
   addWorktree = unused
   removeWorktree = unused
-  remoteHosts = unused
-  setReview = unused
-  reviewsRead = unused
 }
 
 async function unused(): Promise<never> {
@@ -167,38 +164,58 @@ export class FakeForge implements ForgeClient {
 }
 
 export const COLUMNS: TaskColumn[] = [
-  { name: 'Pas commencé', group: 'todo', color: 'default' },
+  { name: 'Pas commencé', group: 'todo', color: 'neutral' },
   { name: 'En cours', group: 'doing', color: 'blue' },
 ]
 
-// The tasks role: one task to do, ID-7; moves and comments recorded.
-export class FakeTasks implements TaskSource {
+// The core's tasks: one task to do, ID-7; moves and comments recorded.
+export class FakeTasks implements TaskAccess {
   readonly moved: string[] = []
   readonly comments: string[] = []
-  page?: (id: string) => Promise<TaskPage> = async () => ({
+  page: (id: string) => Promise<TaskPage> = async () => ({
     text: '# Contexte\n- ajouter le rôle',
     comments: [{ at: '2026-09-25T10:00:00Z', text: 'Vu avec le PO' }],
   })
   board_: Board = {
-    source: 'Notion',
+    source: 'notion',
     configured: true,
     columns: COLUMNS,
-    tasks: [{ id: 't1', title: 'Ajout rôle', status: 'Pas commencé', ref: 'ID-7', url: 'https://notion/t1', role: 'owner', lastEdited: null, due: null }],
+    tasks: [
+      {
+        id: 't1',
+        type: 'task',
+        provider: 'notion',
+        title: 'Ajout rôle',
+        status: 'Pas commencé',
+        group: 'todo',
+        ref: 'ID-7',
+        url: 'https://notion/t1',
+        role: 'owner',
+        lastEdited: null,
+        due: null,
+        properties: {},
+      },
+    ],
   }
 
   async board() {
     return this.board_
+  }
+  async get(id: string): Promise<Task | null> {
+    return this.board_.tasks.find((t) => t.id === id) ?? null
+  }
+  async find(key: string): Promise<Task | null> {
+    const wanted = key.trim().toLowerCase()
+    return this.board_.tasks.find((t) => t.id === key.trim() || t.ref?.toLowerCase() === wanted) ?? null
+  }
+  async search(): Promise<Task[]> {
+    return []
   }
   async move(id: string, status: string) {
     this.moved.push(`${id} ${status}`)
     const task = this.board_.tasks.find((t) => t.id === id)
     if (task) task.status = status
   }
-  async search() {
-    return []
-  }
-  async join() {}
-  async sync() {}
   async comment(id: string, text: string) {
     this.comments.push(`${id} ${text}`)
   }

@@ -12,8 +12,8 @@ import { FakeForge, FakeGit, FakeTasks, MemoryStore, fakeEnv, real, recording, s
 import { IDENTITY, realRepo, sh } from './repos.ts'
 
 // Taken from quack-board (tests/unit/claude_tools.spec.ts, Simon's). The tools reach the tasks, git and the forges
-// through the roles: fakes of them here (the task cache and the board's announcement of Simon's app have no
-// equivalent: the source of tasks is the role itself).
+// through the core: fakes of them here (the task cache and the board's announcement of Simon's app have no
+// equivalent: the tasks are the core's objects).
 
 const branch = (repo: string, name: string, patch: Partial<GitBranch> = {}): GitBranch => ({
   repo,
@@ -47,7 +47,10 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
   const tasks = new FakeTasks()
   const store = new MemoryStore()
   const settings = settingsWith(options.settings)
-  const tools = workspaceTools({ env: fakeEnv(), git: async () => git, tasks: async () => tasks, settings: async () => settings, store }, async () => {})
+  const tools = workspaceTools(
+    { env: fakeEnv(), git: async () => git, tasks: async () => tasks, forgeOf: () => git.forgeOf(), settings: async () => settings, store },
+    async () => {}
+  )
   const asked: string[] = []
   const ctx = (allow = true, extra: Partial<ToolContext> = {}): ToolContext => ({
     sessionId: 's1',
@@ -245,15 +248,18 @@ describe('Claude tools', () => {
     const forge = new FakeForge({ '7-ajout': { number: 3, state: 'open', draft: false, url: 'https://gl/mr/3', description: '' } })
     const { git, call } = setup({ forge })
     let reads = 0
-    git.reviewsRead = async () => void reads++
+    git.sync = async () => void reads++
     await call('merge_review', { repo: 'app', branch: '7-ajout' })
     await call('play_job', { repo: 'app', branch: '7-ajout', job: 1 })
     expect(reads).toBe(2)
   })
 
-  it('a git provider that cannot read again (older) does not fail the tool', async () => {
+  it('a read again that fails does not fail the tool', async () => {
     const forge = new FakeForge({ '7-ajout': { number: 3, state: 'open', draft: false, url: 'https://gl/mr/3', description: '' } })
-    const { call } = setup({ forge })
+    const { git, call } = setup({ forge })
+    git.sync = async () => {
+      throw new Error('git ne répond pas')
+    }
     expect((await call('merge_review', { repo: 'app', branch: '7-ajout' })).isError).toBe(false)
   })
 

@@ -1,17 +1,24 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "title": "Lunar Industries - Claude",
-  "engine": "^0.1.1",
+  "engine": "^0.2.0",
   "permissions": [
     "shell"
   ],
   "contributes": {
-    "requires": [
-      "git"
-    ],
-    "uses": [
-      "tasks"
+    "needs": [
+      {
+        "extension": "git"
+      },
+      {
+        "object": "task",
+        "optional": true
+      },
+      {
+        "object": "review",
+        "optional": true
+      }
     ],
     "pages": [
       {

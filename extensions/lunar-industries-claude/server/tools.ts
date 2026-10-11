@@ -2,8 +2,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { Environment } from '@bidule/api/extensions'
-import type { ForgeClient, ForgeJob, GitSource } from '@bidule/ext-git/contract'
-import type { Task, TaskSource } from '@bidule/sdk/tasks'
+import type { GitSource } from '@bidule/ext-git/contract'
+import type { ForgeClient, ForgeJob } from '@bidule/sdk/forges'
+import type { Task } from '@bidule/sdk/tasks'
+import type { TaskAccess } from './objects.ts'
 import { sdk } from './sdk.ts'
 import { deployOf, issueOf, list, reviewTargetOf, slugify, templateOf, type Settings } from './settings.ts'
 import { acquire, lockHost, lockName, lockStatus, pidOfSession, release } from './slot_lock.ts'
@@ -13,9 +15,10 @@ import { addWorktree, baseOf, listWorktrees, removeWorktree, shellVia, worktreeP
 
 /**
  * Taken from quack-board (services/claude_tools.ts, Simon's): the workspace's own tools, given to each Claude session
- * as the MCP server `workspace`. They run in the API, through the roles the modules share — `tasks` (the source of
- * tasks), `git` (the repos, and the forges registered with it: GitHub, GitLab). A tool that writes asks the user
- * first, whatever the session's permission mode: every write to the tasks, the forge, git or a lock is confirmed.
+ * as the MCP server `workspace`. They run in the API, through the core: its tasks (whichever extensions provide them),
+ * git's actions (the repos and their branches) and the forge serving each repo (`review.forge`: GitHub, GitLab). A
+ * tool that writes asks the user first, whatever the session's permission mode: every write to the tasks, the forge,
+ * git or a lock is confirmed.
  */
 
 export const SERVER = 'workspace'
@@ -44,7 +47,9 @@ export interface ToolDeps {
   env: Environment
   git: () => Promise<GitSource>
   // null without a source of tasks.
-  tasks: () => Promise<TaskSource | null>
+  tasks: () => Promise<TaskAccess | null>
+  // The forge serving a repo, as a client on its project (null: none, or no token).
+  forgeOf: (repo: string) => Promise<ForgeClient | null>
   settings: () => Promise<Settings>
   store: SessionStore
 }
@@ -134,19 +139,19 @@ export function reviewDescription(issueNumber: number | null, taskUrl: string | 
 export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): WorkspaceTool[] {
   const tasksOf = async () => {
     const tasks = await deps.tasks()
-    if (!tasks) throw new ToolError('Aucune source de tâches (rôle tasks)')
+    if (!tasks) throw new ToolError('Aucune source de tâches')
     return tasks
   }
 
-  // A task by its id or its reference (TSK-42): the user's board first, else the whole source.
+  // A task by its id or its reference (TSK-42): those the core knows (the user's first), else the tools' search.
   const findTask = async (key: string): Promise<Task> => {
     const wanted = key.trim()
     const tasks = await tasksOf()
-    const onBoard = (await tasks.board()).tasks.find((t) => t.id === wanted || t.ref?.toLowerCase() === wanted.toLowerCase())
-    if (onBoard) return onBoard
+    const known = await tasks.find(wanted)
+    if (known) return known
     const found = (await tasks.search(wanted)).find((t) => t.id === wanted || t.ref?.toLowerCase() === wanted.toLowerCase())
     if (!found) throw new ToolError(`Tâche inconnue : ${key}`)
-    return { ...found, role: found.role ?? 'participant' }
+    return found
   }
 
   // A repo by its path or its label (as the app lists them).
@@ -157,7 +162,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
   }
 
   const forgeOf = async (repo: { path: string; label: string }): Promise<ForgeClient> => {
-    const client = await (await deps.git()).forgeOf(repo.path)
+    const client = await deps.forgeOf(repo.path)
     if (!client) throw new ToolError(`${repo.label} n'a pas de remote GitHub ou GitLab, ou pas de jeton pour sa forge`)
     return client
   }
@@ -196,15 +201,14 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
     })
   }
 
-  // What a tool changed on the forge or on origin, git reads again (and tells it: `git.reviewed`, `git.changed`), so that
-  // the Kanban's and Branches' marks (review, CI, pushed) do not stay as they were until the next read. A failed read
-  // does not undo the write.
-  const readAgain = async (branches = false) => {
+  // What a tool changed on the forge or on origin, git reads again (its branches changed in the core, the forges read
+  // their reviews and pipelines again), so that the Kanban's and Branches' marks (review, CI, pushed) do not stay as they
+  // were until the next read. A failed read does not undo the write.
+  const readAgain = async () => {
     try {
-      const git = await deps.git()
-      await (branches ? git.sync() : git.reviewsRead())
+      await (await deps.git()).sync()
     } catch {
-      // An older git provider has no reviewsRead, or the read failed: the next read of git tells it.
+      // The next read of git tells it.
     }
   }
 
@@ -245,7 +249,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const t = await findTask(task)
         const tasks = await tasksOf()
         const branches = await (await deps.git()).branchesOf(t.id)
-        const page = tasks.page ? await tasks.page(t.id) : { text: '', comments: [] }
+        const page = await tasks.page(t.id)
         return {
           id: t.id,
           ref: t.ref,
@@ -286,9 +290,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       detail: ({ task, text }) => `Commenter ${task} :\n${text}`,
       run: async ({ task, text }) => {
         const t = await findTask(task)
-        const tasks = await tasksOf()
-        if (!tasks.comment) throw new ToolError('La source de tâches ne prend pas de commentaires')
-        await tasks.comment(t.id, text)
+        await (await tasksOf()).comment(t.id, text)
         return { ok: true, task: t.title }
       },
     }),
@@ -321,7 +323,8 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const results = await startTask(
           t,
           { repos: targets, slug: slugify(slug ?? t.title), issue: issue || s.createIssue, review, checkout: 'keep', template: templateOf(s) },
-          git
+          git,
+          deps.forgeOf
         )
         const status = inProgress ? await moveToInProgress(t, results, await tasksOf()) : null
         return { results, status }
@@ -563,7 +566,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
           if (changes) throw new ToolError(`Modifications non committées dans ${path} :\n${changes}`)
         }
         await out(r.path, ['push', '-u', 'origin', branch], 120_000)
-        await readAgain(true)
+        await readAgain()
         return { pushed: branch, commit: await headOf(r.path, branch), committedMerge }
       },
     }),

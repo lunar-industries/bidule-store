@@ -1,8 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import type { ServerContext } from '@bidule/api/extensions'
-import type {} from '@bidule/ext-git/contract'
+import type { GitSource } from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { SessionError } from './errors.ts'
+import { forgeOf, taskAccess } from './objects.ts'
 import { list, readSettings, reviewTargetOf } from './settings.ts'
 import { SessionService } from './sessions.ts'
 import { SessionStore } from './store.ts'
@@ -18,15 +19,12 @@ export let sessions: SessionService
 export const PLUGIN = fileURLToPath(new URL('../claude/plugin', import.meta.url))
 
 export const settings = () => readSettings(ctx)
-// The `git` role with what the sessions' tools need of it (forges, raw commands): an older provider lacks them.
-export async function git() {
-  const g = await ctx.use('git')
-  if (typeof g.run !== 'function' || typeof g.forgeOf !== 'function') {
-    throw new SessionError('Le provider git est trop ancien pour les sessions Claude : mettre à jour l’extension git', 409)
-  }
-  return g
-}
-export const tasks = async () => (ctx.has('tasks') ? ctx.use('tasks') : null)
+// git's actions (the repos, their branches, git itself), through the core.
+export const git = async () => ctx.objects.client<GitSource>('git')
+// The core's tasks; null without any provider of them.
+export const tasks = async () => taskAccess(ctx)
+// The forge serving a repo, by its path (`review.forge`: GitHub, GitLab).
+export const forge = (repo: string) => forgeOf(ctx, repo)
 
 // The sessions run only once the user has turned them on (Réglages): the Agent SDK with their Claude account.
 export async function enabled(): Promise<void> {
@@ -61,7 +59,7 @@ export async function activate(context: ServerContext) {
       sessions: (id, status) => void ctx.events.emit('lunar-industries-claude.sessions', { id, status }),
       session: (id, message) => void ctx.events.emit('lunar-industries-claude.session', { id, message }),
     },
-    tools: workspaceTools({ env: ctx.env, git, tasks, settings, store }),
+    tools: workspaceTools({ env: ctx.env, git, tasks, forgeOf: forge, settings, store }),
     worktree: repoWorktree,
     plugins: [PLUGIN],
   })

@@ -13,7 +13,6 @@ import type {
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import type { GitSource } from '@bidule/ext-git/contract'
-import type { TaskSource } from '@bidule/sdk/tasks'
 import {
   EFFORT_LEVELS,
   PERMISSION_MODES,
@@ -33,6 +32,7 @@ import {
   type Template,
   type ToolChange,
 } from '../contract.ts'
+import type { TaskAccess } from './objects.ts'
 import { pathInWsl, placeOf, sessionEnv } from './runner.ts'
 import { sdk } from './sdk.ts'
 import type { Settings } from './settings.ts'
@@ -163,7 +163,7 @@ export interface SessionDeps {
   settings: () => Promise<Settings>
   git: () => Promise<GitSource>
   // null without a source of tasks.
-  tasks: () => Promise<TaskSource | null>
+  tasks: () => Promise<TaskAccess | null>
   // What the module tells (its events).
   tell: {
     sessions(id: string, status: SessionStatus): void
@@ -555,22 +555,16 @@ export class SessionService {
     return id
   }
 
-  #namedElsewhere = new Map<string, { ref: string | null; title: string }>()
-
-  // The sessions' tasks, by id: those of the user's board, and for the others (done and no longer on the board, someone
-  // else's) the source's own search, once for each.
+  // The sessions' tasks, by id: those of the user's board, and the others (done and no longer on the board, someone
+  // else's) as the core still knows them.
   async #taskNames(wanted: (string | null)[]): Promise<Map<string, { ref: string | null; title: string }>> {
     const tasks = await this.deps.tasks().catch(() => null)
     const board = tasks ? await tasks.board().catch(() => null) : null
     const names = new Map((board?.tasks ?? []).map((t) => [t.id, { ref: t.ref, title: t.title }]))
     for (const id of new Set(wanted)) {
-      if (!id || names.has(id)) continue
-      let found = this.#namedElsewhere.get(id)
-      if (!found && tasks) {
-        const task = (await tasks.search(id).catch(() => [])).find((t) => t.id === id)
-        if (task) this.#namedElsewhere.set(id, (found = { ref: task.ref, title: task.title }))
-      }
-      if (found) names.set(id, found)
+      if (!id || names.has(id) || !tasks) continue
+      const task = await tasks.get(id).catch(() => null)
+      if (task) names.set(id, { ref: task.ref, title: task.title })
     }
     return names
   }

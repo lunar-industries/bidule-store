@@ -1,12 +1,14 @@
 import type { GitSource } from '@bidule/ext-git/contract'
-import type { Task, TaskSource } from '@bidule/sdk/tasks'
+import type { ForgeClient } from '@bidule/sdk/forges'
+import type { Task } from '@bidule/sdk/tasks'
+import type { TaskAccess } from './objects.ts'
 import { branchName } from './settings.ts'
 
 /**
- * Taken from quack-board (domain/start_task.ts, Simon's): starts a task in each repo, through the repo's forge (the
- * git role's `forgeOf`): its issue when needed, its branch on the forge, a draft review, the branch fetched locally,
- * then linked to the task. A failed step stops that repo and says why; nothing already created on the forge is
- * undone.
+ * Taken from quack-board (domain/start_task.ts, Simon's): starts a task in each repo, through the repo's forge
+ * (`review.forge`): its issue when needed, its branch on the forge, a draft review, the branch fetched locally, then
+ * linked to the task (a link of the core, by git's `link`). A failed step stops that repo and says why; nothing
+ * already created on the forge is undone.
  */
 
 export type StartInput = {
@@ -35,13 +37,18 @@ const shortError = (err: unknown) =>
 const taskLine = (task: Task) =>
   [`Tâche : ${task.ref ? `${task.ref} — ` : ''}${task.title}`, task.url ?? ''].filter(Boolean).join('\n')
 
-export async function startTask(task: Task, input: StartInput, git: GitSource): Promise<StartResult[]> {
+export async function startTask(
+  task: Task,
+  input: StartInput,
+  git: GitSource,
+  forgeOf: (repo: string) => Promise<ForgeClient | null>
+): Promise<StartResult[]> {
   const results: StartResult[] = []
   for (const { path, label, base } of input.repos) {
     const result: StartResult = { repo: path, label, branch: null, steps: [] }
     results.push(result)
     try {
-      const client = await git.forgeOf(path)
+      const client = await forgeOf(path)
       if (!client) {
         result.steps.push({ step: 'Forge', ok: false, detail: 'Pas de remote GitHub ou GitLab joignable, ou pas de jeton' })
         continue
@@ -107,7 +114,7 @@ export async function startTask(task: Task, input: StartInput, git: GitSource): 
  * Once a repo is started (its branch linked), a task still to do moves to the source's first in-progress column, as
  * dragging its card would. null when nothing is to change.
  */
-export async function moveToInProgress(task: Task, results: StartResult[], tasks: TaskSource): Promise<StartStep | null> {
+export async function moveToInProgress(task: Task, results: StartResult[], tasks: TaskAccess): Promise<StartStep | null> {
   const started = results.some((r) => r.steps.some((s) => s.step === 'Liaison' && s.ok))
   if (!started) return null
   const step = 'Statut'
