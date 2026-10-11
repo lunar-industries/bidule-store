@@ -4,39 +4,15 @@ import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { GitBranch } from '@bidule/ext-git/contract'
 import { LOCKS_DIR } from '../server/slot_lock.ts'
 import type { Settings } from '../server/settings.ts'
 import { pipelineVerdict, workspaceServer, workspaceTools, type ToolContext } from '../server/tools.ts'
-import { FakeForge, FakeGit, FakeTasks, MemoryStore, fakeEnv, real, recording, settingsWith } from './fakes.ts'
+import { FakeBranches, FakeForge, FakeGit, FakeTasks, MemoryStore, fakeEnv, real, recording, settingsWith } from './fakes.ts'
 import { IDENTITY, realRepo, sh } from './repos.ts'
 
-// Taken from quack-board (tests/unit/claude_tools.spec.ts, Simon's). The tools reach the tasks, git and the forges
-// through the core: fakes of them here (the task cache and the board's announcement of Simon's app have no
+// Taken from quack-board (tests/unit/claude_tools.spec.ts, Simon's). The tools reach the tasks, the branches, git and
+// the forges through the core: fakes of them here (the task cache and the board's announcement of Simon's app have no
 // equivalent: the tasks are the core's objects).
-
-const branch = (repo: string, name: string, patch: Partial<GitBranch> = {}): GitBranch => ({
-  repo,
-  repoLabel: 'app',
-  name,
-  taskId: null,
-  manual: false,
-  isDefault: false,
-  ahead: 0,
-  behind: 0,
-  pushed: true,
-  lastCommitAt: null,
-  headSha: null,
-  base: null,
-  remoteHost: 'gl.example',
-  remotePath: 'team/app',
-  remote: 'origin',
-  reviewNumber: null,
-  reviewRef: null,
-  reviewState: null,
-  ci: null,
-  ...patch,
-})
 
 function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<Settings>; repos?: { path: string; label: string }[] } = {}) {
   const git = options.git ?? new FakeGit()
@@ -45,6 +21,7 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
   git.forge = forge
   git.repoList = options.repos ?? [{ path: '/r/app', label: 'app' }]
   const tasks = new FakeTasks()
+  const branches = new FakeBranches()
   const store = new MemoryStore()
   const settings = settingsWith(options.settings)
   // What the forge was asked to read again (`review.refresh`); `fail` makes it fail.
@@ -54,7 +31,16 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
     forgeReads.branches.push(`${repo} ${branch}`)
   }
   const tools = workspaceTools(
-    { env: fakeEnv(), git: async () => git, tasks: async () => tasks, forgeOf: () => git.forgeOf(), refreshForge, settings: async () => settings, store },
+    {
+      env: fakeEnv(),
+      git: async () => git,
+      branches: () => branches,
+      tasks: async () => tasks,
+      forgeOf: () => git.forgeOf(),
+      refreshForge,
+      settings: async () => settings,
+      store,
+    },
     async () => {}
   )
   const asked: string[] = []
@@ -73,7 +59,7 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
     if (!tool) throw new Error(`no tool ${name}`)
     return tool.call(args, context)
   }
-  return { git, forge, tasks, store, asked, ctx, call, tools, forgeReads }
+  return { git, forge, tasks, branches, store, asked, ctx, call, tools, forgeReads }
 }
 
 describe('Claude tools', () => {
@@ -86,11 +72,13 @@ describe('Claude tools', () => {
   })
 
   it('a tool that reads does not ask', async () => {
-    const { asked, call } = setup()
+    const { asked, branches, call } = setup()
+    branches.ofTasks.t1 = [{ repo: '/r/app', repoLabel: 'app', name: '7-ajout-role', review: 'MR !3', ci: 'fail' }]
     const res = await call('read_task', { task: 'id-7' })
     expect(res.isError).toBe(false)
     const task = JSON.parse(res.text)
     expect(task).toMatchObject({ id: 't1', ref: 'ID-7', title: 'Ajout rôle' })
+    expect(task.branches).toEqual([{ repo: 'app', name: '7-ajout-role', review: 'MR !3', ci: 'fail' }])
     expect(task.content).toBe('# Contexte\n- ajouter le rôle')
     expect(task.comments).toEqual([{ at: '2026-09-25T10:00:00Z', text: 'Vu avec le PO' }])
     expect(asked).toEqual([])
@@ -122,7 +110,7 @@ describe('Claude tools', () => {
   })
 
   it('starts a task as « Démarrer… » does, from the repo’s review target', async () => {
-    const { git, forge, tasks, call, forgeReads } = setup({ settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
+    const { git, forge, tasks, branches, call, forgeReads } = setup({ settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
     const res = await call('start_task', { task: 'ID-7', repos: [{ repo: 'app' }] })
     expect(res.isError, res.text).toBe(false)
     expect(forge.writes).toEqual([
@@ -132,7 +120,7 @@ describe('Claude tools', () => {
     ])
     // The main checkout keeps its branch: the local branch is only created, then linked to the task.
     expect(git.commands).toContain('/r/app branch --track 500-ajout-role origin/500-ajout-role')
-    expect(git.linked).toEqual(['/r/app 500-ajout-role t1'])
+    expect(branches.linked).toEqual(['/r/app 500-ajout-role t1'])
     // The forge reads the new branch and its draft review at once.
     expect(forgeReads.branches).toEqual(['/r/app 500-ajout-role'])
     expect(tasks.moved).toEqual(['t1 En cours'])
@@ -208,8 +196,8 @@ describe('Claude tools', () => {
 
   it('opens the draft MR of a branch pushed from a worktree, with its task’s title', async () => {
     const forge = new FakeForge({ '7-ajout-role': null })
-    const { git, call } = setup({ forge, settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
-    git.branchList = [branch('/r/app', '7-ajout-role', { taskId: 't1' })]
+    const { git, branches, call } = setup({ forge, settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
+    branches.tasks['/r/app 7-ajout-role'] = 't1'
     const res = await call('create_review', { repo: 'app', branch: '7-ajout-role' })
     expect(res.isError, res.text).toBe(false)
     expect(git.commands).toContain('/r/app fetch origin 7-ajout-role launchpad')

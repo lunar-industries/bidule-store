@@ -12,11 +12,21 @@
         "extension": "git"
       },
       {
+        "object": "repository"
+      },
+      {
+        "object": "branch"
+      },
+      {
         "object": "task",
         "optional": true
       },
       {
         "object": "review",
+        "optional": true
+      },
+      {
+        "object": "pipeline",
         "optional": true
       }
     ],

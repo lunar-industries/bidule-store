@@ -3,7 +3,7 @@ import type { ServerContext } from '@bidule/api/extensions'
 import type { GitSource } from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { SessionError } from './errors.ts'
-import { forgeOf, refreshForge, taskAccess } from './objects.ts'
+import { branchAccess, forgeOf, refreshForge, taskAccess } from './objects.ts'
 import { list, readSettings, reviewTargetOf } from './settings.ts'
 import { SessionService } from './sessions.ts'
 import { SessionStore } from './store.ts'
@@ -19,8 +19,10 @@ export let sessions: SessionService
 export const PLUGIN = fileURLToPath(new URL('../claude/plugin', import.meta.url))
 
 export const settings = () => readSettings(ctx)
-// git's actions (the repos, their branches, git itself), through the core.
+// git's actions (the repos, git itself, its worktrees), through the core.
 export const git = async () => ctx.objects.client<GitSource>('git')
+// The core's branches: a task's, with their review and CI; a branch's task, and linking one by hand.
+export const branches = () => branchAccess(ctx.objects)
 // The core's tasks; null without any provider of them.
 export const tasks = async () => taskAccess(ctx)
 // The forge serving a repo, by its path (`review.forge`: GitHub, GitLab).
@@ -61,7 +63,7 @@ export async function activate(context: ServerContext) {
       sessions: (id, status) => void ctx.events.emit('lunar-industries-claude.sessions', { id, status }),
       session: (id, message) => void ctx.events.emit('lunar-industries-claude.session', { id, message }),
     },
-    tools: workspaceTools({ env: ctx.env, git, tasks, forgeOf: forge, refreshForge: refreshBranch, settings, store }),
+    tools: workspaceTools({ env: ctx.env, git, branches, tasks, forgeOf: forge, refreshForge: refreshBranch, settings, store }),
     worktree: repoWorktree,
     plugins: [PLUGIN],
   })

@@ -9,6 +9,12 @@
         "extension": "git"
       },
       {
+        "object": "repository"
+      },
+      {
+        "object": "branch"
+      },
+      {
         "object": "task",
         "optional": true
       },

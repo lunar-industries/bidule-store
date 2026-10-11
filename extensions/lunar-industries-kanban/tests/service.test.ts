@@ -54,6 +54,8 @@ function fakeCore(
 ) {
   const links = [...(init.links ?? [])]
   const written: string[] = []
+  // Every change, in order (`+` a link, `-` an unlink): the core's rule on names runs again after each one.
+  const changes: string[] = []
   const objects: Record<string, { id: string }[]> = {
     repository: [repo],
     branch: init.branches ?? [],
@@ -72,13 +74,15 @@ function fakeCore(
     link: async (from: Ref, kind: string, to: Ref, origin: string) => {
       links.push({ from, kind, to, origin })
       written.push(`${to.id}→${kind === 'noTask' ? null : from.id}`)
+      changes.push(`+${kind} ${from.id} ${to.id}`)
     },
     unlink: async (from: Ref, kind: string, to: Ref) => {
       for (let i = links.length - 1; i >= 0; i--) if (same(links[i], from, kind, to)) links.splice(i, 1)
+      changes.push(`-${kind} ${from.id} ${to.id}`)
     },
     first: async () => init.forge ?? null,
   } as unknown as Objects
-  return { core, written }
+  return { core, written, changes }
 }
 
 describe('the cards’ branches', () => {
@@ -126,6 +130,21 @@ describe('the cards’ branches', () => {
     expect(written).toEqual(['dropped→null', 'new→t'])
     expect(after.branches.filter((b) => b.taskId === 't').map((b) => b.name)).toEqual(['kept', 'new'])
     expect(after.branches.find((b) => b.name === 'dropped')?.taskId).toBeNull()
+  })
+
+  test('the link by hand comes before the others go, so that the rule on names never sees the branch free', async () => {
+    const { core, changes } = fakeCore({
+      branches: [branch('dropped'), branch('new')],
+      links: [linked('t', 'dropped', 'ref'), linked('x', 'new', 'ref')],
+    })
+    await new KanbanService(core).setBranches('t', [{ repo: '/r/app', name: 'new' }])
+    expect(changes).toEqual([
+      '+noTask dropped dropped',
+      '-branch t dropped',
+      '+branch t new',
+      '-branch x new',
+      '-noTask new new',
+    ])
   })
 
   test('an unknown branch or task changes nothing', async () => {

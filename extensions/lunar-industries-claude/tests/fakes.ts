@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import type { Environment, EnvironmentKind } from '@bidule/api/extensions'
-import type { GitBranch, GitSource } from '@bidule/ext-git/contract'
+import type { GitSource } from '@bidule/ext-git/contract'
 import type { ForgeClient, ForgeIssue, ForgeJob, ForgePipeline, ForgeReview, NewReview } from '@bidule/sdk/forges'
 import type { Board, Task, TaskColumn, TaskPage } from '@bidule/sdk/tasks'
-import type { TaskAccess } from '../server/objects.ts'
+import type { BranchAccess, TaskAccess } from '../server/objects.ts'
 import type { Settings } from '../server/settings.ts'
 import { SessionStore, type SessionRow } from '../server/store.ts'
 
@@ -29,32 +29,21 @@ export function settingsWith(patch: Partial<Settings> = {}): Settings {
 }
 
 /**
- * git's actions: the repos and branches given, and the forge given for every repo (`review.forge`, see forgeOf).
+ * git's actions: the repos given, and the forge given for every repo (`review.forge`, see forgeOf).
  * `run` is the command answer: by default it records the commands, answers the refs listed and lets every other
  * command succeed (see recording()); real() runs git for real.
  */
 export class FakeGit implements GitSource {
   readonly commands: string[] = []
-  readonly linked: string[] = []
   forge: ForgeClient | null = null
   repoList: { path: string; label: string }[] = []
-  branchList: GitBranch[] = []
 
   constructor(public run: (folder: string, args: string[], timeout?: number) => Promise<string> = async () => '') {}
 
   async repos() {
     return this.repoList
   }
-  async branches() {
-    return this.branchList
-  }
-  async branchesOf(taskId: string) {
-    return this.branchList.filter((b) => b.taskId === taskId)
-  }
-  async link(repo: string, name: string, taskId: string | null) {
-    this.linked.push(`${repo} ${name} ${taskId}`)
-    return true
-  }
+  branches = unused
   // The forge serving every repo (the core's `review.forge`).
   forgeOf = async () => this.forge
   async resolvePath(path: string) {
@@ -75,6 +64,28 @@ export class FakeGit implements GitSource {
 
 async function unused(): Promise<never> {
   throw new Error('not used by the module')
+}
+
+/**
+ * The core's branches: each task's (`ofTask`, by task id), each branch's task (`taskOf`, by `<repo> <name>`); the links
+ * made by hand are recorded in `linked` (see objects.test.ts for the real one over the core's objects).
+ */
+export class FakeBranches implements BranchAccess {
+  readonly linked: string[] = []
+  ofTasks: Record<string, Awaited<ReturnType<BranchAccess['ofTask']>>> = {}
+  tasks: Record<string, string> = {}
+
+  async ofTask(taskId: string) {
+    return this.ofTasks[taskId] ?? []
+  }
+  async taskOf(repo: string, name: string) {
+    return this.tasks[`${repo} ${name}`] ?? null
+  }
+  async link(repo: string, name: string, taskId: string) {
+    this.linked.push(`${repo} ${name} ${taskId}`)
+    this.tasks[`${repo} ${name}`] = taskId
+    return true
+  }
 }
 
 // Records `<folder> <args>`; the refs listed exist, `rev-parse` answers a sha (or the exclude file's path), every

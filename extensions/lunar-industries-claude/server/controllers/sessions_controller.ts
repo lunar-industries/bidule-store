@@ -1,6 +1,6 @@
 import { basename, join, sep } from 'node:path'
 import type { HttpContext } from '@adonisjs/core/http'
-import { ctx, enabled, git, sessions, settings, store, tasks } from '@bidule/ext-lunar-industries-claude/server/index'
+import { branches, ctx, enabled, git, sessions, settings, store, tasks } from '@bidule/ext-lunar-industries-claude/server/index'
 import { SessionError } from '@bidule/ext-lunar-industries-claude/server/errors'
 import { detect, placeOf } from '@bidule/ext-lunar-industries-claude/server/runner'
 import { reviewTargetOf } from '@bidule/ext-lunar-industries-claude/server/settings'
@@ -93,10 +93,10 @@ export default class SessionsController {
     // is given the repos the app knows, and its folder (`cwd`) says where it goes on.
     const wanted = resume ? asked.repos.filter((r) => known.includes(r)) : asked.repos
     if (wanted.some((r) => !known.includes(r))) throw new SessionError('Dépôt inconnu', 404)
-    const ofTask = taskId && !resume ? await (await git()).branchesOf(taskId) : []
+    const ofTask = taskId && !resume ? await branches().ofTask(taskId) : []
     // None chosen: the repos of the task's branches, else every repo the app knows.
     const repos = wanted.length ? wanted : ofTask.length ? [...new Set(ofTask.map((b) => b.repo))] : known
-    const branches = ofTask.filter((b) => repos.includes(b.repo))
+    const inRepos = ofTask.filter((b) => repos.includes(b.repo))
     // The next new session starts with the same model and effort, even after the app restarts. Not the mode: it is a
     // setting of its own, and a session started in Plan mode once must not change it.
     if (!resume) {
@@ -112,7 +112,7 @@ export default class SessionsController {
       resume,
       taskId,
       cwd: resume ? cwd : undefined,
-      worktrees: branches.map((b) => ({ repo: b.repo, branch: b.name })),
+      worktrees: inRepos.map((b) => ({ repo: b.repo, branch: b.name })),
       attached: { images, files },
     })
     return { id }

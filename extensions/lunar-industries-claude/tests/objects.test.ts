@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ServerContext } from '@bidule/api/extensions'
 import type { Task } from '@bidule/sdk/tasks'
-import { taskAccess } from '../server/objects.ts'
+import { branchAccess, taskAccess, type BranchObjects } from '../server/objects.ts'
 
 // The core's tasks as the sessions read them (ctx.objects): two providers sharing a status, a task the user is not on,
 // and a provider that neither shows a page nor takes comments.
@@ -82,5 +82,113 @@ describe('the core’s tasks', () => {
     await expect(tasks?.comment('t3', 'Vu')).rejects.toThrow('La source de tâches ne prend pas de commentaires')
     await tasks?.move('t3', 'En cours')
     expect(acted).toEqual(['task.page t1 {}', 'task.comment t1 {"text":"Vu"}', 'task.move t3 {"status":"En cours"}'])
+  })
+})
+
+// The core's branches as the tools read and link them: two repos, a task's branches with their review and pipeline,
+// and the core's rule that links a branch by the task's reference in its name, run after each change as the core does.
+function fakeBranches() {
+  const base = { provider: 'git', ref: null, url: null, properties: {} }
+  type Ref = { type: string; id: string }
+  type Link = { from: Ref; kind: string; to: Ref; origin: string }
+  const stored: Record<string, Record<string, unknown>[]> = {
+    repository: [
+      { ...base, id: 'r1', type: 'repository', path: '/r/app', label: 'app' },
+      { ...base, id: 'r2', type: 'repository', path: '/r/api', label: 'api' },
+    ],
+    branch: [
+      { ...base, id: 'b1', type: 'branch', repositoryId: 'r1', name: 'id-7-ajout-role', isDefault: false },
+      { ...base, id: 'b2', type: 'branch', repositoryId: 'r2', name: 'id-7-api', isDefault: false },
+      { ...base, id: 'b3', type: 'branch', repositoryId: 'r1', name: 'autre', isDefault: false },
+    ],
+    review: [
+      { ...base, provider: 'gitlab', id: 'v1', type: 'review', branchId: 'b1', number: 2, label: 'MR !2', state: 'closed' },
+      { ...base, provider: 'gitlab', id: 'v2', type: 'review', branchId: 'b1', number: 3, label: 'MR !3', state: 'open' },
+      { ...base, provider: 'gitlab', id: 'v3', type: 'review', branchId: 'b2', number: 4, label: 'MR !4', state: 'merged' },
+    ],
+    pipeline: [{ ...base, provider: 'gitlab', id: 'p1', type: 'pipeline', branchId: 'b1', status: 'fail' }],
+  }
+  const refs: Record<string, string> = { t7: 'id-7', t8: 'id-8' }
+  const links: Link[] = []
+  const same = (a: Ref, b: Ref) => a.type === b.type && a.id === b.id
+  // The core's rule on branch names (`discoverBranches`), as simple as these names need.
+  const discover = () => {
+    const byHand = new Set([
+      ...links.filter((l) => l.kind === 'branch' && l.origin === 'manual').map((l) => l.to.id),
+      ...links.filter((l) => l.kind === 'noTask').map((l) => l.from.id),
+    ])
+    for (const b of stored.branch) {
+      const id = String(b.id)
+      if (byHand.has(id)) continue
+      const hit = Object.entries(refs).find(([, ref]) => String(b.name).startsWith(ref))?.[0] ?? null
+      for (let i = links.length - 1; i >= 0; i--)
+        if (links[i].kind === 'branch' && links[i].to.id === id && links[i].origin === 'ref' && links[i].from.id !== hit) links.splice(i, 1)
+      if (hit && !links.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
+        links.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
+    }
+  }
+  discover()
+  const objects = {
+    list: async (type: string, filter: { ids?: string[]; where?: Record<string, unknown> } = {}) =>
+      (stored[type] ?? []).filter(
+        (o) =>
+          (!filter.ids || filter.ids.includes(String(o.id))) &&
+          Object.entries(filter.where ?? {}).every(([k, v]) => o[k] === v)
+      ),
+    related: async (id: string, filter: { kind?: string; type?: string } = {}) =>
+      links
+        .filter((l) => l.from.id === id || l.to.id === id)
+        .map((l) =>
+          l.from.id === id
+            ? { kind: l.kind, type: l.to.type, id: l.to.id, origin: l.origin, outgoing: true }
+            : { kind: l.kind, type: l.from.type, id: l.from.id, origin: l.origin, outgoing: false }
+        )
+        .filter((r) => (!filter.kind || r.kind === filter.kind) && (!filter.type || r.type === filter.type)),
+    relations: async (filter: { kind: string }) => links.filter((l) => l.kind === filter.kind),
+    // As the core: a rule never overrides the user's link; each change runs the rule again.
+    link: async (from: Ref, kind: string, to: Ref, origin: string) => {
+      const current = links.find((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
+      if (current?.origin === 'manual' && origin !== 'manual') return
+      if (current) current.origin = origin
+      else links.push({ from, kind, to, origin })
+      discover()
+    },
+    unlink: async (from: Ref, kind: string, to: Ref) => {
+      const at = links.findIndex((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
+      if (at < 0) return
+      links.splice(at, 1)
+      discover()
+    },
+  }
+  const linksOf = (branch: string) =>
+    links.filter((l) => l.to.id === branch || l.from.id === branch).map((l) => [l.kind, l.from.id, l.origin])
+  return { branches: branchAccess(objects as unknown as BranchObjects), linksOf }
+}
+
+describe('the core’s branches', () => {
+  it('a task’s branches by repo label, with their latest review and their CI', async () => {
+    const { branches } = fakeBranches()
+    expect(await branches.ofTask('t7')).toEqual([
+      { repo: '/r/api', repoLabel: 'api', name: 'id-7-api', review: 'MR !4', ci: 'merged' },
+      { repo: '/r/app', repoLabel: 'app', name: 'id-7-ajout-role', review: 'MR !3', ci: 'fail' },
+    ])
+    expect(await branches.ofTask('t8')).toEqual([])
+  })
+
+  it('a branch’s task, by its repo’s path; none for a branch unknown or without one', async () => {
+    const { branches } = fakeBranches()
+    expect(await branches.taskOf('/r/app', 'id-7-ajout-role')).toBe('t7')
+    expect(await branches.taskOf('/r/app', 'autre')).toBeNull()
+    expect(await branches.taskOf('/r/app', 'nope')).toBeNull()
+    expect(await branches.taskOf('/elsewhere', 'id-7-ajout-role')).toBeNull()
+  })
+
+  it('a link by hand: its other tasks go, and the rule on names does not link it back', async () => {
+    const { branches, linksOf } = fakeBranches()
+    expect(linksOf('b1')).toEqual([['branch', 't7', 'ref']])
+    expect(await branches.link('/r/app', 'id-7-ajout-role', 't8')).toBe(true)
+    expect(linksOf('b1')).toEqual([['branch', 't8', 'manual']])
+    expect(await branches.taskOf('/r/app', 'id-7-ajout-role')).toBe('t8')
+    expect(await branches.link('/r/app', 'nope', 't8')).toBe(false)
   })
 })

@@ -1,6 +1,79 @@
-import type { ServerContext } from '@bidule/api/extensions'
+import type { ObjectsContext, ServerContext } from '@bidule/api/extensions'
 import type { ForgeClient } from '@bidule/sdk/forges'
+import type { Ci, StoredObject } from '@bidule/sdk/objects'
 import type { Board, Task, TaskPage } from '@bidule/sdk/tasks'
+
+/**
+ * The branches as the sessions and their tools read them: the core's objects (git's branches and repos), their task
+ * (the core's links `task → branch`, which the rule on the task's reference and the user keep), their latest review
+ * and CI (the forges' objects). git's own actions (its CLI, worktrees, the repos' state) stay git's.
+ */
+export interface BranchAccess {
+  // A task's branches, by their repo's label: the repo by its path (git's actions take it), how the forge cites the
+  // latest review (« MR !12 ») and the CI (merged once the review is); null when no forge read it.
+  ofTask(taskId: string): Promise<{ repo: string; repoLabel: string; name: string; review: string | null; ci: Ci | null }[]>
+  // The task a branch of a repo (by its path) is linked to, by hand first; null when none, or unknown.
+  taskOf(repo: string, name: string): Promise<string | null>
+  /**
+   * Links a branch to a task by hand, in the core: the task's link (origin `manual`: the name's reference no longer
+   * moves it), then its other tasks and its `noTask` mark go. The link comes first: each change sets the core's rule
+   * going again (`discoverBranches`), which would otherwise link the branch back to the task its name refers to. False
+   * when the core does not know the branch.
+   */
+  link(repo: string, name: string, taskId: string): Promise<boolean>
+}
+
+export type BranchObjects = Pick<ObjectsContext, 'list' | 'related' | 'relations' | 'link' | 'unlink'>
+
+export function branchAccess(objects: BranchObjects): BranchAccess {
+  // A branch of a repo, by the repo's path and its name.
+  const find = async (path: string, name: string): Promise<StoredObject<'branch'> | null> => {
+    const [repo] = await objects.list('repository', { where: { path } })
+    const [branch] = repo ? await objects.list('branch', { where: { repositoryId: repo.id, name } }) : []
+    return branch ?? null
+  }
+  return {
+    async ofTask(taskId) {
+      const ids = (await objects.related(taskId, { kind: 'branch', type: 'branch' }))
+        .filter((l) => l.outgoing)
+        .map((l) => l.id)
+      if (!ids.length) return []
+      const branches = await objects.list('branch', { ids })
+      const [repos, reviews, pipelines] = await Promise.all([
+        objects.list('repository', { ids: [...new Set(branches.map((b) => b.repositoryId))] }),
+        objects.list('review'),
+        objects.list('pipeline'),
+      ])
+      const byId = new Map(repos.map((r) => [r.id, r]))
+      return branches
+        .flatMap((b) => {
+          const repo = byId.get(b.repositoryId)
+          if (!repo) return []
+          const review = reviews.filter((r) => r.branchId === b.id).sort((x, y) => y.number - x.number)[0]
+          const pipeline = pipelines.find((p) => p.branchId === b.id)
+          const ci: Ci | null = review?.state === 'merged' ? 'merged' : review || pipeline ? (pipeline?.status ?? 'none') : null
+          return [{ repo: repo.path, repoLabel: repo.label, name: b.name, review: review?.label ?? null, ci }]
+        })
+        .sort((a, b) => a.repoLabel.localeCompare(b.repoLabel))
+    },
+    async taskOf(path, name) {
+      const branch = await find(path, name)
+      if (!branch) return null
+      const links = (await objects.related(branch.id, { kind: 'branch', type: 'task' })).filter((l) => !l.outgoing)
+      return (links.find((l) => l.origin === 'manual') ?? links[0])?.id ?? null
+    },
+    async link(path, name, taskId) {
+      const found = await find(path, name)
+      if (!found) return false
+      const branch = { type: 'branch' as const, id: found.id }
+      await objects.link({ type: 'task', id: taskId }, 'branch', branch, 'manual')
+      for (const l of await objects.related(found.id, { kind: 'branch', type: 'task' }))
+        if (!l.outgoing && l.id !== taskId) await objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
+      await objects.unlink(branch, 'noTask', branch)
+      return true
+    },
+  }
+}
 
 /**
  * The tasks as the sessions and their tools read and write them: the core's objects (type `task`, whichever

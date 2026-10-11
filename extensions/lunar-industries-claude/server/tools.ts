@@ -5,7 +5,7 @@ import type { Environment } from '@bidule/api/extensions'
 import type { GitSource } from '@bidule/ext-git/contract'
 import type { ForgeClient, ForgeJob } from '@bidule/sdk/forges'
 import type { Task } from '@bidule/sdk/tasks'
-import type { TaskAccess } from './objects.ts'
+import type { BranchAccess, TaskAccess } from './objects.ts'
 import { sdk } from './sdk.ts'
 import { deployOf, issueOf, list, reviewTargetOf, slugify, templateOf, type Settings } from './settings.ts'
 import { acquire, lockHost, lockName, lockStatus, pidOfSession, release } from './slot_lock.ts'
@@ -16,7 +16,7 @@ import { addWorktree, baseOf, listWorktrees, removeWorktree, shellVia, worktreeP
 /**
  * Taken from quack-board (services/claude_tools.ts, Simon's): the workspace's own tools, given to each Claude session
  * as the MCP server `workspace`. They run in the API, through the core: its tasks (whichever extensions provide them),
- * git's actions (the repos and their branches) and the forge serving each repo (`review.forge`: GitHub, GitLab). A
+ * its branches (their task, review and CI), git's actions (the repos, git itself) and the forge serving each repo (`review.forge`: GitHub, GitLab). A
  * tool that writes asks the user first, whatever the session's permission mode: every write to the tasks, the forge,
  * git or a lock is confirmed.
  */
@@ -46,6 +46,8 @@ export interface ToolDeps {
   // Where the outside tools run: a worktree's preparation, and the pids of the executable slot's holders.
   env: Environment
   git: () => Promise<GitSource>
+  // The core's branches: a task's, a branch's task, and a branch linked to its task by hand.
+  branches: () => BranchAccess
   // null without a source of tasks.
   tasks: () => Promise<TaskAccess | null>
   // The forge serving a repo, as a client on its project (null: none, or no token).
@@ -258,7 +260,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       run: async ({ task }) => {
         const t = await findTask(task)
         const tasks = await tasksOf()
-        const branches = await (await deps.git()).branchesOf(t.id)
+        const branches = await deps.branches().ofTask(t.id)
         const page = await tasks.page(t.id)
         return {
           id: t.id,
@@ -267,7 +269,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
           status: t.status,
           due: t.due,
           url: t.url,
-          branches: branches.map((b) => ({ repo: b.repoLabel, name: b.name, review: b.reviewRef, ci: b.ci })),
+          branches: branches.map((b) => ({ repo: b.repoLabel, name: b.name, review: b.review, ci: b.ci })),
           content: page.text,
           comments: page.comments,
         }
@@ -334,7 +336,8 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
           t,
           { repos: targets, slug: slugify(slug ?? t.title), issue: issue || s.createIssue, review, checkout: 'keep', template: templateOf(s) },
           git,
-          deps.forgeOf
+          deps.forgeOf,
+          deps.branches()
         )
         // The new branches and their draft reviews, read on the forge at once.
         for (const r of results) if (r.branch) await readForge(r.repo, r.branch)
@@ -477,8 +480,8 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         if (client.kind === 'github' && Number(await out(r.path, ['rev-list', '--count', `origin/${into}..origin/${branch}`])) === 0) {
           throw new ToolError(`GitHub refuse une PR sans commit : ${branch} n'a aucun commit de plus que ${into} sur origin. Committer et pousser d'abord.`)
         }
-        const known = (await (await deps.git()).branches()).find((b) => b.repo === r.path && b.name === branch)
-        const task = known?.taskId ? await findTask(known.taskId).catch(() => null) : null
+        const taskId = await deps.branches().taskOf(r.path, branch)
+        const task = taskId ? await findTask(taskId).catch(() => null) : null
         const text = [description ?? '', reviewDescription(issueOf(templateOf(s), branch), task?.url ?? null)].filter(Boolean).join('\n\n')
         const review = await client.createReview({ source: branch, target: into, title: title ?? task?.title ?? branch, description: text, draft })
         await readForge(r.path, branch)

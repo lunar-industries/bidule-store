@@ -1,5 +1,4 @@
 import type { ObjectsContext } from '@bidule/api/extensions'
-import type { GitSource } from '@bidule/ext-git/contract'
 import type { ForgeClient } from '@bidule/sdk/forges'
 import type { StoredObject } from '@bidule/sdk/objects'
 import type { Job, ListedBranch, Links, ListedRepo, Listing } from '../contract.ts'
@@ -9,12 +8,10 @@ import { issueOf, list, reviewDescription, templateOf } from './names.ts'
 const K = 'lunar-industries-branches'
 
 export interface BranchesDeps {
-  // The core's objects the page reads: the repos and branches (git's), their tasks (links of the core), their reviews
-  // and pipelines (the forges'), the client on a repo's forge (`review.forge`), and that forge reading a branch again
-  // after a write there (`review.refresh`).
-  objects: Pick<ObjectsContext, 'list' | 'get' | 'relations' | 'first'>
-  // What git does for the page: a branch's task set by hand.
-  git: () => Pick<GitSource, 'link'>
+  // The core's objects the page reads: the repos and branches (git's), their tasks (links of the core, which it sets by
+  // hand), their reviews and pipelines (the forges'), the client on a repo's forge (`review.forge`), and that forge
+  // reading a branch again after a write there (`review.refresh`).
+  objects: Pick<ObjectsContext, 'list' | 'get' | 'related' | 'relations' | 'link' | 'unlink' | 'first'>
   setting: (key: string) => Promise<unknown>
   save: (key: string, value: string) => Promise<void>
   // A repo's review target changed.
@@ -172,9 +169,23 @@ export class BranchesService {
     return done
   }
 
-  // Through git, which keeps the link in the core (by hand: the name's reference no longer moves it).
+  /**
+   * A branch linked to a task by hand (null: unlinked), in the core: the task's link (origin `manual`: the name's
+   * reference no longer moves it), or the `noTask` mark; then its other tasks and the opposite mark go. The user's word
+   * comes first: each change sets the core's rule going again (`discoverBranches`), which must already see the branch
+   * as linked by hand, or it would link it back to the task its name refers to.
+   */
   async link(repo: string, name: string, taskId: string | null): Promise<void> {
-    if (!(await this.deps.git().link(repo, name, taskId))) throw new BranchesError('Branche inconnue', 404)
+    const { objects } = this.deps
+    const r = await this.#repo(repo).catch(() => null)
+    const [b] = r ? await objects.list('branch', { where: { repositoryId: r.id, name } }) : []
+    if (!b) throw new BranchesError('Branche inconnue', 404)
+    const branch = { type: 'branch' as const, id: b.id }
+    if (taskId) await objects.link({ type: 'task', id: taskId }, 'branch', branch, 'manual')
+    else await objects.link(branch, 'noTask', branch, 'manual')
+    for (const l of await objects.related(b.id, { kind: 'branch', type: 'task' }))
+      if (!l.outgoing && l.id !== taskId) await objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
+    if (taskId) await objects.unlink(branch, 'noTask', branch)
   }
 
   // Where its review, its latest pipeline and its issue are: read on the forge now, for the branch shown.

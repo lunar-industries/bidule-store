@@ -1,14 +1,14 @@
 import type { GitSource } from '@bidule/ext-git/contract'
 import type { ForgeClient } from '@bidule/sdk/forges'
 import type { Task } from '@bidule/sdk/tasks'
-import type { TaskAccess } from './objects.ts'
+import type { BranchAccess, TaskAccess } from './objects.ts'
 import { branchName } from './settings.ts'
 
 /**
  * Taken from quack-board (domain/start_task.ts, Simon's): starts a task in each repo, through the repo's forge
  * (`review.forge`): its issue when needed, its branch on the forge, a draft review, the branch fetched locally, then
- * linked to the task (a link of the core, by git's `link`). A failed step stops that repo and says why; nothing
- * already created on the forge is undone.
+ * linked to the task by hand (a link of the core). A failed step stops that repo and says why; nothing already created
+ * on the forge is undone.
  */
 
 export type StartInput = {
@@ -41,7 +41,8 @@ export async function startTask(
   task: Task,
   input: StartInput,
   git: GitSource,
-  forgeOf: (repo: string) => Promise<ForgeClient | null>
+  forgeOf: (repo: string) => Promise<ForgeClient | null>,
+  branches: Pick<BranchAccess, 'link'>
 ): Promise<StartResult[]> {
   const results: StartResult[] = []
   for (const { path, label, base } of input.repos) {
@@ -99,9 +100,9 @@ export async function startTask(
         },
         () => (input.checkout === 'switch' ? 'créée, et le dépôt est dessus' : 'créée')
       )
-      // Read back so the branch is there, then linked by hand to the task.
+      // Read back so the branch is in the core, then linked by hand to the task.
       await git.sync().catch(() => undefined)
-      await git.link(path, name, task.id)
+      await branches.link(path, name, task.id)
       result.steps.push({ step: 'Liaison', ok: true, detail: task.title })
     } catch (err) {
       if (!(err instanceof StepFailed)) throw err

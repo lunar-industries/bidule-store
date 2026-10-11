@@ -120,15 +120,16 @@ export class KanbanService {
     return this.branches()
   }
 
-  // A link by hand, as git made it: the branch's other tasks unlinked, then its task, or `noTask` (the core's rule
-  // that links a branch by its task's reference then leaves it alone).
+  // A link by hand: its task, or `noTask`, first (the core's rule that links a branch by its task's reference then
+  // leaves it alone; it runs again at each change, and would link the branch back meanwhile), then the branch's other
+  // tasks and the opposite mark go.
   async #link(id: string, taskId: string | null) {
     const branch = { type: 'branch' as const, id }
-    for (const l of await this.objects.related(id, { kind: 'branch', type: 'task' }))
-      await this.objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
-    await this.objects.unlink(branch, 'noTask', branch)
     if (taskId) await this.objects.link({ type: 'task', id: taskId }, 'branch', branch, 'manual')
     else await this.objects.link(branch, 'noTask', branch, 'manual')
+    for (const l of await this.objects.related(id, { kind: 'branch', type: 'task' }))
+      if (!l.outgoing && l.id !== taskId) await this.objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
+    if (taskId) await this.objects.unlink(branch, 'noTask', branch)
   }
 
   // Where a mark of a card leads: the branch's review, else its pipeline, as the forges gave them; else asked of the

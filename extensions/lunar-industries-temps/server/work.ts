@@ -92,12 +92,17 @@ export function coreWork(objects: Objects): Work {
       })
     },
 
-    // A link the user made (`manual`): the core's rule on branch names never undoes it.
+    // A link the user made (`manual`): the core's rule on branch names never undoes it. Set first, then the branch's
+    // other tasks and its « no task » mark go: each unlink runs that rule again, which must find the manual link.
     async link(repoPath, name, taskId) {
       const [repo] = await objects.list('repository', { where: { path: repoPath } })
       const [branch] = repo ? await objects.list('branch', { where: { repositoryId: repo.id, name } }) : []
       if (!branch) return
-      await objects.link({ type: 'task', id: taskId }, 'branch', { type: 'branch', id: branch.id }, 'manual')
+      const to = { type: 'branch' as const, id: branch.id }
+      await objects.link({ type: 'task', id: taskId }, 'branch', to, 'manual')
+      for (const other of await objects.related(branch.id, { kind: 'branch', type: 'task' }))
+        if (other.id !== taskId) await objects.unlink({ type: 'task', id: other.id }, 'branch', to)
+      await objects.unlink(to, 'noTask', to)
     },
 
     async titles() {
