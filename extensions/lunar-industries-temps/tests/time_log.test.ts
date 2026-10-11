@@ -1,7 +1,7 @@
-// Taken from quack-board (tests/unit/time_log.spec.ts, Simon's « Time log »), through the timeLog role's sendDay
-// and read (a fake Time Log that keeps one entry per task, label and day, as Notion's does).
+// Taken from quack-board (tests/unit/time_log.spec.ts, Simon's « Time log »), through the Time Log's sendDay and
+// read (a fake Time Log that keeps one entry per task, label and day, as Notion's does).
 import { describe, expect, test } from 'vitest'
-import { FakeTimeLog, PlainTimeLog, setup } from './fakes.ts'
+import { FakeTimeLog, PlainTimeLog, ReadingTimeLog, setup } from './fakes.ts'
 
 const DAY = '2026-09-22'
 const NEXT_DAY = new Date(2026, 8, 23, 9)
@@ -17,7 +17,7 @@ describe('Time log', () => {
       { taskId: null, repo: 'r', branch: 'fix', label: 'Réunion', share: 3, confirmed: true },
       { taskId: 't2', share: 0 },
     ])
-    sent.tasks.board.tasks = [{ id: 't1', title: 'Caméra', status: 'x', ref: null, url: null, role: 'owner', lastEdited: null, due: null }]
+    sent.tasks.list = [{ id: 't1', title: 'Caméra' }]
     await sent.days.send(DAY)
     expect(log.entries.map((e) => [e.day, e.taskId, e.label, e.share])).toEqual([
       [DAY, 't1', 'Développement', 0.6],
@@ -62,6 +62,20 @@ describe('Time log', () => {
     await expect(days.send(DAY)).rejects.toThrow(/journée entière/)
     expect((await days.view(DAY)).logProblem).toMatch(/journée entière/)
     expect((await setup({ now: NEXT_DAY, log: null }).days.view(DAY)).logProblem).toMatch(/Aucun Time Log/)
+  })
+
+  test('a Time Log only read shows its days as recorded, and refuses to be sent one', async () => {
+    const entries = new FakeTimeLog()
+    entries.entries.push({ id: 'p1', day: DAY, taskId: 't1', label: 'Réunion', share: 1, url: null, props: {}, lastEdited: '', archived: false })
+    const { store, days } = setup({ now: NEXT_DAY, log: new ReadingTimeLog(entries) })
+    const view = await days.view(DAY)
+    expect(view.state).toBe('recorded')
+    expect(view.lines.map((l) => [l.source, l.taskId, l.label, l.share])).toEqual([['log', 't1', 'Réunion', 20]])
+    expect(view.labels).toContain('Réunion')
+    expect(view.logProblem).toMatch(/journée entière/)
+    await days.edit(DAY)
+    await expect(days.send(DAY)).rejects.toThrow(/journée entière/)
+    expect(await store.drafts(DAY)).toHaveLength(1)
   })
 
   test('a draft under 1 is saved, but not sent', async () => {

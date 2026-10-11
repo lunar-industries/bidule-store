@@ -1,7 +1,7 @@
 // Lunar Industries - Temps: Simon's Temps module (quack-board), an unofficial one competing with Bidule's own (`temps`).
 // A day is worth 1, shared out in twentieths between lines (a task, or none: a meeting, an absence, a deployment),
-// each with the label of the Time Log; proposed from git and the source of tasks, then sent to the Time Log (the
-// `timeLog` role's fields/read/sendDay). Types only: the interface reads this file.
+// each with the label of the Time Log; proposed from the core's activity (git's, the tasks'), then sent to the Time
+// Log (the provider of `timeEntry` objects). Types only: the interface reads this file.
 //
 // Its routes, under /api/ext/lunar-industries-temps (shares in twentieths):
 //   GET    days/:day                 DayView (the day's draft brought up to date first)
@@ -78,8 +78,8 @@ export type DayView = {
   defaultLabel: string
   // The Time Log's other properties a line may fill in.
   extras: LogField[]
-  // Null when the Time Log can be read and written a whole day at a time (the timeLog role's fields, read and
-  // sendDay), else why not: the day can be prepared, not sent.
+  // Null when the Time Log can be read and written a whole day at a time, else why not: the day can be prepared, not
+  // sent.
   logProblem: string | null
 }
 

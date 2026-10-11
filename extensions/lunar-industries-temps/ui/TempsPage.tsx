@@ -155,7 +155,7 @@ export function TempsPage() {
     loadBoard()
     loadSummary()
   }, [])
-  useOn('tasks.changed', loadBoard)
+  useOn('objects.changed', ({ type }) => type === 'task' && loadBoard())
 
   // In the morning, before any activity, the previous work day still to deal with comes first (once a date).
   const decided = useRef(returning)

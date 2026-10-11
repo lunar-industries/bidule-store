@@ -1,19 +1,33 @@
 {
   "id": "lunar-industries-temps",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "title": "Lunar Industries - Temps",
-  "engine": "^0.1.1",
+  "engine": "^0.2.0",
   "activation": [
-    "onEvent:tasks.changed",
-    "onEvent:git.changed"
+    "onEvent:objects.changed"
   ],
   "contributes": {
-    "requires": [
-      "git"
-    ],
-    "uses": [
-      "tasks",
-      "timeLog"
+    "needs": [
+      {
+        "object": "task",
+        "optional": true
+      },
+      {
+        "object": "activity",
+        "optional": true
+      },
+      {
+        "object": "repository",
+        "optional": true
+      },
+      {
+        "object": "branch",
+        "optional": true
+      },
+      {
+        "object": "timeEntry",
+        "optional": true
+      }
     ],
     "pages": [
       {

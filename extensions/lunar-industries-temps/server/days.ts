@@ -1,5 +1,4 @@
-import type { GitSource } from '@bidule/ext-git/contract'
-import type { LogEntry, LogFields, LogLine, TaskSource, TimeLog } from '@bidule/sdk/tasks'
+import type { LogEntry, LogFields, LogLine, TimeLog } from '@bidule/sdk/tasks'
 import type { DayLine, DayState, DaySummary, DayView, LineInput, Summary } from '../contract.ts'
 import {
   addDays,
@@ -26,7 +25,7 @@ import type { DraftRow, LogRow, NewDraftRow, TempsStore } from './store.ts'
 /**
  * Taken from quack-board (domain/day.ts and domain/time_log.ts, Simon's): the user's days. Each day's draft follows
  * the signals until the user changes it; a day the Time Log has is shown as it is there, and « Modifier » makes it a
- * draft again. Sending writes the whole day to the Time Log (the timeLog role's sendDay), which then holds it.
+ * draft again. Sending writes the whole day to the Time Log (its sendDay), which then holds it.
  */
 
 // Refused edits; the message is shown to the user.
@@ -38,25 +37,45 @@ const LOG_AHEAD_DAYS = 60
 // A period read from the Time Log is read again after this long.
 const FRESH_MS = 10 * 60_000
 
+// A branch of the user's repos, with the task it is linked to.
+export type WorkBranch = { repo: string; name: string; taskId: string | null; isDefault: boolean }
+
+/** The user's work as the core has it (server/work.ts reads it from the core's objects). */
+export interface Work {
+  repos(): Promise<{ path: string; label: string }[]>
+  // The branches the repos have now.
+  branches(): Promise<WorkBranch[]>
+  // The user's signals between two instants: git's activity (with the task of its branch, kept once the branch is
+  // deleted) and the tasks' (an edit, a change of status).
+  events(since: string, until: string): Promise<WorkEvent[]>
+  // Links a branch to a task by hand.
+  link(repo: string, branch: string, taskId: string): Promise<void>
+  // The tasks' titles, by id.
+  titles(): Promise<Map<string, string>>
+}
+
+// The Time Log as the days use it: the user's entries of a period and, when its provider offers them, its fields and
+// a whole day written at once.
+export type DayLog = Pick<TimeLog, 'name' | 'configured' | 'read' | 'fields' | 'sendDay'>
+type ReadingLog = DayLog & Required<Pick<DayLog, 'read'>>
+const reads = (log: DayLog | null): log is ReadingLog => typeof log?.read === 'function'
+type SendingLog = DayLog & Required<Pick<DayLog, 'sendDay'>>
+const sends = (log: DayLog): log is SendingLog => typeof log.sendDay === 'function'
+
 export interface DaysDeps {
   store: TempsStore
   settings: () => Promise<TempsSettings>
-  git: () => Promise<GitSource>
-  // Null without a source of tasks, or without a Time Log.
-  tasks: () => Promise<TaskSource | null>
-  timeLog: () => Promise<TimeLog | null>
+  work: Work
+  // Null without a provider of time entries.
+  timeLog: () => Promise<DayLog | null>
   // A day changed: whoever shows the days reloads.
   changed: () => void
   now?: () => Date
 }
 
-// The Time Log read and written a whole day at a time: its three richer methods.
-type RichLog = Required<Pick<TimeLog, 'fields' | 'read' | 'sendDay'>> & TimeLog
-const isRich = (log: TimeLog | null): log is RichLog =>
-  Boolean(log && typeof log.fields === 'function' && typeof log.read === 'function' && typeof log.sendDay === 'function')
-
-export const NO_RICH_LOG =
-  'Le Time Log branché ne sait pas lire ni écrire une journée entière (étiquettes, absences) : il faut un provider du rôle timeLog qui le fasse, comme Notion à jour'
+export const NO_LOG = 'Aucun Time Log branché : aucune extension ne fournit les entrées de temps'
+export const noWholeDay = (name: string) =>
+  `Le Time Log de ${name} ne reçoit pas de journée entière (étiquettes, absences, autres propriétés) : la journée se prépare ici, mais ne s'envoie pas`
 
 // 1 = Monday … 7 = Sunday, on the local date.
 const isoWeekday = (day: string) => dayStart(day).getDay() || 7
@@ -101,36 +120,13 @@ export class Days {
     return this.deps.store
   }
 
-  // ---------- what the roles say
+  // ---------- what the core says
 
   // The user's signals between two days (both included), oldest first.
   async #signals(from: string, to: string): Promise<WorkEvent[]> {
     const since = dayStart(from).toISOString()
     const until = dayStart(addDays(to, 1)).toISOString()
-    const git = await this.deps.git()
-    const events: WorkEvent[] = (await git.events(since, until)).map((e) => ({
-      at: e.at,
-      kind: e.kind,
-      repo: e.repo,
-      branch: e.branch,
-      detail: e.detail,
-      taskId: e.taskId,
-    }))
-    const tasks = await this.deps.tasks()
-    for (const e of (await tasks?.edits?.(since, until)) ?? []) {
-      events.push({ at: e.at, kind: 'task', repo: null, branch: null, detail: 'Tâche modifiée', taskId: e.taskId })
-    }
-    for (const c of (await tasks?.statusChanges?.(since, until)) ?? []) {
-      events.push({
-        at: c.at,
-        kind: 'status',
-        repo: null,
-        branch: null,
-        detail: `${c.from} → ${c.to}`,
-        taskId: c.taskId,
-        toGroup: c.toGroup,
-      })
-    }
+    const events = await this.deps.work.events(since, until)
     return events.sort((a, b) => a.at.localeCompare(b.at))
   }
 
@@ -140,19 +136,20 @@ export class Days {
   async #started(day: string, branches: Map<string, BranchInfo> | null): Promise<string[]> {
     const since = dayStart(addDays(day, -LOG_WINDOW_DAYS)).toISOString()
     const until = dayStart(addDays(day, 1)).toISOString()
-    const events = await (await this.deps.git()).events(since, until)
+    const events = await this.deps.work.events(since, until)
     const tasks = new Set<string>()
     for (const e of events) {
       if (e.kind !== 'commit') continue
-      const taskId = branches?.get(placeKey(e.repo, e.branch))?.taskId ?? e.taskId
+      const branch = e.repo && e.branch ? branches?.get(placeKey(e.repo, e.branch)) : undefined
+      const taskId = branch?.taskId ?? e.taskId
       if (taskId) tasks.add(taskId)
     }
     return [...tasks].sort()
   }
 
   async #input(day: string, s: TempsSettings): Promise<DayInput> {
-    const git = await this.deps.git()
-    const [branches, repos, events] = await Promise.all([git.branches(), git.repos(), this.#signals(day, day)])
+    const { work } = this.deps
+    const [branches, repos, events] = await Promise.all([work.branches(), work.repos(), this.#signals(day, day)])
     const labels = new Map(repos.map((r) => [r.path, r.label]))
     // The branches git has, and, for the ones it forgot (merged, then deleted), the task they had when it knew them.
     await this.#store.rememberBranches(branches.map((b) => ({ repo: b.repo, branch: b.name, taskId: b.taskId })))
@@ -167,22 +164,23 @@ export class Days {
     }
   }
 
-  async #log(): Promise<TimeLog | null> {
+  async #log(): Promise<DayLog | null> {
     return this.deps.timeLog().catch(() => null)
   }
 
   // Why the day cannot be sent to the Time Log as it is, or null.
   async #logProblem(): Promise<string | null> {
     const log = await this.#log()
-    if (!log) return 'Aucun Time Log branché (rôle timeLog)'
-    if (!isRich(log)) return NO_RICH_LOG
+    if (!log) return NO_LOG
     if (!(await log.configured().catch(() => false))) return `Le Time Log de ${log.name} n'est pas configuré`
-    return this.#readProblem
+    if (this.#readProblem) return this.#readProblem
+    return sends(log) ? null : noWholeDay(log.name)
   }
 
+  // Without them (a provider that does not say them), the labels already used are offered, and no other property.
   async #fields(): Promise<LogFields> {
     const log = await this.#log()
-    if (!isRich(log)) return { labels: [], extras: [] }
+    if (!log?.fields) return { labels: [], extras: [] }
     return log.fields().catch(() => ({ labels: [], extras: [] }))
   }
 
@@ -192,7 +190,7 @@ export class Days {
    */
   async readLog(from: string, to: string, force = false): Promise<void> {
     const log = await this.#log()
-    if (!isRich(log) || !(await log.configured().catch(() => false))) return
+    if (!reads(log) || !(await log.configured().catch(() => false))) return
     const today = this.#today()
     const start = addDays(today, -LOG_WINDOW_DAYS)
     const end = addDays(today, LOG_AHEAD_DAYS)
@@ -210,7 +208,7 @@ export class Days {
     return read
   }
 
-  async #readInto(log: RichLog, from: string, to: string, key: string): Promise<void> {
+  async #readInto(log: ReadingLog, from: string, to: string, key: string): Promise<void> {
     try {
       const entries = await log.read(from, to)
       await this.#store.recordLog(entries.map(logRowOf), from, to)
@@ -456,9 +454,9 @@ export class Days {
     if (change.taskId) {
       const taskId = change.taskId
       if (line.repo && line.branch) {
-        const git = await this.deps.git()
-        const branch = (await git.branches()).find((b) => b.repo === line.repo && b.name === line.branch)
-        if (branch && !branch.isDefault && !branch.taskId) await git.link(line.repo, line.branch, taskId)
+        const { work } = this.deps
+        const branch = (await work.branches()).find((b) => b.repo === line.repo && b.name === line.branch)
+        if (branch && !branch.isDefault && !branch.taskId) await work.link(line.repo, line.branch, taskId)
       }
       const twin = rows.find((r) => r.id !== line.id && r.taskId === taskId && r.label === line.label)
       next = twin
@@ -485,8 +483,8 @@ export class Days {
    */
   async send(day: string): Promise<{ written: number }> {
     const log = await this.#log()
-    if (!log) throw new DraftError('Aucun Time Log branché (rôle timeLog)')
-    if (!isRich(log)) throw new DraftError(NO_RICH_LOG)
+    if (!log) throw new DraftError(NO_LOG)
+    if (!sends(log)) throw new DraftError(noWholeDay(log.name))
     if (!(await log.configured())) throw new DraftError(`Le Time Log de ${log.name} n'est pas configuré`)
     const drafts = await this.#store.drafts(day)
     const total = drafts.reduce((a, d) => a + d.share, 0)
@@ -494,8 +492,7 @@ export class Days {
     if (drafts.some((d) => !d.taskId && d.branch && !d.confirmed)) {
       throw new DraftError('Une branche sans tâche reste à rattacher ou à garder sans tâche')
     }
-    const tasks = await this.deps.tasks()
-    const titles = new Map(((await tasks?.board().catch(() => null))?.tasks ?? []).map((t) => [t.id, t.title]))
+    const titles = await this.deps.work.titles().catch(() => new Map<string, string>())
     const merged = new Map<string, LogLine>()
     for (const d of drafts) {
       if (!d.share) continue

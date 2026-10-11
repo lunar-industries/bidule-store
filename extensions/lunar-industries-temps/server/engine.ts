@@ -4,7 +4,7 @@ import type { TaskGroup } from '@bidule/sdk/tasks'
  * Taken from quack-board (domain/engine.ts, Simon's): what the user's activity proposes for a day. A day is worth 1,
  * split into twentieths; each piece of activity goes to a line (a task, a branch linked to no task, the default
  * branch, production), and the lines share the day out in proportion to the time their activity covers. Pure: the
- * events and the branches come from the roles (git, tasks), read by days.ts.
+ * events and the branches come from the core's objects (git's, the tasks'), read by days.ts.
  */
 
 // All day arithmetic uses the machine's local time zone, in minutes since local midnight.

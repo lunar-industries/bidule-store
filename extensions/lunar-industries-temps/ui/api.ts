@@ -31,7 +31,7 @@ export const api = {
   summary: () => get<Summary>('summary'),
 }
 
-// The core's board (the `tasks` role): the tasks a line goes to, and the columns (« passer en … »).
+// The core's board (its `task` objects): the tasks a line goes to, and the columns (« passer en … »).
 export async function board(): Promise<Board | null> {
   const b = await json<Board>('/api/board').catch(() => null)
   return b && b.source ? b : null

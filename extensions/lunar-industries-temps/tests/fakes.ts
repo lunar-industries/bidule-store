@@ -1,9 +1,12 @@
-import type { GitBranch, GitEvent, GitSource } from '@bidule/ext-git/contract'
-import type { Board, LogEntry, LogLine, StatusChange, TaskSource, TimeLog } from '@bidule/sdk/tasks'
-import { Days } from '../server/days.ts'
+import type { LogEntry, LogLine, TaskGroup, TimeLog } from '@bidule/sdk/tasks'
+import { Days, type DayLog, type Work, type WorkBranch } from '../server/days.ts'
+import type { WorkEvent } from '../server/engine.ts'
 import { DEFAULT_SETTINGS, type TempsSettings } from '../server/settings.ts'
 import type { DraftRow, LogRow, NewDraftRow, TempsStore } from '../server/store.ts'
 import type { Props } from '../contract.ts'
+
+// A piece of git's activity, on a branch of a repo.
+type GitEvent = WorkEvent & { kind: 'checkout' | 'commit' | 'branch' | 'edit'; repo: string; branch: string }
 
 // The module's tables, in memory.
 export class MemoryStore implements TempsStore {
@@ -90,62 +93,47 @@ export class MemoryStore implements TempsStore {
 
 // The user's repos: branches (with their task and whether they are the default), events, links.
 export class FakeGit {
-  branchRows: GitBranch[] = []
+  branchRows: WorkBranch[] = []
   eventRows: GitEvent[] = []
   links: [string, string, string | null][] = []
 
   branch(repo: string, name: string, o: { taskId?: string | null; isDefault?: boolean } = {}) {
-    this.branchRows.push({
-      repo,
-      repoLabel: repo,
-      name,
-      taskId: o.taskId ?? null,
-      manual: false,
-      isDefault: o.isDefault ?? false,
-      ahead: 0,
-      behind: 0,
-      pushed: false,
-      lastCommitAt: null,
-      headSha: null,
-      base: null,
-      remoteHost: null,
-      remotePath: null,
-      remote: null,
-      reviewNumber: null,
-      reviewRef: null,
-      reviewState: null,
-      ci: null,
-    })
+    this.branchRows.push({ repo, name, taskId: o.taskId ?? null, isDefault: o.isDefault ?? false })
   }
   event(at: string, kind: GitEvent['kind'], repo: string, branch: string, detail = '') {
     const taskId = this.branchRows.find((b) => b.repo === repo && b.name === branch)?.taskId ?? null
     this.eventRows.push({ at, kind, repo, branch, detail, taskId })
   }
-  source(): GitSource {
-    return {
-      repos: async () => [...new Set(this.branchRows.map((b) => b.repo))].map((path) => ({ path, label: path })),
-      branches: async () => this.branchRows,
-      events: async (since: string, until: string) => this.eventRows.filter((e) => e.at >= since && e.at < until),
-      link: async (repo: string, name: string, taskId: string | null) => {
-        this.links.push([repo, name, taskId])
-        const b = this.branchRows.find((x) => x.repo === repo && x.name === name)
-        if (b) Object.assign(b, { taskId, manual: true })
-        return true
-      },
-    } as unknown as GitSource
-  }
 }
 
+// The tasks: their titles, the user's edits and changes of status.
 export class FakeTasks {
   edits: { at: string; taskId: string }[] = []
-  changes: StatusChange[] = []
-  board: Board = { source: 'Fake', configured: true, columns: [], tasks: [] }
-  source(): TaskSource {
-    return {
-      board: async () => this.board,
-      edits: async (since: string, until: string) => this.edits.filter((e) => e.at >= since && e.at < until),
-      statusChanges: async (since: string, until: string) => this.changes.filter((c) => c.at >= since && c.at < until),
-    } as unknown as TaskSource
+  changes: { at: string; taskId: string; to: string; toGroup: TaskGroup | null }[] = []
+  list: { id: string; title: string }[] = []
+}
+
+// The user's work as the core would give it: git's activity and the tasks', the branches, their links.
+export function fakeWork(git: FakeGit, tasks: FakeTasks): Work {
+  const within = (since: string, until: string) => (e: { at: string }) => e.at >= since && e.at < until
+  return {
+    repos: async () => [...new Set(git.branchRows.map((b) => b.repo))].map((path) => ({ path, label: path })),
+    branches: async () => git.branchRows,
+    events: async (since, until) => [
+      ...git.eventRows.filter(within(since, until)),
+      ...tasks.edits
+        .filter(within(since, until))
+        .map((e): WorkEvent => ({ at: e.at, kind: 'task', repo: null, branch: null, detail: 'Tâche modifiée', taskId: e.taskId })),
+      ...tasks.changes.filter(within(since, until)).map(
+        (c): WorkEvent => ({ at: c.at, kind: 'status', repo: null, branch: null, detail: `→ ${c.to}`, taskId: c.taskId, toGroup: c.toGroup })
+      ),
+    ],
+    link: async (repo, name, taskId) => {
+      git.links.push([repo, name, taskId])
+      const b = git.branchRows.find((x) => x.repo === repo && x.name === name)
+      if (b) b.taskId = taskId
+    },
+    titles: async () => new Map(tasks.list.map((t) => [t.id, t.title])),
   }
 }
 
@@ -208,7 +196,20 @@ export class PlainTimeLog implements TimeLog {
   async remove() {}
 }
 
-export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: TimeLog | null }) {
+// A Time Log as the core gives it today (Notion's `timeEntry.read`): the user's entries are read, a whole day is not
+// written.
+export class ReadingTimeLog {
+  readonly name = 'Lu'
+  constructor(protected log: FakeTimeLog) {}
+  async configured() {
+    return true
+  }
+  read(from: string, to: string) {
+    return this.log.read(from, to)
+  }
+}
+
+export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: DayLog | null }) {
   const store = new MemoryStore()
   const git = new FakeGit()
   const tasks = new FakeTasks()
@@ -217,8 +218,7 @@ export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: T
   const days = new Days({
     store,
     settings: async () => ({ ...DEFAULT_SETTINGS, ...o.settings }),
-    git: async () => git.source(),
-    tasks: async () => tasks.source(),
+    work: fakeWork(git, tasks),
     timeLog: async () => log,
     changed: () => (changes += 1),
     now: () => o.now,
