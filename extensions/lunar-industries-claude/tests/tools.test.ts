@@ -47,8 +47,14 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
   const tasks = new FakeTasks()
   const store = new MemoryStore()
   const settings = settingsWith(options.settings)
+  // What the forge was asked to read again (`review.refresh`); `fail` makes it fail.
+  const forgeReads = { branches: [] as string[], fail: false }
+  const refreshForge = async (repo: string, branch: string) => {
+    if (forgeReads.fail) throw new Error('la forge ne répond pas')
+    forgeReads.branches.push(`${repo} ${branch}`)
+  }
   const tools = workspaceTools(
-    { env: fakeEnv(), git: async () => git, tasks: async () => tasks, forgeOf: () => git.forgeOf(), settings: async () => settings, store },
+    { env: fakeEnv(), git: async () => git, tasks: async () => tasks, forgeOf: () => git.forgeOf(), refreshForge, settings: async () => settings, store },
     async () => {}
   )
   const asked: string[] = []
@@ -67,7 +73,7 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
     if (!tool) throw new Error(`no tool ${name}`)
     return tool.call(args, context)
   }
-  return { git, forge, tasks, store, asked, ctx, call, tools }
+  return { git, forge, tasks, store, asked, ctx, call, tools, forgeReads }
 }
 
 describe('Claude tools', () => {
@@ -116,7 +122,7 @@ describe('Claude tools', () => {
   })
 
   it('starts a task as « Démarrer… » does, from the repo’s review target', async () => {
-    const { git, forge, tasks, call } = setup({ settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
+    const { git, forge, tasks, call, forgeReads } = setup({ settings: { repos: { '/r/app': { reviewTarget: 'launchpad' } } } })
     const res = await call('start_task', { task: 'ID-7', repos: [{ repo: 'app' }] })
     expect(res.isError, res.text).toBe(false)
     expect(forge.writes).toEqual([
@@ -127,6 +133,8 @@ describe('Claude tools', () => {
     // The main checkout keeps its branch: the local branch is only created, then linked to the task.
     expect(git.commands).toContain('/r/app branch --track 500-ajout-role origin/500-ajout-role')
     expect(git.linked).toEqual(['/r/app 500-ajout-role t1'])
+    // The forge reads the new branch and its draft review at once.
+    expect(forgeReads.branches).toEqual(['/r/app 500-ajout-role'])
     expect(tasks.moved).toEqual(['t1 En cours'])
   })
 
@@ -244,22 +252,26 @@ describe('Claude tools', () => {
     expect(forge.writes).toEqual(['ready team/app 3', 'merge team/app 3'])
   })
 
-  it('what a tool wrote on the forge is read again by git, so the marks of the other pages follow', async () => {
+  it('what a tool wrote on the forge is read again by that forge, so the marks of the other pages follow', async () => {
     const forge = new FakeForge({ '7-ajout': { number: 3, state: 'open', draft: false, url: 'https://gl/mr/3', description: '' } })
-    const { git, call } = setup({ forge })
-    let reads = 0
-    git.sync = async () => void reads++
+    const { call, forgeReads } = setup({ forge })
     await call('merge_review', { repo: 'app', branch: '7-ajout' })
     await call('play_job', { repo: 'app', branch: '7-ajout', job: 1 })
-    expect(reads).toBe(2)
+    expect(forgeReads.branches).toEqual(['/r/app 7-ajout', '/r/app 7-ajout'])
+  })
+
+  it('a pushed branch is read again by git', async () => {
+    const { git, call } = setup()
+    let reads = 0
+    git.sync = async () => void reads++
+    await call('push_branch', { repo: 'app', branch: '7-ajout' })
+    expect(reads).toBe(1)
   })
 
   it('a read again that fails does not fail the tool', async () => {
     const forge = new FakeForge({ '7-ajout': { number: 3, state: 'open', draft: false, url: 'https://gl/mr/3', description: '' } })
-    const { git, call } = setup({ forge })
-    git.sync = async () => {
-      throw new Error('git ne répond pas')
-    }
+    const { call, forgeReads } = setup({ forge })
+    forgeReads.fail = true
     expect((await call('merge_review', { repo: 'app', branch: '7-ajout' })).isError).toBe(false)
   })
 

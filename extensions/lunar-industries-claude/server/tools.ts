@@ -50,6 +50,8 @@ export interface ToolDeps {
   tasks: () => Promise<TaskAccess | null>
   // The forge serving a repo, as a client on its project (null: none, or no token).
   forgeOf: (repo: string) => Promise<ForgeClient | null>
+  // After a write on the forge: that forge reads the branch's review and pipeline again (`review.refresh`). Never fails.
+  refreshForge?: (repo: string, branch: string) => Promise<void>
   settings: () => Promise<Settings>
   store: SessionStore
 }
@@ -201,14 +203,22 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
     })
   }
 
-  // What a tool changed on the forge or on origin, git reads again (its branches changed in the core, the forges read
-  // their reviews and pipelines again), so that the Kanban's and Branches' marks (review, CI, pushed) do not stay as they
-  // were until the next read. A failed read does not undo the write.
+  // What a tool pushed to origin, git reads again (its branches changed in the core, the forges read the active ones
+  // again), so that the Kanban's and Branches' marks (pushed, review, CI) do not stay as they were until the next read.
+  // A failed read does not undo the write.
   const readAgain = async () => {
     try {
       await (await deps.git()).sync()
     } catch {
       // The next read of git tells it.
+    }
+  }
+  // What a tool changed on the forge (a review, a job), the forge reads again for that branch (`review.refresh`).
+  const readForge = async (repo: string, branch: string) => {
+    try {
+      await deps.refreshForge?.(repo, branch)
+    } catch {
+      // The forge's next read tells it.
     }
   }
 
@@ -326,6 +336,8 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
           git,
           deps.forgeOf
         )
+        // The new branches and their draft reviews, read on the forge at once.
+        for (const r of results) if (r.branch) await readForge(r.repo, r.branch)
         const status = inProgress ? await moveToInProgress(t, results, await tasksOf()) : null
         return { results, status }
       },
@@ -469,7 +481,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const task = known?.taskId ? await findTask(known.taskId).catch(() => null) : null
         const text = [description ?? '', reviewDescription(issueOf(templateOf(s), branch), task?.url ?? null)].filter(Boolean).join('\n\n')
         const review = await client.createReview({ source: branch, target: into, title: title ?? task?.title ?? branch, description: text, draft })
-        await readAgain()
+        await readForge(r.path, branch)
         return { created: true, review }
       },
     }),
@@ -502,9 +514,10 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       schema: { repo: z.string(), branch: z.string(), job: z.number().int() },
       write: true,
       detail: ({ repo, branch, job }) => `Lancer le job ${job} du pipeline de ${branch} (${repo})`,
-      run: async ({ repo, job }) => {
-        await (await forgeOf(await findRepo(repo))).playJob(job)
-        await readAgain()
+      run: async ({ repo, branch, job }) => {
+        const r = await findRepo(repo)
+        await (await forgeOf(r)).playJob(job)
+        await readForge(r.path, branch)
         return { ok: true }
       },
     }),
@@ -579,13 +592,14 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
       write: true,
       detail: ({ repo, branch, ready }) => `Merger la MR de ${branch} sur la forge (${repo})${ready ? ', sortie du brouillon' : ''}`,
       run: async ({ repo, branch, ready }) => {
-        const client = await forgeOf(await findRepo(repo))
+        const r = await findRepo(repo)
+        const client = await forgeOf(r)
         const review = await client.review(branch)
         if (!review || review.state !== 'open') throw new ToolError(`${branch} n'a pas de MR ouverte (voir create_review)`)
         if (review.draft && !ready) throw new ToolError(`La MR ${review.url} est en brouillon : la sortir du brouillon avec ready: true`)
         if (review.draft) await client.markReady(review.number)
         await client.mergeReview(review.number)
-        await readAgain()
+        await readForge(r.path, branch)
         return { merged: review.url }
       },
     }),

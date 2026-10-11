@@ -3,7 +3,7 @@ import type { ServerContext } from '@bidule/api/extensions'
 import type { GitSource } from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { SessionError } from './errors.ts'
-import { forgeOf, taskAccess } from './objects.ts'
+import { forgeOf, refreshForge, taskAccess } from './objects.ts'
 import { list, readSettings, reviewTargetOf } from './settings.ts'
 import { SessionService } from './sessions.ts'
 import { SessionStore } from './store.ts'
@@ -25,6 +25,8 @@ export const git = async () => ctx.objects.client<GitSource>('git')
 export const tasks = async () => taskAccess(ctx)
 // The forge serving a repo, by its path (`review.forge`: GitHub, GitLab).
 export const forge = (repo: string) => forgeOf(ctx, repo)
+// That forge reading a branch again after a write there (`review.refresh`).
+export const refreshBranch = (repo: string, branch: string) => refreshForge(ctx, repo, branch)
 
 // The sessions run only once the user has turned them on (Réglages): the Agent SDK with their Claude account.
 export async function enabled(): Promise<void> {
@@ -59,7 +61,7 @@ export async function activate(context: ServerContext) {
       sessions: (id, status) => void ctx.events.emit('lunar-industries-claude.sessions', { id, status }),
       session: (id, message) => void ctx.events.emit('lunar-industries-claude.session', { id, message }),
     },
-    tools: workspaceTools({ env: ctx.env, git, tasks, forgeOf: forge, settings, store }),
+    tools: workspaceTools({ env: ctx.env, git, tasks, forgeOf: forge, refreshForge: refreshBranch, settings, store }),
     worktree: repoWorktree,
     plugins: [PLUGIN],
   })

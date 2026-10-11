@@ -10,10 +10,11 @@ const K = 'lunar-industries-branches'
 
 export interface BranchesDeps {
   // The core's objects the page reads: the repos and branches (git's), their tasks (links of the core), their reviews
-  // and pipelines (the forges'), and the client on a repo's forge (`review.forge`).
+  // and pipelines (the forges'), the client on a repo's forge (`review.forge`), and that forge reading a branch again
+  // after a write there (`review.refresh`).
   objects: Pick<ObjectsContext, 'list' | 'get' | 'relations' | 'first'>
-  // What git does for the page: a branch's task set by hand, the repos read again.
-  git: () => Pick<GitSource, 'link' | 'sync'>
+  // What git does for the page: a branch's task set by hand.
+  git: () => Pick<GitSource, 'link'>
   setting: (key: string) => Promise<unknown>
   save: (key: string, value: string) => Promise<void>
   // A repo's review target changed.
@@ -21,7 +22,7 @@ export interface BranchesDeps {
 }
 
 // A branch as the core has it, with what the listing adds left out.
-type Branch = Omit<ListedBranch, 'forge' | 'issueNumber'> & { repositoryId: string }
+type Branch = Omit<ListedBranch, 'forge' | 'issueNumber'> & { id: string; repositoryId: string }
 
 // A forge's refusal (ForgeFailure: an Error with the HTTP status), as the page shows it.
 function refused(err: unknown): BranchesError {
@@ -81,6 +82,7 @@ export class BranchesService {
         const pipeline = pipelines.find((p) => p.branchId === b.id)
         return [
           {
+            id: b.id,
             repositoryId: repo.id,
             repo: repo.path,
             repoLabel: repo.label,
@@ -139,7 +141,7 @@ export class BranchesService {
       branches: all
         .filter((b) => !b.isDefault && !hidden.has(b.name.toLowerCase()))
         .map((b) => {
-          const { repositoryId, ...shown } = b
+          const { id: _id, repositoryId, ...shown } = b
           return { ...shown, forge: forges.get(repositoryId) ?? null, issueNumber: issueOf(template, b.name) }
         }),
       repos: listed,
@@ -156,16 +158,17 @@ export class BranchesService {
     return { b, client }
   }
 
-  // A write on the forge, then git read again (its review and CI follow), before the answer: the page reloads from it, and
-  // would show the state before the write otherwise. A read that fails does not undo the write.
-  async #act<T>(work: () => Promise<T>): Promise<T> {
+  // A write on the forge, then the forge reads the branch again (`review.refresh`: its review and CI follow), before the
+  // answer: the page reloads from it, and would show the state before the write otherwise. A read that fails does not
+  // undo the write.
+  async #act<T>(b: Branch, work: () => Promise<T>): Promise<T> {
     let done: T
     try {
       done = await work()
     } catch (err) {
       throw refused(err)
     }
-    await this.deps.git().sync().catch(() => undefined)
+    await this.deps.objects.first('review.refresh', { repositoryId: b.repositoryId, branchIds: [b.id] }).catch(() => null)
     return done
   }
 
@@ -201,13 +204,13 @@ export class BranchesService {
   }
 
   async runPipeline(repo: string, name: string): Promise<void> {
-    const { client } = await this.#branch(repo, name)
-    await this.#act(() => client.runPipeline(name))
+    const { b, client } = await this.#branch(repo, name)
+    await this.#act(b, () => client.runPipeline(name))
   }
 
   async retry(repo: string, name: string): Promise<void> {
     const { b, client } = await this.#branch(repo, name)
-    await this.#act(async () => {
+    await this.#act(b, async () => {
       const pipeline = b.headSha ? await client.pipeline(b.headSha) : null
       if (!pipeline) throw new BranchesError(`${name} n'a pas de pipeline à relancer`)
       await client.retryPipeline(pipeline.id)
@@ -215,8 +218,8 @@ export class BranchesService {
   }
 
   async play(repo: string, name: string, jobId: number): Promise<void> {
-    const { client } = await this.#branch(repo, name)
-    await this.#act(() => client.playJob(jobId))
+    const { b, client } = await this.#branch(repo, name)
+    await this.#act(b, () => client.playJob(jobId))
   }
 
   // A draft review towards the target asked, else the repo's, else the settings'; titled after the branch's task.
@@ -225,7 +228,7 @@ export class BranchesService {
     const into = target || (await this.#targets())[repo] || (await this.#text('reviewTarget')) || null
     if (!into) throw new BranchesError('Choisis la branche cible de la MR')
     const task = b.taskId ? await this.deps.objects.get('task', b.taskId).catch(() => null) : null
-    await this.#act(async () => {
+    await this.#act(b, async () => {
       // A number in the name is no proof of an issue (2024-cleanup): « Closes # » would close one the branch has nothing
       // to do with, so it stays only when the forge has that issue.
       const guess = issueOf(await this.#template(), name)

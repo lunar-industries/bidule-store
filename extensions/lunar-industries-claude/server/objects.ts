@@ -81,3 +81,16 @@ export async function forgeOf(ctx: ServerContext, path: string): Promise<ForgeCl
   const [repo] = await ctx.objects.list('repository', { where: { path } })
   return repo ? ctx.objects.first('review.forge', { repositoryId: repo.id }) : null
 }
+
+// After a write on the forge: the forge serving the repo (by its path) reads the branch's review and pipeline again
+// (`review.refresh`), so that the Kanban's and Branches' badges follow at once. Never fails: the next read tells it.
+export async function refreshForge(ctx: ServerContext, path: string, branch: string): Promise<void> {
+  try {
+    const [repo] = await ctx.objects.list('repository', { where: { path } })
+    if (!repo) return
+    const branches = await ctx.objects.list('branch', { where: { repositoryId: repo.id, name: branch } })
+    await ctx.objects.first('review.refresh', { repositoryId: repo.id, branchIds: branches.map((b) => b.id) })
+  } catch {
+    // Read again in the forge's next run.
+  }
+}

@@ -50,7 +50,7 @@ describe('the listing', () => {
 describe('on the forge', () => {
   test('a draft review towards the repo’s target, titled after the task, closing the issue', async () => {
     const forge = fakeForge()
-    const { world, syncs } = fakeGit(all(), forge.client)
+    const { world, refreshed } = fakeGit(all(), forge.client)
     const { s } = service(world, { tasks: [task('t1', 'Écran de connexion')] })
     await s.setTarget(app, 'develop')
     await s.review(app, '42-ecran-de-connexion', null)
@@ -63,8 +63,8 @@ describe('on the forge', () => {
         draft: true,
       },
     ])
-    // git read again: the review and the CI follow.
-    expect(syncs()).toBe(1)
+    // The forge reads the branch again: its review and its CI follow.
+    expect(refreshed).toEqual([{ repositoryId: 'repo:/r/app', branchIds: ['/r/app\n42-ecran-de-connexion'] }])
   })
 
   test('a number in the name is no issue unless the forge has it: nothing is closed by mistake', async () => {

@@ -82,24 +82,25 @@ export function fakeForge(fields: Partial<ForgeClient> = {}) {
   return { client, calls, reviews }
 }
 
-// git's actions the page uses, recording them, over these branches; the forge `review.forge` gives (null: none).
+// git's actions the page uses, recording them, over these branches; the forge `review.forge` gives (null: none), and
+// what `review.refresh` was asked.
 export function fakeGit(branches: Spec[], forge: ForgeClient | null) {
   const links: string[] = []
-  let syncs = 0
+  // What the forge was asked to read again (`review.refresh`).
+  const refreshed: unknown[] = []
   const git: ReturnType<BranchesDeps['git']> = {
     link: async (repo, name, taskId) => {
       links.push(`${repo} ${name} ${taskId}`)
       return branches.some((b) => b.repo === repo && b.name === name)
     },
-    sync: async () => void syncs++,
   }
-  return { world: { branches, forge, git }, links, syncs: () => syncs }
+  return { world: { branches, forge, git, refreshed }, links, refreshed }
 }
 
 type World = ReturnType<typeof fakeGit>['world']
 
 // The core's objects for these branches: their repos, the branches, their reviews and pipelines, their tasks' links.
-function objectsOf({ branches, forge }: World, tasks: Task[]): BranchesDeps['objects'] {
+function objectsOf({ branches, forge, refreshed }: World, tasks: Task[]): BranchesDeps['objects'] {
   const base = { provider: 'git', ref: null, url: null, properties: {} }
   const repoId = (path: string) => `repo:${path}`
   const branchId = (b: Spec) => `${b.repo}\n${b.name}`
@@ -160,7 +161,7 @@ function objectsOf({ branches, forge }: World, tasks: Task[]): BranchesDeps['obj
       (stored[type] ?? []).filter((o) => Object.entries(filter.where ?? {}).every(([k, v]) => Reflect.get(o, k) === v)),
     get: async (type: StoredType, id: string) => (stored[type] ?? []).find((o) => o.id === id) ?? null,
     relations: async () => relations,
-    first: async () => forge,
+    first: async (action: string, args: unknown) => (action === 'review.refresh' ? (refreshed.push(args), true) : forge),
   }
   return objects as unknown as BranchesDeps['objects']
 }
