@@ -44,8 +44,10 @@ export function BranchesPage() {
   }
   useEffect(reload, [])
   useOn('git.changed', reload)
-  useOn('git.reviewed', reload)
-  useOn('tasks.changed', reload)
+  // The forges' reviews and CI read again, the tasks changed.
+  useOn('objects.changed', ({ type }) => {
+    if (type === 'review' || type === 'pipeline' || type === 'task') reload()
+  })
   useOn('lunar-industries-branches.changed', reload)
 
   const tasks = board?.tasks ?? []

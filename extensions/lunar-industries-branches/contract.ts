@@ -1,6 +1,7 @@
 // Lunar Industries - Branches: Simon's Branches page (quack-board), an unofficial module competing with Bidule's own
 // (`branches`). Each branch of the user's repos with the step it is at (task, review, CI, merge) and what to do next;
-// the forge is the `git` role's (forgeOf). Types only: the interface reads this file.
+// the repos, branches, task links, reviews and pipelines are the core's objects, the forge's client is `review.forge`'s.
+// Types only: the interface reads this file.
 //
 // Its routes, under /api/ext/lunar-industries-branches:
 //   GET  branches                      Listing
@@ -12,12 +13,30 @@
 //   POST branches/jobs/:id/play        { repo, name } → { ok }
 //   POST branches/review               { repo, name, target } → { ok }
 //   PUT  repos/target                  { repo, target | null } → { ok }
-import type { GitBranch } from '@bidule/ext-git/contract'
+import type {} from '@bidule/ext-git/contract'
+import type { Ci, ReviewState } from '@bidule/sdk/objects'
 
-export type ForgeKind = 'github' | 'gitlab'
+// The forge's extension id (github, gitlab), as its client says it.
+export type ForgeKind = string
 
-// A branch as the page lists it: the git role's, with its repo's forge and the issue its name carries.
-export type ListedBranch = GitBranch & { forge: ForgeKind | null; issueNumber: number | null }
+// A branch as the page lists it: the core's branch, with its repo, its task, its latest review and its CI, its repo's
+// forge and the issue its name carries.
+export type ListedBranch = {
+  // The repo's absolute path identifies it; its label is what is shown.
+  repo: string
+  repoLabel: string
+  name: string
+  isDefault: boolean
+  taskId: string | null
+  lastCommitAt: string | null
+  // Its last commit here: the one CI ran on.
+  headSha: string | null
+  reviewNumber: number | null
+  reviewState: ReviewState | null
+  ci: Ci | null
+  forge: ForgeKind | null
+  issueNumber: number | null
+}
 
 // A repo: its forge, the branches its reviews can go to (its default one, then its integration ones), and the one
 // chosen for it (null: none of its own).

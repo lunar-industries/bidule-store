@@ -1,26 +1,24 @@
-import type { ForgeClient, ForgeJob, GitBranch, GitSource, NewReview } from '@bidule/ext-git/contract'
-import type { Task, TaskSource } from '@bidule/sdk/tasks'
+import type { ForgeClient, ForgeJob, NewReview } from '@bidule/sdk/forges'
+import type { StoredObject, StoredType } from '@bidule/sdk/objects'
+import type { Task } from '@bidule/sdk/tasks'
 import type { ListedBranch } from '../contract.ts'
-import { BranchesService } from '../server/service.ts'
+import { BranchesService, type BranchesDeps } from '../server/service.ts'
 
-export function branch(fields: Partial<GitBranch> & { name: string }): GitBranch {
+// A branch as a test describes it: what the core has of it, its task link, review and CI included.
+export type Spec = Omit<ListedBranch, 'forge' | 'issueNumber'>
+
+// One time for every branch of a test: recent, and the same, so the listing keeps the order they are given in.
+const NOW = new Date().toISOString()
+
+export function branch(fields: Partial<Spec> & { name: string }): Spec {
   return {
     repo: '/r/app',
     repoLabel: 'app',
     taskId: null,
-    manual: false,
     isDefault: false,
-    ahead: 0,
-    behind: 0,
-    pushed: true,
-    lastCommitAt: new Date().toISOString(),
+    lastCommitAt: NOW,
     headSha: 'abc',
-    base: null,
-    remoteHost: 'gitlab.com',
-    remotePath: 'team/app',
-    remote: 'origin',
     reviewNumber: null,
-    reviewRef: null,
     reviewState: null,
     ci: null,
     ...fields,
@@ -35,7 +33,21 @@ export const listed = (fields: Partial<ListedBranch> & { name: string }): Listed
 })
 
 export function task(id: string, title: string, fields: Partial<Task> = {}): Task {
-  return { id, title, status: 'En cours', ref: null, url: `https://notion.so/${id}`, role: 'owner', lastEdited: null, due: null, ...fields }
+  return {
+    id,
+    type: 'task',
+    provider: 'notion',
+    ref: null,
+    url: `https://notion.so/${id}`,
+    properties: {},
+    title,
+    status: 'En cours',
+    group: 'doing',
+    role: 'owner',
+    lastEdited: null,
+    due: null,
+    ...fields,
+  }
 }
 
 // A forge that records what it is asked to do.
@@ -70,29 +82,95 @@ export function fakeForge(fields: Partial<ForgeClient> = {}) {
   return { client, calls, reviews }
 }
 
-export function fakeGit(branches: GitBranch[], forge: ForgeClient | null) {
+// git's actions the page uses, recording them, over these branches; the forge `review.forge` gives (null: none).
+export function fakeGit(branches: Spec[], forge: ForgeClient | null) {
   const links: string[] = []
   let syncs = 0
-  const git = {
-    repos: async () => [...new Set(branches.map((b) => b.repo))].map((path) => ({ path, label: branches.find((b) => b.repo === path)!.repoLabel })),
-    branches: async () => branches,
-    forgeOf: async () => forge,
-    link: async (repo: string, name: string, taskId: string | null) => (links.push(`${repo} ${name} ${taskId}`), true),
+  const git: ReturnType<BranchesDeps['git']> = {
+    link: async (repo, name, taskId) => {
+      links.push(`${repo} ${name} ${taskId}`)
+      return branches.some((b) => b.repo === repo && b.name === name)
+    },
     sync: async () => void syncs++,
-  } as unknown as GitSource
-  return { git, links, syncs: () => syncs }
+  }
+  return { world: { branches, forge, git }, links, syncs: () => syncs }
 }
 
-export function service(
-  git: GitSource,
-  { tasks = [], settings = {} }: { tasks?: Task[]; settings?: Record<string, string> } = {},
-) {
+type World = ReturnType<typeof fakeGit>['world']
+
+// The core's objects for these branches: their repos, the branches, their reviews and pipelines, their tasks' links.
+function objectsOf({ branches, forge }: World, tasks: Task[]): BranchesDeps['objects'] {
+  const base = { provider: 'git', ref: null, url: null, properties: {} }
+  const repoId = (path: string) => `repo:${path}`
+  const branchId = (b: Spec) => `${b.repo}\n${b.name}`
+  const repository: StoredObject<'repository'>[] = [...new Set(branches.map((b) => b.repo))].map((path) => ({
+    ...base,
+    id: repoId(path),
+    type: 'repository',
+    path,
+    label: branches.find((b) => b.repo === path)?.repoLabel ?? path,
+    remoteHost: 'gitlab.com',
+    remotePath: 'team/app',
+    defaultBranch: branches.find((b) => b.repo === path && b.isDefault)?.name ?? null,
+  }))
+  const branch: StoredObject<'branch'>[] = branches.map((b) => ({
+    ...base,
+    id: branchId(b),
+    type: 'branch',
+    repositoryId: repoId(b.repo),
+    name: b.name,
+    isDefault: b.isDefault,
+    ahead: 0,
+    behind: 0,
+    pushed: true,
+    lastCommitAt: b.lastCommitAt,
+    headSha: b.headSha,
+    base: null,
+  }))
+  const review: StoredObject<'review'>[] = branches.flatMap((b) =>
+    b.reviewNumber && b.reviewState
+      ? [
+          {
+            ...base,
+            provider: 'gitlab',
+            id: `review:${branchId(b)}`,
+            type: 'review' as const,
+            branchId: branchId(b),
+            number: b.reviewNumber,
+            label: `MR !${b.reviewNumber}`,
+            state: b.reviewState,
+            draft: false,
+            comments: null,
+            title: null,
+          },
+        ]
+      : []
+  )
+  const pipeline: StoredObject<'pipeline'>[] = branches.flatMap((b) =>
+    b.ci && b.ci !== 'merged'
+      ? [{ ...base, provider: 'gitlab', id: `pipeline:${branchId(b)}`, type: 'pipeline' as const, branchId: branchId(b), headSha: b.headSha, status: b.ci }]
+      : []
+  )
+  const stored: Partial<Record<StoredType, { id: string }[]>> = { repository, branch, review, pipeline, task: tasks }
+  const relations = branches.flatMap((b) =>
+    b.taskId ? [{ from: { type: 'task' as const, id: b.taskId }, kind: 'branch', to: { type: 'branch' as const, id: branchId(b) }, origin: 'manual' }] : []
+  )
+  const objects = {
+    list: async (type: StoredType, filter: { where?: Record<string, unknown> } = {}) =>
+      (stored[type] ?? []).filter((o) => Object.entries(filter.where ?? {}).every(([k, v]) => Reflect.get(o, k) === v)),
+    get: async (type: StoredType, id: string) => (stored[type] ?? []).find((o) => o.id === id) ?? null,
+    relations: async () => relations,
+    first: async () => forge,
+  }
+  return objects as unknown as BranchesDeps['objects']
+}
+
+export function service(world: World, { tasks = [], settings = {} }: { tasks?: Task[]; settings?: Record<string, string> } = {}) {
   const saved: Record<string, string> = { ...settings }
   let changed = 0
-  const source = { board: async () => ({ source: 'Notion', configured: true, columns: [], tasks }) } as unknown as TaskSource
   const s = new BranchesService({
-    git: async () => git,
-    tasks: async () => source,
+    objects: objectsOf(world, tasks),
+    git: () => world.git,
     setting: async (key) => saved[key],
     save: async (key, value) => void (saved[key] = value),
     changed: () => void changed++,

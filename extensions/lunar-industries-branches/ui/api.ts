@@ -29,7 +29,7 @@ export const api = {
   target: (repo: string, target: string | null) => send('PUT', 'repos/target', { repo, target }),
 }
 
-// The core's board (the `tasks` role): the tasks a branch is linked to.
+// The core's board (its `task` objects): the tasks a branch is linked to.
 export async function board(): Promise<Board | null> {
   const b = await json<Board>('/api/board').catch(() => null)
   return b && b.source ? b : null

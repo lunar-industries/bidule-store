@@ -17,7 +17,12 @@ function Background() {
         () => undefined,
       )
     count()
-    const offs = [on('git.changed', count), on('git.reviewed', count)]
+    const offs = [
+      on('git.changed', count),
+      on('objects.changed', ({ type }) => {
+        if (type === 'review' || type === 'pipeline') count()
+      }),
+    ]
     return () => offs.forEach((off) => off())
   }, [])
   return null

@@ -13,7 +13,8 @@ export const STEPS: { id: Exclude<Step, 'done'>; label: string }[] = [
 ]
 export type StepState = 'done' | 'current' | 'todo'
 
-export const REVIEW: Record<ForgeKind, string> = { gitlab: 'MR', github: 'PR' }
+// How a forge names a review: a merge request elsewhere than on GitHub.
+export const REVIEW: Partial<Record<ForgeKind, string>> = { gitlab: 'MR', github: 'PR' }
 
 export function stepOf(b: ListedBranch): Step {
   if (!b.taskId) return 'task'
@@ -38,7 +39,7 @@ export const branchKey = (b: { repo: string; name: string }) => `${b.repo}\u0000
 
 // A branch with what the list and the detail show.
 export function rowOf(b: ListedBranch, tasks: Task[]) {
-  const review = b.forge ? REVIEW[b.forge] : 'MR'
+  const review = (b.forge && REVIEW[b.forge]) || 'MR'
   const step = stepOf(b)
   const reached = step === 'done' ? STEPS.length : STEPS.findIndex((s) => s.id === step)
   const stateAt = (i: number): StepState => (i < reached ? 'done' : i === reached ? 'current' : 'todo')
@@ -58,7 +59,7 @@ export function rowOf(b: ListedBranch, tasks: Task[]) {
 export type Row = ReturnType<typeof rowOf>
 
 /**
- * The repos as the list shows them: the branches newest first (the git role's order), the merged ones last and only
+ * The repos as the list shows them: the branches newest first (the server's order), the merged ones last and only
  * when asked; the repos without a working branch too. A repo without a target of its own takes the settings' one when
  * it has that branch.
  */

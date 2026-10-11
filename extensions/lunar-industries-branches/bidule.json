@@ -1,14 +1,25 @@
 {
   "id": "lunar-industries-branches",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "title": "Lunar Industries - Branches",
-  "engine": "^0.1.1",
+  "engine": "^0.2.0",
   "contributes": {
-    "requires": [
-      "git"
-    ],
-    "uses": [
-      "tasks"
+    "needs": [
+      {
+        "extension": "git"
+      },
+      {
+        "object": "task",
+        "optional": true
+      },
+      {
+        "object": "review",
+        "optional": true
+      },
+      {
+        "object": "pipeline",
+        "optional": true
+      }
     ],
     "pages": [
       {
