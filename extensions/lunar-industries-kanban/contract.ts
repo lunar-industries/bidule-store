@@ -1,18 +1,28 @@
 // Lunar Industries - Kanban: Simon's Kanban (quack-board), an unofficial one competing with Bidule's own (`kanban`).
-// The board itself comes from the core's routes over the `tasks` role (/api/board, /api/tasks/…), as for any Kanban;
-// the branches of the cards come from the `git` role, through the module's own routes, under
-// /api/ext/lunar-industries-kanban:
-//   GET branches                 { available, branches: KanbanBranch[] }   (available: someone holds the git role)
+// The board itself comes from the core's routes over the tasks (/api/board, /api/tasks/…), as for any Kanban; the
+// branches of the cards are the core's objects (branches, their repository, review and pipeline, their task's link),
+// through the module's own routes, under /api/ext/lunar-industries-kanban:
+//   GET branches                 { available, branches: KanbanBranch[] }   (available: someone provides branches)
 //   PUT tasks/:id/branches       { branches: BranchRef[] } → { branches: KanbanBranch[] }
-//   GET review?repo&name         { url }  (the branch's review, else its pipeline, read on its forge now)
-import type { GitBranch } from '@bidule/ext-git/contract'
+//   GET review?repo&name         { url }  (the branch's review, else its pipeline)
+import type { Ci, ReviewState } from '@bidule/sdk/objects'
 
+// A branch by its repository's path and its name.
 export type BranchRef = { repo: string; name: string }
 
-// A branch as the cards and the tray show it.
-export type KanbanBranch = Pick<
-  GitBranch,
-  'repo' | 'repoLabel' | 'name' | 'taskId' | 'isDefault' | 'lastCommitAt' | 'reviewNumber' | 'reviewRef' | 'reviewState' | 'ci'
->
+// A branch as the cards and the tray show it: its review and CI when a forge has them.
+export type KanbanBranch = {
+  repo: string
+  repoLabel: string
+  name: string
+  taskId: string | null
+  isDefault: boolean
+  lastCommitAt: string | null
+  reviewNumber: number | null
+  // How the forge cites it: « PR #12 », « MR !12 ».
+  reviewRef: string | null
+  reviewState: ReviewState | null
+  ci: Ci | null
+}
 
 export type Branches = { available: boolean; branches: KanbanBranch[] }

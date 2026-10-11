@@ -5,8 +5,12 @@ import { badgeOf, branchKey, branchLabel, groupsOf, linkRows, marksOf, orphansOf
 
 const task = (id: string, status: string, patch: Partial<Task> = {}): Task => ({
   id,
+  type: 'task',
+  provider: 'notion',
+  properties: {},
   title: `Tâche ${id}`,
   status,
+  group: status === 'Terminé' ? 'done' : status === 'En cours' ? 'doing' : 'todo',
   ref: null,
   url: null,
   role: 'owner',
@@ -19,10 +23,10 @@ const board: Board = {
   source: 'Notion',
   configured: true,
   columns: [
-    { name: 'À faire', color: 'gray', group: 'todo' },
-    { name: 'Backlog', color: 'gray', group: 'todo' },
+    { name: 'À faire', color: 'neutral', group: 'todo' },
+    { name: 'Backlog', color: 'neutral', group: 'todo' },
     { name: 'En cours', color: 'blue', group: 'doing' },
-    { name: 'Terminé', color: 'green', group: 'done' },
+    { name: 'Terminé', color: 'mint', group: 'done' },
   ],
   tasks: [task('1', 'À faire'), task('2', 'En cours'), task('3', 'Terminé'), task('4', 'Archivé')],
 }
@@ -109,7 +113,7 @@ describe('branches', () => {
   })
 
   test('a review known by its number alone still has its mark', () => {
-    const marks = marksOf([branch('a', { reviewNumber: 12, ci: 'success' })])
+    const marks = marksOf([branch('a', { reviewNumber: 12, ci: 'ok' })])
     expect(marks.map((m) => m.text)).toEqual(['#12'])
   })
 

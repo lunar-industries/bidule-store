@@ -50,7 +50,7 @@ export interface Group {
 export function groupsOf(board: Board, hidden: string[], toggled: ReadonlySet<string>): Group[] {
   const listed = new Set(board.columns.map((c) => c.name))
   const strays = [...new Set(board.tasks.map((t) => t.status).filter((s) => !listed.has(s)))]
-  const stray = (name: string): TaskColumn & { unknown: boolean } => ({ name, color: 'default', group: 'todo', unknown: true })
+  const stray = (name: string): TaskColumn & { unknown: boolean } => ({ name, color: 'neutral', group: 'todo', unknown: true })
   const columns: Column[] = [...board.columns.map((c) => ({ ...c, unknown: false })), ...strays.map(stray)]
     .filter((c) => !hidden.includes(c.name))
     .map((c) => {

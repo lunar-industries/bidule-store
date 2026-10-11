@@ -1,5 +1,4 @@
 import type { ServerContext } from '@bidule/api/extensions'
-import type {} from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { DEFAULT_HIDDEN, KanbanService } from './service.ts'
 
@@ -7,9 +6,8 @@ import { DEFAULT_HIDDEN, KanbanService } from './service.ts'
 export let service: KanbanService
 
 export function activate(ctx: ServerContext) {
-  // The git role is optional (`uses`): without it, the board shows no branch.
-  service = new KanbanService(
-    async () => (ctx.has('git') ? ctx.use('git') : null),
-    async () => String((await ctx.settings.get('lunar-industries-kanban.hiddenBranches')) ?? DEFAULT_HIDDEN)
+  // Branches are optional (`needs`): without a provider of them, the board shows no branch.
+  service = new KanbanService(ctx.objects, async () =>
+    String((await ctx.settings.get('lunar-industries-kanban.hiddenBranches')) ?? DEFAULT_HIDDEN)
   )
 }

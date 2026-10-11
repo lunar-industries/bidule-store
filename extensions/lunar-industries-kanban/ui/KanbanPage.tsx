@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type 
 import {
   busy,
   columnColor,
-  execute,
   MascotHead,
   openDialog,
   react,
@@ -18,7 +17,16 @@ import {
   type Task,
 } from '@bidule/sdk'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
-import { board as readBoard, branches as readBranches, errorMessage, moveTask, reviewUrl, setBranches, type Loaded } from './api.ts'
+import {
+  board as readBoard,
+  branches as readBranches,
+  errorMessage,
+  moveTask,
+  reviewUrl,
+  setBranches,
+  syncTasks,
+  type Loaded,
+} from './api.ts'
 import { CardMenu } from './CardMenu.tsx'
 import {
   badgeOf,
@@ -63,7 +71,7 @@ const carries = (e: DragEvent, type: string) => e.dataTransfer.types.includes(ty
 const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
 const columnLabel = (name: string) => name || 'Sans statut'
 
-// The board, reloaded whenever the source says it changed (a sync, a move from elsewhere).
+// The board, reloaded whenever the core says the tasks changed (a sync, a move from elsewhere).
 function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => void] {
   const [board, setBoard] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,17 +84,24 @@ function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => v
       (err) => setError(errorMessage(err)),
     )
   useEffect(reload, [])
-  useOn('tasks.changed', reload)
+  useOn('objects.changed', ({ type }) => {
+    if (type === 'task') reload()
+  })
   return [board, setBoard, error, reload]
 }
 
-// The branches, from the git role (none without it), read again whenever git reads the repos.
+// What the branches are made of: a change to any of them reads them again (a link is announced on its task, or on
+// the branch for one unlinked by hand).
+const BRANCH_TYPES = new Set(['branch', 'repository', 'review', 'pipeline', 'task'])
+
+// The branches, from the core (none without a provider of them), read again whenever they change.
 function useBranches(): [Branches, (b: Branches) => void] {
   const [branches, setBranches] = useState<Branches>({ available: false, branches: [] })
   const reload = () => void readBranches().then(setBranches, () => undefined)
   useEffect(reload, [])
-  useOn('git.changed', reload)
-  useOn('git.reviewed', reload)
+  useOn('objects.changed', ({ type }) => {
+    if (BRANCH_TYPES.has(type)) reload()
+  })
   return [branches, setBranches]
 }
 
@@ -284,7 +299,7 @@ export function Kanban() {
               : `Aucune tâche ${board.source} où tu es responsable ou participant.`}
           {board.source !== null && board.configured && (
             <p>
-              <button type="button" className="btn" onClick={() => void busy(execute('notion.sync', undefined))}>
+              <button type="button" className="btn" onClick={() => void busy(syncTasks())}>
                 Synchroniser
               </button>
             </p>

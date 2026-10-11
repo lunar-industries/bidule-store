@@ -22,7 +22,7 @@ export function CardMenu({
   y: number
   source: string
   actions: KanbanParts['actions']
-  // null without the git role.
+  // null without a provider of branches.
   link: (() => void) | null
   columns: MenuColumn[]
   move: (status: string) => void

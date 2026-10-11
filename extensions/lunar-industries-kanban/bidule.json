@@ -1,12 +1,30 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "title": "Lunar Industries - Kanban",
-  "engine": "^0.1.2",
+  "engine": "^0.2.0",
   "contributes": {
-    "uses": [
-      "tasks",
-      "git"
+    "needs": [
+      {
+        "object": "task",
+        "optional": true
+      },
+      {
+        "object": "repository",
+        "optional": true
+      },
+      {
+        "object": "branch",
+        "optional": true
+      },
+      {
+        "object": "review",
+        "optional": true
+      },
+      {
+        "object": "pipeline",
+        "optional": true
+      }
     ],
     "pages": [
       {

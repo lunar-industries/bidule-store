@@ -2,7 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { service } from '@bidule/ext-lunar-industries-kanban/server/index'
 import { branchesValidator, reviewValidator } from '@bidule/ext-lunar-industries-kanban/server/validators'
 
-// The cards' branches (git role): the list, a task's branches replaced, where a card's mark leads.
+// The cards' branches (the core's objects): the list, a task's branches replaced, where a card's mark leads.
 export default class KanbanController {
   async branches() {
     return service.branches()
