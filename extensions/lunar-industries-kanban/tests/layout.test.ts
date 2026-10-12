@@ -1,7 +1,7 @@
 import type { Board, Task } from '@bidule/sdk'
 import { describe, expect, test } from 'vitest'
 import type { KanbanBranch } from '../contract.ts'
-import { badgeOf, branchKey, branchLabel, groupsOf, linkRows, marksOf, orphansOf, shortBranch } from '../ui/layout.ts'
+import { badgeOf, branchKey, branchLabel, groupsOf, linkRows, marksOf, orphansOf, shortBranch, trayIsOpen } from '../ui/layout.ts'
 
 const task = (id: string, status: string, patch: Partial<Task> = {}): Task => ({
   id,
@@ -142,5 +142,15 @@ describe('branches', () => {
     expect(rows[0].checked).toBe(true)
     expect(rows[2].note).toBe('liée à Une autre')
     expect(linkRows(list, 't', 'LIB', () => '', new Set()).map((r) => r.name)).toEqual(['elsewhere'])
+  })
+})
+
+describe('settings', () => {
+  test('the branch tray is open unless the user closed it', () => {
+    expect(trayIsOpen('false')).toBe(false)
+    expect(trayIsOpen('true')).toBe(true)
+    // Not stored yet (the settings not read), or anything else: open, the default.
+    expect(trayIsOpen(undefined)).toBe(true)
+    expect(trayIsOpen('')).toBe(true)
   })
 })

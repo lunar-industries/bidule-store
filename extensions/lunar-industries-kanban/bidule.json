@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "title": "Lunar Industries - Kanban",
   "engine": "^0.2.0",
   "contributes": {
@@ -50,6 +50,20 @@
           "type": "text",
           "title": "Colonnes masquées",
           "default": "[]",
+          "hidden": true
+        },
+        {
+          "key": "lunar-industries-kanban.toggled",
+          "type": "text",
+          "title": "Colonnes pliées ou dépliées",
+          "default": "[]",
+          "hidden": true
+        },
+        {
+          "key": "lunar-industries-kanban.trayOpen",
+          "type": "text",
+          "title": "Tiroir des branches ouvert",
+          "default": "true",
           "hidden": true
         }
       ]
