@@ -11,6 +11,7 @@ const TOKEN = { 'x-bidule-token': 'dev' }
 const MODULES = [
   'lunar-industries-branches',
   'lunar-industries-claude',
+  'lunar-industries-common',
   'lunar-industries-containers',
   'lunar-industries-kanban',
   'lunar-industries-temps',
@@ -60,6 +61,20 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
       await host.activate(id)
       assert.isTrue(host.isStarted(id), `${id} did not start`)
     }
+  })
+
+  test('lunar-industries-common’s commands from the interface: a target saved and read back, bad arguments refused', async ({
+    client,
+    assert,
+  }) => {
+    const run = (id: string, args: unknown) => client.post(`/api/commands/${id}`).headers(TOKEN).json({ args })
+    ;(await run('lunar-industries-common.setTarget', { repo: '/r/app', target: 'develop' })).assertStatus(200)
+    const read = await run('lunar-industries-common.settings', null)
+    read.assertStatus(200)
+    assert.deepEqual(read.body().result.targets, { '/r/app': 'develop' })
+    assert.equal((await run('lunar-industries-common.link', { repo: '' })).status(), 422)
+    // Back as it was: the settings the core keeps in memory outlive the test's transaction.
+    ;(await run('lunar-industries-common.setTarget', { repo: '/r/app', target: null })).assertStatus(200)
   })
 
   test('two objects merged in the core: the ids each one keeps go to the one left', async ({ assert }) => {
