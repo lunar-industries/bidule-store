@@ -20,9 +20,11 @@ avec votre clé. Le guide : [docs/creer-un-store.md](docs/creer-un-store.md) ; l
 `extensions/<id>` : les sources des modules qui concurrencent les officiels (Kanban, Branches, Temps, Claude,
 Conteneurs…), sur le même modèle qu'une extension de Bidule, avec leur propre id et `"bidule": { "storeOnly": true }`
 dans leur `package.json`. Ils respectent les contrats des modules officiels ; on désactive l'officiel dans
-Réglages › Extensions pour installer le leur. Ils se construisent, se signent et se publient par le workflow
-Extensions de Bidule ; on y travaille en clonant ce dépôt dans le checkout de Bidule (`bidule-store/`) puis
-`npm run store:link` (voir `docs/distribution.md` de Bidule).
+Réglages › Extensions pour installer le leur. Les modules `lunar-industries-*` partagent une extension sans page,
+`lunar-industries-common` (les branches lues dans le cœur, le lien d'une branche à une tâche, les réglages communs) :
+chacun la déclare dans ses dépendances, et le store l'installe avec lui. Ils se construisent, se signent et se
+publient par le workflow Extensions de Bidule ; on y travaille en clonant ce dépôt dans le checkout de Bidule
+(`bidule-store/`) puis `npm run store:link` (voir `docs/distribution.md` de Bidule).
 
 Un module communautaire peut aussi vivre dans le store de son auteur, signé par la clé de ce store : Bidule peut
 suggérer ce store dans Réglages › Stores (voir « Être suggéré par Bidule » dans

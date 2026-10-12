@@ -1,6 +1,6 @@
 import { basename, join, sep } from 'node:path'
 import type { HttpContext } from '@adonisjs/core/http'
-import { branches, ctx, enabled, git, sessions, settings, store, tasks } from '@bidule/ext-lunar-industries-claude/server/index'
+import { apiKey, branches, ctx, enabled, git, sessions, settings, store, tasks } from '@bidule/ext-lunar-industries-claude/server/index'
 import { SessionError } from '@bidule/ext-lunar-industries-claude/server/errors'
 import { detect, placeOf } from '@bidule/ext-lunar-industries-claude/server/runner'
 import { reviewTargetOf } from '@bidule/ext-lunar-industries-claude/server/settings'
@@ -21,7 +21,7 @@ import {
   taskValidator,
   watchValidator,
 } from '@bidule/ext-lunar-industries-claude/server/validators'
-import type { SessionContext, UsageRow } from '../../contract.ts'
+import type { RepoSettings, SessionContext, UsageRow } from '../../contract.ts'
 
 // Tokens by model, for the interface. `priced`: the figures come from what the session's turns reported, so their
 // dollars mean something; read back from a transcript they do not, and the row says so.
@@ -64,17 +64,20 @@ const done = (found: boolean, message = 'Session terminée') => {
 // Taken from quack-board (ClaudesController, Simon's): the Claude sessions run by the Agent SDK, their conversation,
 // their decisions, their settings, and what the page shows beside them.
 export default class SessionsController {
-  // Whether the sessions are on, and the Claude Code they run (on Windows, the one of WSL's default distro).
+  // Whether the sessions are on, and the Claude Code they run (the one of the tools' environment), with or without the
+  // user's API key.
   async status() {
     const on = (await settings()).enabled
-    return { enabled: on, places: on ? await detect(ctx.env) : [] }
+    return { enabled: on, places: on ? await detect(ctx.env, await apiKey()) : [] }
   }
 
-  // The repos the app knows, with what the module's settings say of each.
+  // The repos the app knows, with what the module's settings say of each, and their own review target.
   async repos() {
     const s = await settings()
     const repos = await (await git()).repos()
-    return { repos: repos.map((r) => ({ path: r.path, label: r.label, ...s.repos[r.path] })) }
+    return {
+      repos: repos.map((r): RepoSettings => ({ ...s.repos[r.path], path: r.path, label: r.label, reviewTarget: s.targets[r.path] ?? null })),
+    }
   }
 
   async index() {
@@ -135,7 +138,7 @@ export default class SessionsController {
         task: null,
         repos: [],
         worktrees: [],
-        where: where?.remote?.label ?? 'Ce poste',
+        where: where?.at.label ?? 'Ce poste',
         login: null,
         slot: [],
         costUsd: null,
@@ -170,7 +173,7 @@ export default class SessionsController {
       task: task ? { id: task.id, ref: task.ref, title: task.title, status: task.status, url: task.url } : null,
       repos: repos.map((r) => ({ label: r.label, path: r.path })),
       worktrees,
-      where: place?.remote?.label ?? 'Ce poste',
+      where: place?.at.label ?? 'Ce poste',
       // What the session is telling now, else what its last turn left on its row.
       login: sessions.loginOf(row.id) ?? row.login,
       slot: locks.map((l) => ({ repo: l.repo, session: l.session, alive: l.alive, mine: pid !== null && l.pid === pid })),
@@ -260,13 +263,12 @@ export default class SessionsController {
     return done(sessions.stop(params.id), 'Session inconnue')
   }
 
-  // A session of the terminal shown on the page: its transcript is read again while the page renews this.
+  // A session of the terminal shown on the page: followed by the system's notifications until the page says it stops.
   async watch({ params, request }: HttpContext) {
     await enabled()
     const { cwd } = await request.validateUsing(watchValidator)
     await knownFolder(cwd)
-    sessions.watch(params.id, cwd)
-    return ok
+    return sessions.watch(params.id, cwd)
   }
 
   async unwatch({ params }: HttpContext) {

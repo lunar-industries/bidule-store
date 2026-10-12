@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEvent, SessionMessage, SessionStatus } from '../contract.ts'
 import { SessionService, type StartInput } from '../server/sessions.ts'
 import { mergeListener } from '../server/store.ts'
-import { FakeGit, MemoryStore, fakeEnv, settingsWith } from './fakes.ts'
+import { projectFolderName } from '../server/transcript.ts'
+import { FakeGit, MemoryStore, fakeEnv, settingsWith, type FakeWatch } from './fakes.ts'
 
 // Taken from quack-board (tests/functional/claude.spec.ts, Simon's): the sessions, run by a fake Claude Code (the SDK
 // runs it in place of the real one) that speaks the SDK's protocol and answers by a word of the message.
@@ -86,6 +87,28 @@ describe('Sessions with a fake Claude Code', () => {
     expect(partial).toBeGreaterThan(-1)
     expect(partial).toBeLessThan(final)
     expect(told.sessions.map(([, status]) => status)).toEqual(['running', 'idle', 'saved'])
+  })
+
+  it('Claude Code’s own login by default; the module’s API key when the user gave one', async () => {
+    const id = await start('bonjour')
+    await until(() => service.loginOf(id) !== null)
+    expect(service.loginOf(id)).toBe('subscription')
+    await service.close(id)
+
+    const keyed = new SessionService({
+      env: fakeEnv(),
+      store,
+      settings: async () => settingsWith({ root: repo }),
+      git: async () => Object.assign(new FakeGit(), { repoList: [{ path: repo, label: 'app' }] }),
+      tasks: async () => null,
+      tell: { sessions: () => {}, session: () => {} },
+      executable: FAKE,
+      apiKey: async () => 'sk-test',
+    })
+    const other = await keyed.start({ repos: [repo], prompt: 'bonjour', mode: 'default' })
+    await until(() => keyed.loginOf(other) !== null)
+    expect(keyed.loginOf(other)).toBe('apiKey')
+    await keyed.close(other)
   })
 
   it('« Toujours » gives Claude Code back the rule it proposed', async () => {
@@ -178,5 +201,96 @@ describe('A task of the core merged into another', () => {
     expect((await store.find('s1'))?.taskId).toBe('old')
     await merged({ type: 'task', from: 'old', into: 'kept' })
     expect((await store.find('s1'))?.taskId).toBe('kept')
+  })
+})
+
+// A session of the terminal (one the app does not run), its transcript written as Claude Code writes it, in a Claude
+// Code folder of the test's own (CLAUDE_CONFIG_DIR, which the SDK reads); the environment's notifications are the
+// test's to give.
+describe('A session of the terminal, followed', () => {
+  const ID = '11111111-1111-4111-8111-111111111111'
+  let config: string
+  let repo: string
+  let before: string | undefined
+  let watches: FakeWatch[]
+  let told: [string, SessionMessage][]
+
+  const transcript = (id: string) => join(config, 'projects', projectFolderName(repo), `${id}.jsonl`)
+  const line = (id: string, uuid: string, parent: string | null, type: 'user' | 'assistant', text: string) =>
+    `${JSON.stringify({
+      parentUuid: parent,
+      isSidechain: false,
+      type,
+      message: type === 'user' ? { role: 'user', content: text } : { role: 'assistant', model: 'm', content: [{ type: 'text', text }] },
+      uuid,
+      timestamp: new Date().toISOString(),
+      sessionId: id,
+      cwd: repo,
+    })}\n`
+  const service = (options: { live?: boolean } = {}) =>
+    new SessionService({
+      env: fakeEnv('local', { watches, live: options.live }),
+      store: new MemoryStore(),
+      settings: async () => settingsWith({ root: repo }),
+      git: async () => new FakeGit(),
+      tasks: async () => null,
+      tell: { sessions: () => {}, session: (id, message) => void told.push([id, message]) },
+    })
+  const saidLines = () => told.flatMap(([, m]) => (m.type === 'event' ? [m.event] : []))
+
+  beforeEach(async () => {
+    config = await mkdtemp(join(tmpdir(), 'lic-config-'))
+    repo = await mkdtemp(join(tmpdir(), 'lic-repo-'))
+    before = process.env['CLAUDE_CONFIG_DIR']
+    process.env['CLAUDE_CONFIG_DIR'] = config
+    watches = []
+    told = []
+    await mkdir(join(config, 'projects', projectFolderName(repo)), { recursive: true })
+    await writeFile(transcript(ID), line(ID, 'a1', null, 'user', 'bonjour'))
+  })
+  afterEach(() => {
+    if (before === undefined) delete process.env['CLAUDE_CONFIG_DIR']
+    else process.env['CLAUDE_CONFIG_DIR'] = before
+  })
+
+  it('a change of its transcript sends the new lines, and says it is at work', async () => {
+    const s = service()
+    expect(await s.watch(ID, repo)).toEqual({ live: true })
+    expect(watches.map((w) => w.folders)).toEqual([[join(config, 'projects', projectFolderName(repo))]])
+    await appendFile(transcript(ID), line(ID, 'a2', 'a1', 'assistant', 'Salut'))
+    watches[0].onChange(watches[0].folders[0], `${ID}.jsonl`)
+    await until(() => saidLines().length > 0)
+    expect(saidLines()).toEqual([{ kind: 'text', text: 'Salut', seq: 2 }])
+    expect(told.find(([, m]) => m.type === 'status')?.[1]).toEqual({ type: 'status', status: 'running' })
+    s.unwatch(ID)
+  })
+
+  it('a change of another file reads nothing', async () => {
+    const s = service()
+    await s.watch(ID, repo)
+    await appendFile(transcript(ID), line(ID, 'a2', 'a1', 'assistant', 'Salut'))
+    watches[0].onChange(watches[0].folders[0], 'other.jsonl')
+    await new Promise((r) => setTimeout(r, 200))
+    expect(told).toEqual([])
+    s.unwatch(ID)
+  })
+
+  it('a fourth session followed stops the oldest; unwatch stops one', async () => {
+    const ids = ['a', 'b', 'c', 'd'].map((c) => `${c.repeat(8)}-1111-4111-8111-111111111111`)
+    for (const id of ids) await writeFile(transcript(id), line(id, `${id}-1`, null, 'user', 'bonjour'))
+    const s = service()
+    for (const id of ids) await s.watch(id, repo)
+    expect(watches.map((w) => w.closed)).toEqual([true, false, false, false])
+    expect(s.watching).toEqual(ids.slice(1))
+    s.unwatch(ids[1])
+    expect(watches[1].closed).toBe(true)
+    expect(s.watching).toEqual(ids.slice(2))
+    for (const id of ids) s.unwatch(id)
+  })
+
+  it('not live where the environment cannot follow changes, or without a transcript: nothing is watched', async () => {
+    expect(await service({ live: false }).watch(ID, repo)).toEqual({ live: false })
+    expect(await service().watch('22222222-2222-4222-8222-222222222222', repo)).toEqual({ live: false })
+    expect(watches).toEqual([])
   })
 })

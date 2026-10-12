@@ -103,7 +103,8 @@ async function answer(text) {
       session_id: session,
       model: 'fake',
       claude_code_version: '0.0.0',
-      apiKeySource: 'none',
+      // As Claude Code says it: the API key of its environment, else its login.
+      apiKeySource: process.env.ANTHROPIC_API_KEY ? 'ANTHROPIC_API_KEY' : 'none',
       tools: [],
       mcp_servers: [],
       cwd: process.cwd(),

@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-containers",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "title": "Lunar Industries - Conteneurs",
   "engine": "^0.2.0",
   "permissions": [
@@ -19,7 +19,9 @@
       }
     ],
     "events": [
-      "lunar-industries-containers.changed"
+      "lunar-industries-containers.changed",
+      "lunar-industries-containers.logs",
+      "lunar-industries-containers.usage"
     ]
   }
 }

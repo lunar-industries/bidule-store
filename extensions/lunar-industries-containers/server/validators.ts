@@ -14,12 +14,9 @@ export const filesValidator = vine.create({
   path: vine.string().startsWith('/').maxLength(4096),
 })
 
-// The lines written after this time (a line's own, as the engine gives it): the page follows the logs so.
-export const logsValidator = vine.create({
-  since: vine
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/)
-    .optional(),
+// A follow the page stops, by the id its request got.
+export const unfollowValidator = vine.create({
+  params: vine.object({ follow: vine.string().regex(/^[\w-]{1,64}$/) }),
 })
 
 // The containers ticked, as `engine:id`.

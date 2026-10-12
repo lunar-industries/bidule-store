@@ -1,8 +1,9 @@
+import type { SharedBranch, SharedSettings } from '@bidule/ext-lunar-industries-common/contract'
 import type { ForgeClient, ForgeJob, NewReview } from '@bidule/sdk/forges'
 import type { StoredObject, StoredType } from '@bidule/sdk/objects'
 import type { Task } from '@bidule/sdk/tasks'
 import type { ListedBranch } from '../contract.ts'
-import { BranchesService, type BranchesDeps } from '../server/service.ts'
+import { BranchesService, type BranchesDeps, type Shared } from '../server/service.ts'
 
 // A branch as a test describes it: what the core has of it, its task link, review and CI included.
 export type Spec = Omit<ListedBranch, 'forge' | 'issueNumber'>
@@ -82,50 +83,61 @@ export function fakeForge(fields: Partial<ForgeClient> = {}) {
   return { client, calls, reviews }
 }
 
-type Ref = { type: StoredType; id: string }
-export type Relation = { from: Ref; kind: string; to: Ref; origin: string }
-
 const repoId = (path: string) => `repo:${path}`
-export const branchId = (b: { repo: string; name: string }) => `${b.repo}\n${b.name}`
+const branchId =(b: { repo: string; name: string }) => `${b.repo}\n${b.name}`
 
-// These branches as the core has them, with their tasks' links (each `taskId` set by hand); the forge `review.forge`
-// gives (null: none), and what `review.refresh` was asked.
+// These branches as the core has them; the forge `review.forge` gives (null: none), and what `review.refresh` was asked.
 export function fakeWorld(branches: Spec[], forge: ForgeClient | null) {
   // What the forge was asked to read again (`review.refresh`).
   const refreshed: unknown[] = []
-  const relations: Relation[] = branches.flatMap((b) =>
-    b.taskId ? [{ from: { type: 'task' as const, id: b.taskId }, kind: 'branch', to: { type: 'branch' as const, id: branchId(b) }, origin: 'manual' }] : []
-  )
-  return { world: { branches, forge, refreshed, relations }, refreshed, relations }
+  return { world: { branches, forge, refreshed }, refreshed }
 }
 
 type World = ReturnType<typeof fakeWorld>['world']
 
-/**
- * The core's rule on branch names, run as the core does after a link or an unlink that says a branch's task, on that
- * branch alone: linked or unlinked by hand, it keeps no link by name; otherwise, when its name holds a task's
- * reference, it is linked to that task (origin `ref`), and only to it. A link by name goes only when the rule sees
- * its task (a task with a reference, here).
- */
-function discover(relations: Relation[], branches: Spec[], tasks: Task[], from: Ref, kind: string, to: Ref) {
-  const id = kind === 'branch' && to.type === 'branch' ? to.id : kind === 'noTask' ? from.id : null
-  const b = branches.find((x) => branchId(x) === id)
-  if (!id || !b || b.isDefault) return
-  const byHand = relations.some(
-    (l) => (l.kind === 'branch' && l.to.id === id && l.origin === 'manual') || (l.kind === 'noTask' && l.from.id === id)
-  )
-  const hit = byHand ? null : (tasks.find((t) => t.ref && b.name.toLowerCase().includes(t.ref.toLowerCase()))?.id ?? null)
-  for (let i = relations.length - 1; i >= 0; i--) {
-    const l = relations[i]
-    const seen = tasks.some((t) => t.id === l.from.id && t.ref)
-    if (l.kind === 'branch' && l.to.id === id && l.origin === 'ref' && l.from.id !== hit && seen) relations.splice(i, 1)
+// The shared settings as a new install has them.
+const SETTINGS: SharedSettings = { integrationBranches: [], reviewTarget: null, targets: {}, naming: 'issue', template: '{issue}-{slug}' }
+
+// lunar-industries-common for these branches (its join of the core's objects and its link are tested there): the
+// branches, a link by hand (each said: `name→task`), the shared settings and a repo's own target.
+function sharedOf({ branches }: World, tasks: Task[], settings: SharedSettings, links: string[]): Shared {
+  const integration = new Set(settings.integrationBranches.map((n) => n.toLowerCase()))
+  const shared = (b: Spec): SharedBranch => ({
+    ...b,
+    id: branchId(b),
+    repositoryId: repoId(b.repo),
+    integration: integration.has(b.name.toLowerCase()),
+    reviewRef: b.reviewNumber ? `MR !${b.reviewNumber}` : null,
+    url: null,
+  })
+  return {
+    branches: async ({ repo, name }) => ({
+      available: true,
+      branches: branches
+        .filter((b) => (!repo || b.repo === repo) && (!name || b.name === name))
+        .map(shared)
+        .sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? '')),
+    }),
+    link: async ({ repo, name, taskId }) => {
+      const b = branches.find((x) => x.repo === repo && x.name === name)
+      if (!b || (taskId && !tasks.some((t) => t.id === taskId))) return { linked: false }
+      b.taskId = taskId
+      links.push(`${name}→${taskId}`)
+      return { linked: true }
+    },
+    settings: async () => settings,
+    setTarget: async ({ repo, target }) => {
+      if (!branches.some((b) => b.repo === repo)) throw Object.assign(new Error('Dépôt inconnu'), { status: 404 })
+      const own = { ...settings.targets }
+      if (target) own[repo] = target
+      else delete own[repo]
+      settings.targets = own
+    },
   }
-  if (hit && !relations.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
-    relations.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
 }
 
-// The core's objects for these branches: their repos, the branches, their reviews and pipelines, their tasks' links.
-function objectsOf({ branches, forge, refreshed, relations }: World, tasks: Task[]): BranchesDeps['objects'] {
+// The core's objects the page reads itself: the repos, the tasks, the forge.
+function objectsOf({ branches, forge, refreshed }: World, tasks: Task[]): BranchesDeps['objects'] {
   const base = { provider: 'git', ref: null, url: null, properties: {} }
   const repository: StoredObject<'repository'>[] = [...new Set(branches.map((b) => b.repo))].map((path) => ({
     ...base,
@@ -137,87 +149,19 @@ function objectsOf({ branches, forge, refreshed, relations }: World, tasks: Task
     remotePath: 'team/app',
     defaultBranch: branches.find((b) => b.repo === path && b.isDefault)?.name ?? null,
   }))
-  const branch: StoredObject<'branch'>[] = branches.map((b) => ({
-    ...base,
-    id: branchId(b),
-    type: 'branch',
-    repositoryId: repoId(b.repo),
-    name: b.name,
-    isDefault: b.isDefault,
-    ahead: 0,
-    behind: 0,
-    pushed: true,
-    lastCommitAt: b.lastCommitAt,
-    headSha: b.headSha,
-    base: null,
-  }))
-  const review: StoredObject<'review'>[] = branches.flatMap((b) =>
-    b.reviewNumber && b.reviewState
-      ? [
-          {
-            ...base,
-            provider: 'gitlab',
-            id: `review:${branchId(b)}`,
-            type: 'review' as const,
-            branchId: branchId(b),
-            number: b.reviewNumber,
-            label: `MR !${b.reviewNumber}`,
-            state: b.reviewState,
-            draft: false,
-            comments: null,
-            title: null,
-          },
-        ]
-      : []
-  )
-  const pipeline: StoredObject<'pipeline'>[] = branches.flatMap((b) =>
-    b.ci && b.ci !== 'merged'
-      ? [{ ...base, provider: 'gitlab', id: `pipeline:${branchId(b)}`, type: 'pipeline' as const, branchId: branchId(b), headSha: b.headSha, status: b.ci }]
-      : []
-  )
-  const stored: Partial<Record<StoredType, { id: string }[]>> = { repository, branch, review, pipeline, task: tasks }
-  const same = (a: Ref, b: Ref) => a.type === b.type && a.id === b.id
+  const stored: Partial<Record<StoredType, { id: string }[]>> = { repository, task: tasks }
   const objects = {
     list: async (type: StoredType, filter: { where?: Record<string, unknown> } = {}) =>
       (stored[type] ?? []).filter((o) => Object.entries(filter.where ?? {}).every(([k, v]) => Reflect.get(o, k) === v)),
     get: async (type: StoredType, id: string) => (stored[type] ?? []).find((o) => o.id === id) ?? null,
-    relations: async (filter: { kind: string }) => relations.filter((l) => l.kind === filter.kind).map((l) => ({ ...l })),
-    related: async (id: string, filter: { kind?: string; type?: StoredType } = {}) =>
-      relations
-        .filter((l) => l.from.id === id || l.to.id === id)
-        .map((l) =>
-          l.from.id === id
-            ? { kind: l.kind, type: l.to.type, id: l.to.id, origin: l.origin, outgoing: true }
-            : { kind: l.kind, type: l.from.type, id: l.from.id, origin: l.origin, outgoing: false }
-        )
-        .filter((r) => (!filter.kind || r.kind === filter.kind) && (!filter.type || r.type === filter.type)),
-    // As the core: a rule never overrides the user's link; a link saying a branch's task runs the rule on that branch.
-    link: async (from: Ref, kind: string, to: Ref, origin: string) => {
-      const current = relations.find((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
-      if (current?.origin === 'manual' && origin !== 'manual') return
-      if (current) current.origin = origin
-      else relations.push({ from, kind, to, origin })
-      discover(relations, branches, tasks, from, kind, to)
-    },
-    unlink: async (from: Ref, kind: string, to: Ref) => {
-      const at = relations.findIndex((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
-      if (at < 0) return
-      relations.splice(at, 1)
-      discover(relations, branches, tasks, from, kind, to)
-    },
     first: async (action: string, args: unknown) => (action === 'review.refresh' ? (refreshed.push(args), true) : forge),
   }
   return objects as unknown as BranchesDeps['objects']
 }
 
-export function service(world: World, { tasks = [], settings = {} }: { tasks?: Task[]; settings?: Record<string, string> } = {}) {
-  const saved: Record<string, string> = { ...settings }
-  let changed = 0
-  const s = new BranchesService({
-    objects: objectsOf(world, tasks),
-    setting: async (key) => saved[key],
-    save: async (key, value) => void (saved[key] = value),
-    changed: () => void changed++,
-  })
-  return { s, saved, changed: () => changed }
+export function service(world: World, { tasks = [], settings = {} }: { tasks?: Task[]; settings?: Partial<SharedSettings> } = {}) {
+  const shared = { ...SETTINGS, ...settings }
+  const links: string[] = []
+  const s = new BranchesService({ objects: objectsOf(world, tasks), shared: sharedOf(world, tasks, shared, links) })
+  return { s, shared, links }
 }

@@ -7,12 +7,13 @@ const containers = () =>
 // ui/registry).
 export default function routes(router: Router) {
   router.get('containers', [containers, 'index']).as('index')
-  router.get('usage', [containers, 'usage']).as('usage')
+  router.post('usage/follow', [containers, 'followUsage']).as('usage.follow')
   router.get('selection', [containers, 'selection']).as('selection')
   router.put('selection', [containers, 'select']).as('select')
   router.get('engines/:engine/containers/:id', [containers, 'show']).as('show')
   router.post('engines/:engine/containers/:id/action', [containers, 'act']).as('act')
   router.post('engines/:engine/containers/:id/terminal', [containers, 'terminal']).as('terminal')
-  router.get('engines/:engine/containers/:id/logs', [containers, 'logs']).as('logs')
+  router.post('engines/:engine/containers/:id/logs/follow', [containers, 'followLogs']).as('logs.follow')
+  router.delete('follows/:follow', [containers, 'unfollow']).as('unfollow')
   router.get('engines/:engine/containers/:id/files', [containers, 'files']).as('files')
 }

@@ -7,7 +7,8 @@ import type { ForgeClient, ForgeJob } from '@bidule/sdk/forges'
 import type { Task } from '@bidule/sdk/tasks'
 import type { BranchAccess, TaskAccess } from './objects.ts'
 import { sdk } from './sdk.ts'
-import { deployOf, issueOf, list, reviewTargetOf, slugify, templateOf, type Settings } from './settings.ts'
+import { deployOf, issueOf, list, reviewTargetOf, slugify, type Settings } from './settings.ts'
+import type { PipelineChanges } from './pipeline_changes.ts'
 import { acquire, lockHost, lockName, lockStatus, pidOfSession, release } from './slot_lock.ts'
 import { moveToInProgress, startTask } from './start_task.ts'
 import type { SessionStore } from './store.ts'
@@ -54,6 +55,8 @@ export interface ToolDeps {
   forgeOf: (repo: string) => Promise<ForgeClient | null>
   // After a write on the forge: that forge reads the branch's review and pipeline again (`review.refresh`). Never fails.
   refreshForge?: (repo: string, branch: string) => Promise<void>
+  // The pipelines the core announces changed (wait_pipeline waits on them).
+  pipelines: PipelineChanges
   settings: () => Promise<Settings>
   store: SessionStore
 }
@@ -140,7 +143,7 @@ export function reviewDescription(issueNumber: number | null, taskUrl: string | 
   return [issueNumber ? `Closes #${issueNumber}` : '', taskUrl ? `Tâche : ${taskUrl}` : ''].filter(Boolean).join('\n\n')
 }
 
-export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): WorkspaceTool[] {
+export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
   const tasksOf = async () => {
     const tasks = await deps.tasks()
     if (!tasks) throw new ToolError('Aucune source de tâches')
@@ -334,7 +337,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         }
         const results = await startTask(
           t,
-          { repos: targets, slug: slugify(slug ?? t.title), issue: issue || s.createIssue, review, checkout: 'keep', template: templateOf(s) },
+          { repos: targets, slug: slugify(slug ?? t.title), issue: issue || s.createIssue, review, checkout: 'keep', template: s.branchTemplate },
           git,
           deps.forgeOf,
           deps.branches()
@@ -482,7 +485,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         }
         const taskId = await deps.branches().taskOf(r.path, branch)
         const task = taskId ? await findTask(taskId).catch(() => null) : null
-        const text = [description ?? '', reviewDescription(issueOf(templateOf(s), branch), task?.url ?? null)].filter(Boolean).join('\n\n')
+        const text = [description ?? '', reviewDescription(issueOf(s.branchTemplate, branch), task?.url ?? null)].filter(Boolean).join('\n\n')
         const review = await client.createReview({ source: branch, target: into, title: title ?? task?.title ?? branch, description: text, draft })
         await readForge(r.path, branch)
         return { created: true, review }
@@ -492,21 +495,27 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
     define({
       name: 'wait_pipeline',
       description:
-        'Attend le pipeline du dernier commit d’une branche : jusqu’à sa fin, ou, avec `job` (le nom d’un job manuel de déploiement), jusqu’à ce que ce job puisse être lancé, puis jusqu’à sa fin une fois lancé. S’arrête dès qu’un job échoue. Relit la forge à intervalle croissant, sans rien afficher entre-temps.',
+        'Attend le pipeline du dernier commit d’une branche : jusqu’à sa fin, ou, avec `job` (le nom d’un job manuel de déploiement), jusqu’à ce que ce job puisse être lancé, puis jusqu’à sa fin une fois lancé. S’arrête dès qu’un job échoue. Relit la forge chaque fois que l’application apprend que le pipeline a changé, sans rien afficher entre-temps.',
       schema: { repo: z.string(), branch: z.string(), job: z.string().optional(), timeoutMinutes: z.number().int().min(1).max(60).default(40) },
       write: false,
+      // No asking the forge again and again: the forge reads the branch once now (`review.refresh`), then the pipeline
+      // is read again at each change the core announces, until it is decided or the time is up.
       run: async ({ repo, branch, job, timeoutMinutes }) => {
         const r = await findRepo(repo)
         const client = await forgeOf(r)
         const deadline = Date.now() + timeoutMinutes * 60_000
-        let delay = 5_000
-        for (;;) {
-          const { pipeline, jobs, commit } = await branchState(client, r.path, branch)
-          const verdict = pipeline ? pipelineVerdict(pipeline.status, jobs, job) : { state: 'waiting' as const }
-          if (verdict.state !== 'waiting') return { ...verdict, pipeline: pipeline?.url ?? null, commit }
-          if (Date.now() + delay > deadline) return { state: 'timeout', pipeline: pipeline?.url ?? null, jobs }
-          await wait(delay)
-          delay = Math.min(delay * 2, 60_000)
+        // Watched before anything is read: a change announced while it reads is not missed.
+        const changes = deps.pipelines.watch()
+        try {
+          await readForge(r.path, branch)
+          for (;;) {
+            const { pipeline, jobs, commit } = await branchState(client, r.path, branch)
+            const verdict = pipeline ? pipelineVerdict(pipeline.status, jobs, job) : { state: 'waiting' as const }
+            if (verdict.state !== 'waiting') return { ...verdict, pipeline: pipeline?.url ?? null, commit }
+            if (!(await changes.next(deadline))) return { state: 'timeout', pipeline: pipeline?.url ?? null, jobs }
+          }
+        } finally {
+          changes.close()
         }
       },
     }),
@@ -634,7 +643,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const repos = await (await deps.git()).repos()
         return {
           branchNaming: s.branchNaming,
-          branchTemplate: templateOf(s),
+          branchTemplate: s.branchTemplate,
           createIssue: s.createIssue,
           integrationBranches: s.integrationBranches,
           repos: repos.map((r) => ({ repo: r.label, path: r.path, reviewTarget: reviewTargetOf(s, r.path), deploy: deployOf(s, r.path) })),

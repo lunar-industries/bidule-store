@@ -5,12 +5,15 @@ import type { WorkEvent } from './engine.ts'
 
 type Objects = ServerContext['objects']
 
+// lunar-industries-common's link by hand (its command).
+type LinkByHand = (args: { repo: string; name: string; taskId: string | null }) => Promise<{ linked: boolean }>
+
 /**
  * The user's work, read from the core's objects as the official Temps reads it: the repositories and branches git
  * provides, the activity of git (with its repository and branch) and of the task providers (an edit, a change of
  * status, with its task), and the tasks the branches are linked to. A type nobody provides gives nothing.
  */
-export function coreWork(objects: Objects): Work {
+export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
   const has = (type: StoredType) => objects.providers(type).length > 0
   // The task of each branch, deleted ones included (a branch deleted since still says which task it was for).
   const taskOfBranch = async () =>
@@ -24,17 +27,21 @@ export function coreWork(objects: Objects): Work {
       return (await objects.list('repository')).map((r) => ({ path: r.path, label: r.label }))
     },
 
+    // With the core's `noTask` mark of the branches the user unlinked by hand (a link from the branch to itself).
     async branches() {
       if (!has('branch') || !has('repository')) return []
-      const [repos, branches, taskOf] = await Promise.all([
+      const [repos, branches, taskOf, marks] = await Promise.all([
         objects.list('repository', { withDeleted: true }),
         objects.list('branch'),
         taskOfBranch(),
+        objects.relations({ kind: 'noTask', fromType: 'branch', toType: 'branch' }),
       ])
       const pathOf = new Map(repos.map((r) => [r.id, r.path]))
+      const unlinked = new Set(marks.map((l) => l.from.id))
       return branches.flatMap((b): WorkBranch[] => {
         const repo = pathOf.get(b.repositoryId)
-        return repo ? [{ repo, name: b.name, taskId: taskOf.get(b.id) ?? null, isDefault: b.isDefault }] : []
+        if (!repo) return []
+        return [{ repo, name: b.name, taskId: taskOf.get(b.id) ?? null, isDefault: b.isDefault, noTask: unlinked.has(b.id) }]
       })
     },
 
@@ -93,16 +100,9 @@ export function coreWork(objects: Objects): Work {
     },
 
     // A link the user made (`manual`): the core's rule on branch names never undoes it. The branch's other tasks and
-    // its « no task » mark go.
-    async link(repoPath, name, taskId) {
-      const [repo] = await objects.list('repository', { where: { path: repoPath } })
-      const [branch] = repo ? await objects.list('branch', { where: { repositoryId: repo.id, name } }) : []
-      if (!branch) return
-      const to = { type: 'branch' as const, id: branch.id }
-      await objects.link({ type: 'task', id: taskId }, 'branch', to, 'manual')
-      for (const other of await objects.related(branch.id, { kind: 'branch', type: 'task' }))
-        if (other.id !== taskId) await objects.unlink({ type: 'task', id: other.id }, 'branch', to)
-      await objects.unlink(to, 'noTask', to)
+    // its « no task » mark go. A branch or task gone meanwhile is left as it is.
+    async link(repo, name, taskId) {
+      await linkByHand({ repo, name, taskId })
     },
 
     async titles() {

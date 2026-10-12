@@ -12,10 +12,19 @@
 //   POST sessions/:id/decisions/:request Decision → { ok }
 //   PUT  sessions/:id/mode | model | effort | archive | task
 //   POST sessions/:id/interrupt | stop
-//   POST sessions/:id/watch, DELETE sessions/:id/watch   (a session of the terminal, read again while shown)
+//   POST sessions/:id/watch              { cwd } → WatchResult (a session of the terminal, followed while shown)
+//   DELETE sessions/:id/watch            { ok }
 //   GET  templates                       { templates: Template[] }
 //   GET  models                          { models: SessionModel[] }
 //   GET  repos                           { repos: RepoSettings[] }
+//
+// The branches (a task's, a branch's task, a link by hand), the review targets, the naming of the branches and the
+// integration branches are lunar-industries-common's (its commands; its settings in Réglages).
+import type {} from '@bidule/ext-lunar-industries-common/contract'
+
+// A session of the terminal followed: `live` is false when its changes cannot be followed there (WSL without Perl, a
+// transcript not found), and the page reads it again on demand.
+export type WatchResult = { live: boolean }
 
 // running: Claude works; waiting: a decision is expected from the user; idle: Claude answered and waits for a
 // message; saved: no Claude Code process, the session can be taken up again.
@@ -147,13 +156,15 @@ export type SessionModel = { value: string; label: string; description: string; 
 // A first message the new session window offers: a skill.
 export type Template = { name: string; description: string }
 
-// The Claude Code the sessions run: this machine's (the SDK's), or WSL's on Windows.
+// The Claude Code the sessions run: the one of the tools' environment (this machine, PowerShell, WSL, a toolbox, the
+// Flatpak's host). `apiKey`: the module has the user's Anthropic API key, which the sessions use instead of the login.
 export type ClaudePlace = {
   where: string
   version: string | null
   loggedIn: boolean
   email: string | null
   subscription: string | null
+  apiKey: boolean
   error: string | null
 }
 
@@ -176,7 +187,6 @@ export type Decision = { allow: boolean; always?: boolean; answers?: Record<stri
 
 // A repo's own settings for the sessions and their tools (Réglages; empty: the module's, see the settings).
 export type RepoOverrides = {
-  reviewTarget?: string
   // Untracked files to copy into a new worktree (globs relative to the repo) and the command that prepares it.
   worktreeSeed?: string
   worktreePrepare?: string
@@ -186,7 +196,8 @@ export type RepoOverrides = {
   productionJob?: string
   stagingEnv?: string
 }
-export type RepoSettings = { path: string; label: string } & RepoOverrides
+// A repo with its own settings, and its own review target (lunar-industries-common's; null: the shared one).
+export type RepoSettings = { path: string; label: string; reviewTarget: string | null } & RepoOverrides
 
 declare module '@bidule/sdk/contracts' {
   interface Commands {

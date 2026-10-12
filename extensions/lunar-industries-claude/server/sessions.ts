@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { Environment } from '@bidule/api/extensions'
+import type { Environment, Watcher } from '@bidule/api/extensions'
 import type {
   ModelInfo,
   PermissionMode,
@@ -31,13 +31,15 @@ import {
   type SessionSummary,
   type Template,
   type ToolChange,
+  type WatchResult,
 } from '../contract.ts'
 import type { TaskAccess } from './objects.ts'
-import { pathInWsl, placeOf, sessionEnv } from './runner.ts'
+import { pathInWsl, placeOf, sessionEnv, type Place } from './runner.ts'
 import { sdk } from './sdk.ts'
 import type { Settings } from './settings.ts'
 import type { ModelUsage, SessionRow, SessionStore, UsageByModel } from './store.ts'
 import { localConfigDir, SERVER, TOOLS_PROMPT, workspaceServer, type ToolContext, type WorkspaceTool } from './tools.ts'
+import { transcriptFolder } from './transcript.ts'
 import { workspaceRoot } from './worktrees.ts'
 
 /**
@@ -49,23 +51,26 @@ import { workspaceRoot } from './worktrees.ts'
 
 // How long the text being written is gathered before it is sent: one message per word would be too many.
 const PARTIAL_MS = 50
-// How often the transcript of a watched session is looked at. Only while the interface shows it.
-const WATCH_MS = 2_000
-// A watch the interface stopped renewing (a page closed without saying so) ends by itself.
-export const WATCH_TTL_MS = 30_000
+// A watched session whose transcript has not changed for this long is no longer at work (a single wait, started again
+// at each change).
+const QUIET_MS = 5_000
+// Sessions of the terminal watched at once: a fourth stops the oldest. A watch costs nothing while nothing changes (a
+// notification of the system, no reading), so one left by a page closed without saying so waits for the next.
+export const MAX_WATCHED = 3
 
-// A session of the terminal being watched: what its transcript looked like last time, and how many of its lines
-// were sent.
+// A session of the terminal being watched: the system's notifications on its transcript's folder, what the transcript
+// looked like last time, and how many of its lines were sent.
 interface Watched {
-  timer: NodeJS.Timeout | null
-  // When the watch ends unless the interface renews it.
-  until: number
+  watcher: Watcher | null
   // The transcript's date and size when it was last read; null before the first look.
   mark: string | null
   sent: number
   reading: boolean
-  // Lines were appearing at the last round: the interface has been told the session is at work.
+  // A change came while it was being read: it is read again once done.
+  again: boolean
+  // Lines appeared lately: the interface has been told the session is at work, until QUIET_MS without a change.
   live: boolean
+  quiet: NodeJS.Timeout | null
 }
 
 type NewEvent = SessionEvent extends infer E ? (E extends SessionEvent ? Omit<E, 'seq'> : never) : never
@@ -175,7 +180,9 @@ export interface SessionDeps {
   worktree?: (repo: string, branch: string) => Promise<{ path: string }>
   // The folders of the plugins every session loads (the module's skills, claude/plugin).
   plugins?: string[]
-  // Another Claude Code than the one found for the folder (a fake one, in the tests).
+  // The user's Anthropic API key (a secret of the module's settings); empty: Claude Code's own login.
+  apiKey?: () => Promise<string>
+  // Another Claude Code than the one of the environment, started by the SDK itself (a fake one, in the tests).
   executable?: string
 }
 
@@ -433,6 +440,20 @@ export class SessionService {
     this.deps.tell.session(id, message)
   }
 
+  // Where a folder's Claude Code runs (see placeOf); a fake one, in the tests, needs no lookup.
+  #place(folder: string): Promise<Place> {
+    const { executable } = this.deps
+    return placeOf(folder, this.deps.env, executable ? async () => executable : undefined)
+  }
+
+  // How a session's Claude Code is started: the environment's (placeOf), or the SDK's own spawn of a fake one; with the
+  // user's API key when there is one.
+  async #claudeOptions(place: Place) {
+    const apiKey = (await this.deps.apiKey?.()) ?? ''
+    const { executable } = this.deps
+    return { env: sessionEnv(apiKey), ...(executable ? { pathToClaudeCodeExecutable: executable } : place.options) }
+  }
+
   // At the module's start: no process survived the previous API, the sessions it ran are saved.
   recover(): Promise<void> {
     return this.deps.store.recover()
@@ -473,7 +494,8 @@ export class SessionService {
     // in its own folder, the repo's for a session of the terminal the app did not start.
     const settings = await this.deps.settings()
     const cwd = input.cwd ?? known?.cwd ?? (resume ? repos[0] : await this.#root(repos))
-    const place = await placeOf(cwd, this.deps.env)
+    const place = await this.#place(cwd)
+    const claude = await this.#claudeOptions(place)
     const past = resume ? await this.#saved(id, cwd) : null
     const row =
       known ??
@@ -511,7 +533,7 @@ export class SessionService {
     this.#publish(id, { type: 'status', status: 'running' })
     for (const e of past?.events ?? []) this.#push(session, e)
     if (past) this.#push(session, { kind: 'info', text: 'Session reprise' })
-    if (place.remote) this.#push(session, { kind: 'info', text: `Dans ${place.remote.label} : ${place.remote.claude}` })
+    if (!place.at.local) this.#push(session, { kind: 'info', text: `Dans ${place.at.label} : ${place.at.claude}` })
     this.#push(session, { kind: 'user', text: shownText(prompt, attached) })
     void this.#prepare(session, prompt, input.worktrees ?? [], attached)
 
@@ -527,10 +549,8 @@ export class SessionService {
       prompt: this.#inbox(session),
       options: {
         cwd: place.cwd,
-        env: sessionEnv(),
         ...(resume ? { resume: id } : { sessionId: id }),
-        ...place.options,
-        ...(this.deps.executable ? { pathToClaudeCodeExecutable: this.deps.executable } : {}),
+        ...claude,
         permissionMode: mode satisfies PermissionMode,
         ...(model ? { model } : {}),
         ...(effort ? { effort } : {}),
@@ -543,7 +563,7 @@ export class SessionService {
         // The text as it is written, shown before its message is complete.
         includePartialMessages: true,
         // The module's skills, where that Claude Code reaches them (a Linux path inside WSL).
-        plugins: (this.deps.plugins ?? []).map((path) => ({ type: 'local' as const, path: place.remote ? pathInWsl(path) : path })),
+        plugins: (this.deps.plugins ?? []).map((path) => ({ type: 'local' as const, path: place.at.local ? path : pathInWsl(path) })),
         // The workspace's tools: they ask the user themselves before writing, whatever the mode, so #ask lets them
         // through (not allowedTools, which would skip canUseTool and make the SDK warn).
         ...(tools.length ? { mcpServers: { [SERVER]: workspaceServer(tools, context) } } : {}),
@@ -607,12 +627,12 @@ export class SessionService {
     const byRepo = await Promise.all(
       folders.map(async (repo) => {
         // A folder whose Claude Code cannot be found (WSL without it) lists nothing.
-        const place = await placeOf(repo, this.deps.env).catch(() => null)
+        const place = await this.#place(repo).catch(() => null)
         if (!place) return []
         // Worktrees only where the SDK resolves them by itself: from Windows it would have to run git, which lives
         // in WSL.
         const infos = await readHistory(place.configDir, (h) =>
-          h.listSessions({ dir: place.cwd, limit: 30, includeWorktrees: !place.remote })
+          h.listSessions({ dir: place.cwd, limit: 30, includeWorktrees: place.at.local })
         ).catch(() => [])
         return infos.map((info): SessionSummary => {
           // The row it has only if a task was attached to it afterwards.
@@ -662,7 +682,7 @@ export class SessionService {
 
   // The row of a session of the terminal, made when something has to be kept about it (its task, its model…).
   async #terminalRow(id: string, cwd: string, taskId: string | null): Promise<SessionRow | null> {
-    const place = await placeOf(cwd, this.deps.env).catch(() => null)
+    const place = await this.#place(cwd).catch(() => null)
     const info = await readHistory(place?.configDir, (h) => h.getSessionInfo(id, place ? { dir: place.cwd } : {})).catch(() => undefined)
     if (!info) return null
     const row = this.deps.store.fresh({
@@ -761,7 +781,7 @@ export class SessionService {
    * hold, stay out.
    */
   async tokensOf(id: string, cwd?: string): Promise<UsageByModel> {
-    const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
     const messages = await readHistory(place?.configDir, (h) => h.getSessionMessages(id, place ? { dir: place.cwd } : {})).catch(() => [])
     const totals: UsageByModel = {}
     for (const m of messages) {
@@ -787,7 +807,7 @@ export class SessionService {
   }
 
   async #saved(id: string, cwd?: string) {
-    const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
     const messages = await readHistory(place?.configDir, (h) => h.getSessionMessages(id, place ? { dir: place.cwd } : {})).catch(() => [])
     if (!messages.length) return null
     const events = messages.flatMap(eventsOfMessage)
@@ -796,32 +816,51 @@ export class SessionService {
   }
 
   /**
-   * A session this app does not run, looked at in the interface: its transcript is read again while someone watches
-   * it, and the lines that appeared go out as its events. Nothing runs when nobody is looking: the interface renews
-   * its watch while it shows the session, and one not renewed ends after WATCH_TTL_MS.
+   * A session this app does not run, looked at in the interface: the system tells each change of its transcript's
+   * folder (ctx.env.watch, no reading in between), the transcript is read again when it changed, and the lines that
+   * appeared go out as its events. The interface asks once when it shows the session and says when it stops; at most
+   * MAX_WATCHED are watched at once. `live` is false when the changes cannot be followed there (WSL without Perl) or
+   * the transcript cannot be found: the interface then reads it again on demand.
    */
-  watch(id: string, cwd?: string): void {
+  async watch(id: string, cwd?: string): Promise<WatchResult> {
     if (cwd) this.#folders.set(id, cwd)
     // A session of the app already tells its own news as it goes.
-    if (this.#sessions.has(id)) return
+    if (this.#sessions.has(id)) return { live: true }
+    const { live } = await this.deps.env.info()
     const known = this.#watched.get(id)
     if (known) {
-      known.until = Date.now() + WATCH_TTL_MS
-      return
+      // Asked again: the newest, last to be stopped.
+      this.#watched.delete(id)
+      this.#watched.set(id, known)
     }
-    const entry: Watched = { timer: null, until: Date.now() + WATCH_TTL_MS, mark: null, sent: 0, reading: false, live: false }
-    entry.timer = setInterval(() => {
-      if (Date.now() > entry.until) this.unwatch(id)
-      else void this.#reread(id, entry)
-    }, WATCH_MS)
-    entry.timer.unref()
+    if (known || !live) return { live }
+    const entry: Watched = { watcher: null, mark: null, sent: 0, reading: false, again: false, live: false, quiet: null }
     this.#watched.set(id, entry)
+    for (const old of [...this.#watched.keys()].slice(0, -MAX_WATCHED)) this.unwatch(old)
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
+    const configDir = place?.configDir ?? process.env['CLAUDE_CONFIG_DIR'] ?? localConfigDir()
+    const folder = await transcriptFolder(configDir, place?.cwd, id)
+    // Stopped meanwhile (unwatched, or a newer one came), or nothing to watch.
+    if (this.#watched.get(id) !== entry) return { live }
+    if (!folder) {
+      this.unwatch(id)
+      return { live: false }
+    }
+    const file = `${id}.jsonl`
+    // Watched first, then measured: a change in between is read once the measure is taken.
+    entry.watcher = this.deps.env.watch([folder], (_, name) => {
+      // '': the system lost count, anything may have changed.
+      if (name === file || name === '') void this.#reread(id, entry)
+    })
+    await this.#reread(id, entry)
+    return { live }
   }
 
   unwatch(id: string): void {
     const w = this.#watched.get(id)
     if (!w) return
-    if (w.timer) clearInterval(w.timer)
+    w.watcher?.close()
+    if (w.quiet) clearTimeout(w.quiet)
     this.#watched.delete(id)
   }
 
@@ -829,38 +868,55 @@ export class SessionService {
     return [...this.#watched.keys()]
   }
 
-  // One round: the transcript's size and date first, which are cheap; its lines only when they changed.
+  // The transcript read again, once at a time: a change that comes while it is being read makes one more read.
   async #reread(id: string, entry: Watched): Promise<void> {
-    if (entry.reading) return
+    if (entry.reading) {
+      entry.again = true
+      return
+    }
     entry.reading = true
     try {
-      const cwd = this.#folders.get(id)
-      const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
-      const info = await readHistory(place?.configDir, (h) => h.getSessionInfo(id, place ? { dir: place.cwd } : {})).catch(() => undefined)
-      const mark = info ? `${info.lastModified}:${info.fileSize ?? ''}` : null
-      if (!mark || mark === entry.mark) {
-        // Quiet since the round before: it is not being written to any more.
-        if (entry.live) {
-          entry.live = false
-          this.#publish(id, { type: 'status', status: 'saved' })
-        }
-        return
-      }
-      const past = await this.#saved(id, cwd)
-      const events = (past?.events ?? []).map((e, i) => numbered(e, i + 1))
-      // The first round only takes the measure: the interface has just read the same lines itself.
-      if (entry.mark !== null) {
-        if (!entry.live) {
-          entry.live = true
-          this.#publish(id, { type: 'status', status: 'running' })
-        }
-        for (const event of events.filter((e) => e.seq > entry.sent)) this.#publish(id, { type: 'event', event })
-      }
-      entry.mark = mark
-      entry.sent = events.length
+      do {
+        entry.again = false
+        await this.#readOnce(id, entry)
+      } while (entry.again && this.#watched.get(id) === entry)
     } finally {
       entry.reading = false
     }
+  }
+
+  // The transcript's size and date first, which are cheap; its lines only when they changed.
+  async #readOnce(id: string, entry: Watched): Promise<void> {
+    const cwd = this.#folders.get(id)
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
+    const info = await readHistory(place?.configDir, (h) => h.getSessionInfo(id, place ? { dir: place.cwd } : {})).catch(() => undefined)
+    const mark = info ? `${info.lastModified}:${info.fileSize ?? ''}` : null
+    if (!mark || mark === entry.mark) return
+    const past = await this.#saved(id, cwd)
+    const events = (past?.events ?? []).map((e, i) => numbered(e, i + 1))
+    // The first read only takes the measure: the interface has just read the same lines itself.
+    if (entry.mark !== null && this.#watched.get(id) === entry) {
+      if (!entry.live) {
+        entry.live = true
+        this.#publish(id, { type: 'status', status: 'running' })
+      }
+      for (const event of events.filter((e) => e.seq > entry.sent)) this.#publish(id, { type: 'event', event })
+      this.#quietLater(id, entry)
+    }
+    entry.mark = mark
+    entry.sent = events.length
+  }
+
+  // No change for QUIET_MS: the transcript is no longer being written to.
+  #quietLater(id: string, entry: Watched) {
+    if (entry.quiet) clearTimeout(entry.quiet)
+    entry.quiet = setTimeout(() => {
+      entry.quiet = null
+      if (!entry.live || this.#watched.get(id) !== entry) return
+      entry.live = false
+      this.#publish(id, { type: 'status', status: 'saved' })
+    }, QUIET_MS)
+    entry.quiet.unref()
   }
 
   send(id: string, text: string, attached: Attachments = {}): boolean {
@@ -980,7 +1036,7 @@ export class SessionService {
 
   async #probeModels(repos: string[]): Promise<SessionModel[]> {
     const root = await this.#root(repos).catch(() => null)
-    const place = root ? await placeOf(root, this.deps.env).catch(() => null) : null
+    const place = root ? await this.#place(root).catch(() => null) : null
     if (!place) return []
     let wake = () => {}
     const quiet = new Promise<void>((resolve) => (wake = resolve))
@@ -992,9 +1048,7 @@ export class SessionService {
       })(),
       options: {
         cwd: place.cwd,
-        env: sessionEnv(),
-        ...place.options,
-        ...(this.deps.executable ? { pathToClaudeCodeExecutable: this.deps.executable } : {}),
+        ...(await this.#claudeOptions(place)),
         settingSources: [],
       },
     })

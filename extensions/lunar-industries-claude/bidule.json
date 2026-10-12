@@ -3,6 +3,9 @@
   "version": "0.5.0",
   "title": "Lunar Industries - Claude",
   "engine": "^0.2.1",
+  "dependencies": {
+    "lunar-industries-common": "^0.1.0"
+  },
   "activation": [
     "onEvent:objects.merged"
   ],
@@ -89,6 +92,12 @@
           "default": false
         },
         {
+          "key": "lunar-industries-claude.apiKey",
+          "type": "secret",
+          "title": "Clé d’API Anthropic",
+          "help": "Facultative. Remplie, les sessions l’utilisent à la place du compte Claude connecté dans Claude Code : leur usage est alors facturé sur cette clé (console.anthropic.com). Rangée dans le trousseau du système."
+        },
+        {
           "key": "lunar-industries-claude.root",
           "type": "text",
           "title": "Racine de l’espace de travail",
@@ -156,40 +165,6 @@
           "hidden": true
         },
         {
-          "key": "lunar-industries-claude.reviewTarget",
-          "type": "text",
-          "title": "Branche cible des MR",
-          "help": "Celle des dépôts qui n’en ont pas une à eux ; les nouvelles branches en partent.",
-          "default": ""
-        },
-        {
-          "key": "lunar-industries-claude.branchNaming",
-          "type": "choice",
-          "title": "Nommage des branches",
-          "options": [
-            {
-              "value": "issue",
-              "label": "{issue}-{slug} : une issue d’abord"
-            },
-            {
-              "value": "ref",
-              "label": "{ref}-{slug} : la référence de la tâche"
-            },
-            {
-              "value": "template",
-              "label": "Le modèle ci-dessous"
-            }
-          ],
-          "default": "issue"
-        },
-        {
-          "key": "lunar-industries-claude.branchTemplate",
-          "type": "text",
-          "title": "Modèle de nom de branche",
-          "help": "{issue}, {ref} et {slug}.",
-          "default": "{ref}-{slug}"
-        },
-        {
           "key": "lunar-industries-claude.createIssue",
           "type": "toggle",
           "title": "Toujours créer une issue",
@@ -197,24 +172,18 @@
           "default": false
         },
         {
-          "key": "lunar-industries-claude.integrationBranches",
-          "type": "text",
-          "title": "Branches d’intégration",
-          "default": "main, master, develop"
-        },
-        {
           "key": "lunar-industries-claude.stagingBranch",
           "type": "text",
           "title": "Branche de staging",
           "default": "",
-          "placeholder": "factory"
+          "placeholder": "staging"
         },
         {
           "key": "lunar-industries-claude.productionBranch",
           "type": "text",
           "title": "Branche de production",
           "default": "",
-          "placeholder": "orbit"
+          "placeholder": "production"
         },
         {
           "key": "lunar-industries-claude.stagingJob",

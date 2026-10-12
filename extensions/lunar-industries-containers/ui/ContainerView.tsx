@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BannerTools, ToolSearch, useHint, useOn } from '@bidule/sdk'
-import type { ContainerDetail, ContainerFile } from '../contract.ts'
+import type { ContainerDetail, ContainerFile, LogsEvent } from '../contract.ts'
 import { act, ContainerMenu, copyId, openTerminal } from './actions.tsx'
 import { api, message } from './api.ts'
 import { fmtBytes, fmtPercent, fold, followLogs, isUp, NO_LOGS, parseLine, portLabel, portUrl, relTime, statusOf, usageRowOf, type LogCursor, type LogLine } from './format.ts'
@@ -13,8 +13,8 @@ type Tab = 'logs' | 'stats' | 'files'
 const KEPT_LINES = 2000
 // The measures drawn on the statistics: one every few seconds, since the view was opened.
 const KEPT_SAMPLES = 60
-// How often the logs are asked for what was written since, while their tab shows.
-const LOGS_EVERY_MS = 2000
+// The messages of the logs kept until the API says which follow is the view's.
+const EARLY_KEPT = 50
 
 const STATE_TEXT: Record<string, string> = {
   running: 'En marche',
@@ -35,8 +35,9 @@ function chart(samples: number[], max?: number): { line: string; area: string; t
 
 /**
  * Taken from quack-board (Simon's container page), as in Docker Desktop: what one container is and what can be done
- * with it, its logs (the last ones, then each new line), what it uses over the time the view has been open, and the
- * files inside it. The engines are asked for its numbers and its logs only while the view shows them.
+ * with it, its logs (the last ones, then each new line, followed by the engine and pushed by the API), what it uses
+ * over the time the view has been open, and the files inside it. The engines are asked for its numbers and follow its
+ * logs only while the view shows them.
  */
 export function ContainerView({ target, back }: { target: { engine: string; id: string }; back: () => void }) {
   const { engine, id } = target
@@ -62,42 +63,57 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
   useOn('lunar-industries-containers.changed', () => void reload())
   useHint(c ? `${c.name} : ${isUp(c) ? 'il tourne' : 'il dort'}. Coin.` : null)
 
-  // ---- logs: the last lines, then those written since the last one, while their tab shows
+  // ---- logs: the last lines, then each new one, followed by the engine while their tab shows
   const [lines, setLines] = useState<LogLine[]>([])
   const [query, setQuery] = useState('')
   const [follow, setFollow] = useState(true)
   const last = useRef<LogCursor>(NO_LOGS)
   const box = useRef<HTMLDivElement>(null)
+  // The follow this view asked for (another view's lines are not its own), and what came before the API said which
+  // one it is: the first lines may come before its answer.
+  const following = useRef<string | null>(null)
+  const early = useRef<LogsEvent[]>([])
+  // Only what is new is kept: a line already shown (another view's follow, joined, read them too) comes once.
+  const add = (raw: string[]) => {
+    const next = followLogs(raw.map(parseLine), last.current)
+    last.current = next.cursor
+    if (next.fresh.length) setLines((now) => [...now, ...next.fresh].slice(-KEPT_LINES))
+  }
+  useOn('lunar-industries-containers.logs', (event) => {
+    if (event.follow === following.current) add(event.lines)
+    else if (!following.current) early.current = [...early.current, event].slice(-EARLY_KEPT)
+  })
   useEffect(() => {
     last.current = NO_LOGS
     setLines([])
   }, [engine, id])
+  // Followed again when the container starts, stops or restarts (a new start time): an engine's follow ends with the
+  // container.
+  const running = c ? c.state === 'running' : null
+  const startedAt = c?.startedAt ?? null
   useEffect(() => {
-    if (tab !== 'logs') return
+    if (tab !== 'logs' || running === null) return
     let live = true
-    let asking = false
-    const ask = async () => {
-      if (asking) return
-      asking = true
-      try {
-        const { lines: raw } = await api.logs({ params: { engine, id }, query: last.current.stamp ? { since: last.current.stamp } : {} })
-        // The line at the very time of the last one already shown came with the others: only what is new is kept.
-        const next = followLogs(raw.map(parseLine), last.current)
-        last.current = next.cursor
-        if (live && next.fresh.length) setLines((now) => [...now, ...next.fresh].slice(-KEPT_LINES))
-      } catch {
-        // A stopped engine or a removed container: the view's own reading says so.
-      } finally {
-        asking = false
-      }
-    }
-    void ask()
-    const timer = setInterval(() => void ask(), LOGS_EVERY_MS)
+    let mine: string | null = null
+    early.current = []
+    api.logs.follow({ params: { engine, id } }).then(
+      ({ follow: given, lines: read }) => {
+        if (!live) return void api.unfollow({ params: { follow: given } }).catch(() => undefined)
+        mine = given
+        following.current = given
+        add(read)
+        for (const e of early.current) if (e.follow === given) add(e.lines)
+        early.current = []
+      },
+      // A stopped engine or a removed container: the view's own reading says so.
+      () => undefined
+    )
     return () => {
       live = false
-      clearInterval(timer)
+      following.current = null
+      if (mine) void api.unfollow({ params: { follow: mine } }).catch(() => undefined)
     }
-  }, [tab, engine, id])
+  }, [tab, engine, id, running, startedAt])
   const q = fold(query.trim())
   const shownLines = q ? lines.filter((l) => fold(l.text).includes(q)) : lines
   // The end of the logs stays in view while « Suivre la fin » is ticked.

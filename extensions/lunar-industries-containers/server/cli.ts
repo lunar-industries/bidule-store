@@ -1,7 +1,7 @@
 // Taken from quack-board (apps/api/app/connectors/containers/container_cli.ts, Simon's latest), on the base of
 // Bidule's official containers extension (its Flatpak handling).
 import type { Environment } from '@bidule/api/extensions'
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import type {
   Container,
   ContainerAction,
@@ -22,28 +22,55 @@ class CommandError extends Error {
   }
 }
 
-// What a command prints on stdout, and on stderr too (a container's logs come out of both). The engines run where
-// the outside tools run (ctx.env): inside WSL on Windows, in the toolbox or on the Flatpak's host, or here; from the
-// home folder there. The environment builds the command, so that it never runs somewhere else.
-function run(
-  env: Environment,
-  cli: string,
-  args: string[],
-  timeout = 15_000
-): Promise<{ stdout: string; stderr: string }> {
-  const { file, args: argv, cwd } = env.command({ argv: [cli, ...args] })
-  return new Promise((resolve, reject) => {
-    execFile(
-      file,
-      argv,
-      { timeout, maxBuffer: 64 * 1024 * 1024, cwd, windowsHide: true },
-      (err, stdout, stderr) =>
-        err ? reject(new CommandError(stderr.trim() || err.message, stdout)) : resolve({ stdout, stderr })
-    )
-  })
+// The engines run where the outside tools run (ctx.env): inside WSL on Windows, in the toolbox or on the Flatpak's
+// host, or here; from the home folder there. The environment builds or runs each command, so that it never runs
+// somewhere else.
+
+// What a failed command of the environment printed on one of its outputs (ctx.env.run gives them with the error).
+const printed = (err: unknown, output: 'stdout' | 'stderr'): string => {
+  const text = typeof err === 'object' && err !== null ? Reflect.get(err, output) : undefined
+  return typeof text === 'string' ? text : ''
 }
-const exec = async (env: Environment, cli: string, args: string[], timeout?: number) =>
-  (await run(env, cli, args, timeout)).stdout
+
+// What a command prints on stdout, run by the environment (ctx.env.run).
+async function exec(env: Environment, cli: string, args: string[], timeout = 15_000): Promise<string> {
+  try {
+    return await env.run({ argv: [cli, ...args], timeout })
+  } catch (err) {
+    const message = printed(err, 'stderr').trim() || (err instanceof Error ? err.message : String(err))
+    throw new CommandError(message, printed(err, 'stdout'))
+  }
+}
+
+// `events` is listened to again after it ends: 10 s later the first time, then twice as long each time it ends again,
+// up to 10 min; back to 10 s after a run that lasted more than a minute (the engine was there, then restarted).
+const EVENTS_RETRY_MS = 10_000
+const EVENTS_RETRY_MAX_MS = 10 * 60_000
+const EVENTS_STEADY_MS = 60_000
+
+export const nextRetry = (previous: number | null, lasted: number) =>
+  previous === null || lasted > EVENTS_STEADY_MS ? EVENTS_RETRY_MS : Math.min(previous * 2, EVENTS_RETRY_MAX_MS)
+
+// The lines of a followed container's logs are sent together when they come close: one message per line would be
+// too many (a single wait after the first one, not a loop).
+const LOG_BATCH_MS = 100
+
+// What a long command of the engine says (it writes both outputs), and its end.
+type Streamed = { data(text: string, from: 'stdout' | 'stderr'): void; end(): void }
+
+// A long command of the engine (logs --follow, stats), started on what the environment builds: its outputs as they
+// come, read whole (an output left unread would block it), and its end, which also comes when it cannot start.
+function stream(env: Environment, start: typeof spawn, argv: string[], on: Streamed): () => void {
+  const { file, args, cwd } = env.command({ argv })
+  const child = start(file, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+  child.stdout?.setEncoding('utf8')
+  child.stderr?.setEncoding('utf8')
+  child.stdout?.on('data', (text: string) => on.data(text, 'stdout'))
+  child.stderr?.on('data', (text: string) => on.data(text, 'stderr'))
+  child.on('error', () => {})
+  child.on('close', () => on.end())
+  return () => void child.kill()
+}
 
 // What `docker inspect` and `podman inspect` both give (Podman follows Docker's format), as far as the page needs.
 type Bindings = Record<string, { HostIp?: string; HostPort?: string }[] | null> | null
@@ -157,7 +184,7 @@ function bytes(text: string): number {
   return found?.[1] && unit ? Math.round(Number(found[1]) * unit) : 0
 }
 
-// What `stats --no-stream --format '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'` prints, a line a running container:
+// What one measure of `stats --format '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'` prints, a line a running container:
 // `3f2a9c1b7d4e|0.50%|21.5MiB / 7.6GiB`. The ids are the short ones, the engine's `ps` gives the long ones.
 export function parseStats(text: string): Omit<UsageRow, 'engine'>[] {
   const out: Omit<UsageRow, 'engine'>[] = []
@@ -168,6 +195,27 @@ export function parseStats(text: string): Omit<UsageRow, 'engine'>[] {
     out.push({ id, cpu: Number.parseFloat(cpu) || 0, memory: bytes(memory), limit: bytes(limit) })
   }
   return out
+}
+
+const ESC = String.fromCharCode(27)
+// The sequences that start or end one measure of the streamed `stats`: cursor home (ESC[H, ESC[1;1H), clear the
+// screen (ESC[2J) or what follows the cursor (ESC[J).
+const FRAME_EDGE = new RegExp(`${ESC}\\[(?:\\d*J|\\d*(?:;\\d*)?H)`)
+const SEQUENCE = new RegExp(`${ESC}\\[[\\d;]*[A-Za-z]`, 'g')
+
+/**
+ * The measures of a streamed `stats` (without --no-stream): the engine draws each one over the last one with terminal
+ * sequences. Docker starts it with « cursor home » and ends it with « clear what follows »; Podman clears the screen and
+ * goes home before each one. Given what came, the text of each measure that is complete (the next one started, or the
+ * screen was cleared after it), without its sequences; the rest waits for what follows.
+ */
+export function statsFrames(): (chunk: string) => string[] {
+  let rest = ''
+  return (chunk) => {
+    const parts = (rest + chunk).split(FRAME_EDGE)
+    rest = parts.pop() ?? ''
+    return parts.map((part) => part.replace(SEQUENCE, '')).filter((part) => part.trim())
+  }
 }
 
 // What `ls -1Ap` prints: a name a line, a `/` after a folder's. Folders come first, each group by name.
@@ -213,7 +261,9 @@ export class ContainerCli {
   constructor(
     readonly cli: 'docker' | 'podman',
     readonly name: string,
-    protected env: Environment
+    protected env: Environment,
+    // Starts a long command the environment built (events, and what the page follows); another one in the tests.
+    protected start: typeof spawn = spawn
   ) {}
 
   get id(): string {
@@ -270,12 +320,19 @@ export class ContainerCli {
     return this.#host
   }
 
-  async usage(): Promise<{ cpus: number; memory: number; containers: Omit<UsageRow, 'engine'>[] }> {
-    const [host, out] = await Promise.all([
-      this.host(),
-      exec(this.env, this.cli, ['stats', '--no-stream', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'], 30_000),
-    ])
-    return { ...host, containers: parseStats(out) }
+  /**
+   * What the running containers use, followed by the engine (`stats` streamed: the engine measures again by itself, the
+   * module asks nothing more): each measure as it comes; `end` when the command ends (the engine gone, or stopped
+   * here). Gives how to stop it.
+   */
+  followUsage(on: { rows(rows: Omit<UsageRow, 'engine'>[]): void; end(): void }): () => void {
+    const frames = statsFrames()
+    return stream(this.env, this.start, [this.cli, 'stats', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'], {
+      data: (text, from) => {
+        if (from === 'stdout') for (const frame of frames(text)) on.rows(parseStats(frame))
+      },
+      end: () => on.end(),
+    })
   }
 
   async files(id: string, path: string): Promise<ContainerFile[]> {
@@ -283,11 +340,37 @@ export class ContainerCli {
     return parseListing(await exec(this.env, this.cli, ['exec', id, 'ls', '-1Ap', '--', path]))
   }
 
-  // The last `tail` lines, or those written after `since` (a line's own time: the page follows the logs so).
-  async logs(id: string, options: { tail: number; since?: string }): Promise<string[]> {
-    const from = options.since ? ['--since', options.since] : ['--tail', String(options.tail)]
-    const { stdout, stderr } = await run(this.env, this.cli, ['logs', '--timestamps', ...from, id])
-    return mergeLogs(stdout, stderr)
+  /**
+   * A container's logs followed by the engine (`logs --follow`): its last `tail` lines, then each new one, given in
+   * batches (each in the order of its lines' times, as both outputs came); `end` when the command ends (the container
+   * stopped or removed, the engine gone, or stopped here). Gives how to stop it.
+   */
+  followLogs(id: string, tail: number, on: { lines(lines: string[]): void; end(): void }): () => void {
+    const rest = { stdout: '', stderr: '' }
+    let pending: { stdout: string[]; stderr: string[] } = { stdout: [], stderr: [] }
+    let batch: NodeJS.Timeout | undefined
+    const flush = () => {
+      batch = undefined
+      const lines = mergeLogs(pending.stdout.join('\n'), pending.stderr.join('\n'))
+      pending = { stdout: [], stderr: [] }
+      if (lines.length) on.lines(lines)
+    }
+    const stop = stream(this.env, this.start, [this.cli, 'logs', '--follow', '--timestamps', '--tail', String(tail), id], {
+      data: (text, from) => {
+        const parts = (rest[from] + text).split('\n')
+        rest[from] = parts.pop() ?? ''
+        pending[from].push(...parts.filter(Boolean))
+        batch ??= setTimeout(flush, LOG_BATCH_MS)
+      },
+      end: () => {
+        clearTimeout(batch)
+        pending.stdout.push(rest.stdout)
+        pending.stderr.push(rest.stderr)
+        flush()
+        on.end()
+      },
+    })
+    return stop
   }
 
   watch(onChange: () => void): () => void {
@@ -295,20 +378,28 @@ export class ContainerCli {
     let stopped = false
     let debounce: NodeJS.Timeout | undefined
     let retry: NodeJS.Timeout | undefined
+    // The last wait before listening again (see nextRetry).
+    let wait: number | null = null
     const start = () => {
+      const startedAt = Date.now()
       const { file, args, cwd } = this.env.command({
         argv: [this.cli, 'events', '--format', '{{json .}}', '--filter', 'type=container'],
       })
-      child = spawn(file, args, { stdio: ['ignore', 'pipe', 'ignore'], cwd, windowsHide: true })
+      child = this.start(file, args, { stdio: ['ignore', 'pipe', 'ignore'], cwd, windowsHide: true })
       // One change often comes as several events (create, start, attach…): they count once.
       child.stdout?.on('data', () => {
         clearTimeout(debounce)
         debounce = setTimeout(onChange, 300)
       })
       child.on('error', () => {})
-      // The engine restarted, or the command died: listen again a little later.
-      child.on('exit', () => {
-        if (!stopped) retry = setTimeout(start, 10_000)
+      // The engine restarted, or the command died (or could not start): listen again later, ever later while it keeps
+      // ending at once.
+      child.on('close', () => {
+        if (stopped) return
+        wait = nextRetry(wait, Date.now() - startedAt)
+        // The wait alone does not keep the API running.
+        retry = setTimeout(start, wait)
+        retry.unref()
       })
     }
     start()

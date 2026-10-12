@@ -6,10 +6,15 @@ import { BranchesService } from './service.ts'
 export let service: BranchesService
 
 export async function activate(ctx: ServerContext) {
+  // The branches, their task and the settings the modules share are lunar-industries-common's (a dependency).
+  const { commands } = ctx
   service = new BranchesService({
     objects: ctx.objects,
-    setting: (key) => ctx.settings.get(key),
-    save: (key, value) => ctx.settings.set(key, value),
-    changed: () => void ctx.events.emit('lunar-industries-branches.changed', {}),
+    shared: {
+      branches: (filter) => commands.execute('lunar-industries-common.branches', filter),
+      link: (args) => commands.execute('lunar-industries-common.link', args),
+      settings: () => commands.execute('lunar-industries-common.settings', undefined),
+      setTarget: (args) => commands.execute('lunar-industries-common.setTarget', args),
+    },
   })
 }

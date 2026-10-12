@@ -48,7 +48,8 @@ export function BranchesPage() {
   useOn('objects.changed', ({ type }) => {
     if (type === 'review' || type === 'pipeline' || type === 'task') reload()
   })
-  useOn('lunar-industries-branches.changed', reload)
+  // A repo's review target changed, here or in Claude's settings.
+  useOn('lunar-industries-common.changed', reload)
 
   const tasks = board?.tasks ?? []
   const done = useMemo(() => new Set((board?.columns ?? []).filter((c) => c.group === 'done').map((c) => c.name)), [board])

@@ -102,14 +102,15 @@ export class MemoryStore implements TempsStore {
   }
 }
 
-// The user's repos: branches (with their task and whether they are the default), events, links.
+// The user's repos: branches (with their task, whether they are the default, whether the user unlinked them by hand),
+// events, links.
 export class FakeGit {
   branchRows: WorkBranch[] = []
   eventRows: GitEvent[] = []
   links: [string, string, string | null][] = []
 
-  branch(repo: string, name: string, o: { taskId?: string | null; isDefault?: boolean } = {}) {
-    this.branchRows.push({ repo, name, taskId: o.taskId ?? null, isDefault: o.isDefault ?? false })
+  branch(repo: string, name: string, o: { taskId?: string | null; isDefault?: boolean; noTask?: boolean } = {}) {
+    this.branchRows.push({ repo, name, taskId: o.taskId ?? null, isDefault: o.isDefault ?? false, noTask: o.noTask ?? false })
   }
   event(at: string, kind: GitEvent['kind'], repo: string, branch: string, detail = '') {
     const taskId = this.branchRows.find((b) => b.repo === repo && b.name === branch)?.taskId ?? null
@@ -220,6 +221,12 @@ export class ReadingTimeLog {
   }
 }
 
+// The settings of the tests: the module's defaults, and integration branches as one team names them.
+export const SETTINGS: TempsSettings = {
+  ...DEFAULT_SETTINGS,
+  integrationBranches: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
+}
+
 export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: DayLog | null }) {
   const store = new MemoryStore()
   const git = new FakeGit()
@@ -228,7 +235,7 @@ export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: D
   let changes = 0
   const days = new Days({
     store,
-    settings: async () => ({ ...DEFAULT_SETTINGS, ...o.settings }),
+    settings: async () => ({ ...SETTINGS, ...o.settings }),
     work: fakeWork(git, tasks),
     timeLog: async () => log,
     changed: () => (changes += 1),

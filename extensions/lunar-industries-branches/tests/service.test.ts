@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { BranchesError } from '../server/errors.ts'
-import { branch, branchId, fakeForge, fakeWorld, service, task } from './fakes.ts'
+import { branch, fakeForge, fakeWorld, service, task } from './fakes.ts'
 
 const app = '/r/app'
 const all = () => [
@@ -13,7 +13,7 @@ const all = () => [
 describe('the listing', () => {
   test('without the default and integration branches, which are the repo’s targets; issues read from the names', async () => {
     const { world } = fakeWorld(all(), fakeForge().client)
-    const { s } = service(world, { settings: { 'lunar-industries-branches.hidden': 'main, develop', 'lunar-industries-branches.reviewTarget': 'develop' } })
+    const { s } = service(world, { settings: { integrationBranches: ['main', 'Develop'], reviewTarget: 'develop' } })
     const l = await s.list()
     expect(l.branches.map((b) => b.name)).toEqual(['42-ecran-de-connexion', 'tsk-7-paiement'])
     expect(l.branches[0]).toMatchObject({ forge: 'gitlab', issueNumber: 42 })
@@ -28,12 +28,12 @@ describe('the listing', () => {
     expect(l.branches.every((b) => b.forge === null)).toBe(true)
   })
 
-  test('each branch with its task, its review and its CI, as the core has them; newest first', async () => {
+  test('each branch with its task, its review and its CI, as lunar-industries-common gives them; newest first', async () => {
     const old = new Date(Date.now() - 864e5).toISOString()
     const { world } = fakeWorld(
       [
         branch({ name: 'a', lastCommitAt: old, taskId: 't1', reviewNumber: 3, reviewState: 'open', ci: 'fail' }),
-        branch({ name: 'b', reviewNumber: 4, reviewState: 'merged' }),
+        branch({ name: 'b', reviewNumber: 4, reviewState: 'merged', ci: 'merged' }),
         branch({ name: 'c', lastCommitAt: null }),
       ],
       null
@@ -78,7 +78,7 @@ describe('on the forge', () => {
   test('the issue in a name is found whatever its case', async () => {
     const forge = fakeForge()
     const { world } = fakeWorld([branch({ name: '42-Ecran' })], forge.client)
-    await service(world, { settings: { 'lunar-industries-branches.template': '{issue}-{slug}' } }).s.review(app, '42-Ecran', 'main')
+    await service(world, { settings: { template: '{issue}-{slug}' } }).s.review(app, '42-Ecran', 'main')
     expect(forge.reviews[0]?.description).toBe('Closes #42')
   })
 
@@ -130,41 +130,30 @@ describe('on the forge', () => {
 })
 
 describe('the task and the target', () => {
-  test('a branch linked by hand in the core: its other tasks and the opposite mark go, the rule on names does not undo it', async () => {
-    const { world, relations } = fakeWorld(all(), null)
-    const { s } = service(world, { tasks: [task('t1', 'Écran de connexion'), task('t7', 'Paiement', { ref: 'TSK-7' })] })
-    const paiement = branchId({ repo: app, name: 'tsk-7-paiement' })
-    const linksOf = () =>
-      relations
-        .filter((l) => l.to.id === paiement || l.from.id === paiement)
-        .map((l) => [l.kind, l.from.id, l.origin])
-    // Put by git, the branch was linked by the core's rule to the task its name refers to.
-    relations.push({ from: { type: 'task', id: 't7' }, kind: 'branch', to: { type: 'branch', id: paiement }, origin: 'ref' })
-    // Another branch linked by hand leaves this one as it is.
-    await s.link(app, '42-ecran-de-connexion', 't1')
-    expect(linksOf()).toEqual([['branch', 't7', 'ref']])
-    // To another task by hand: the task its name refers to does not come back.
+  test('a branch linked by hand, or unlinked, through lunar-industries-common; an unknown branch or task said', async () => {
+    const { world } = fakeWorld(all(), null)
+    const { s, links } = service(world, { tasks: [task('t1', 'Écran de connexion')] })
     await s.link(app, 'tsk-7-paiement', 't1')
-    expect(linksOf()).toEqual([['branch', 't1', 'manual']])
-    // Unlinked by hand: marked so, and still not linked by its name.
+    expect((await s.list()).branches.find((b) => b.name === 'tsk-7-paiement')?.taskId).toBe('t1')
     await s.link(app, 'tsk-7-paiement', null)
-    expect(linksOf()).toEqual([['noTask', paiement, 'manual']])
     expect((await s.list()).branches.find((b) => b.name === 'tsk-7-paiement')?.taskId).toBeNull()
-    // Linked again: the mark goes.
-    await s.link(app, 'tsk-7-paiement', 't7')
-    expect(linksOf()).toEqual([['branch', 't7', 'manual']])
+    expect(links).toEqual(['tsk-7-paiement→t1', 'tsk-7-paiement→null'])
     await expect(s.link(app, 'nope', 't1')).rejects.toMatchObject({ status: 404 })
-    await expect(s.link('/elsewhere', 'tsk-7-paiement', 't1')).rejects.toMatchObject({ status: 404 })
+    await expect(s.link(app, 'tsk-7-paiement', 'gone')).rejects.toMatchObject({ status: 404 })
   })
 
-  test('a target kept per repo and announced', async () => {
-    const { world } = fakeWorld(all(), null)
-    const { s, saved, changed } = service(world)
+  test('a target kept per repo by lunar-industries-common; the review goes there, else to the shared one', async () => {
+    const forge = fakeForge()
+    const { world } = fakeWorld(all(), forge.client)
+    const { s, shared } = service(world, { settings: { reviewTarget: 'develop' } })
     await s.setTarget(app, 'main')
-    expect(JSON.parse(saved['lunar-industries-branches.targets'])).toEqual({ [app]: 'main' })
+    expect(shared.targets).toEqual({ [app]: 'main' })
+    expect((await s.list()).repos[0].reviewTarget).toBe('main')
+    await s.review(app, 'tsk-7-paiement', null)
     await s.setTarget(app, null)
-    expect(JSON.parse(saved['lunar-industries-branches.targets'])).toEqual({})
-    expect(changed()).toBe(2)
+    expect(shared.targets).toEqual({})
+    await s.review(app, 'tsk-7-paiement', null)
+    expect(forge.reviews.map((r) => r.target)).toEqual(['main', 'develop'])
     await expect(s.setTarget('/elsewhere', 'main')).rejects.toMatchObject({ status: 404 })
   })
 })

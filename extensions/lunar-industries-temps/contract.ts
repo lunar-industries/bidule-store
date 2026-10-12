@@ -15,7 +15,10 @@
 //   GET    weeks/:day                { days: DaySummary[] } the week holding the day, Monday first
 //   GET    months/:year/:month       { days: DaySummary[] }
 //   GET    summary                   Summary
+//
+// The integration branches and a branch linked by hand are lunar-industries-common's (its commands).
 
+import type {} from '@bidule/ext-lunar-industries-common/contract'
 import type { LogField, LogValue } from '@bidule/sdk/tasks'
 
 /**
