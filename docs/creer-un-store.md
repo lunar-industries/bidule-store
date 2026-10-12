@@ -62,6 +62,7 @@ Le manifeste, au minimum :
   "title": "Lunar - Notes",
   "engine": "^0.1.2",                       // versions du cœur de Bidule acceptées : *, 1.2.3, >=1.2.3, ^1.2.3
   "dependencies": {},                       // autres extensions, par id et plage de versions
+  "conflicts": [],                          // extensions avec lesquelles celle-ci ne peut pas être active, par id
   "permissions": [],                        // "shell" : lancer des commandes dans un terminal (demandé à l'install)
   "contributes": {
     "pages": [{ "id": "notes", "path": "/lunar/notes", "title": "Notes", "order": 70 }],
@@ -78,7 +79,11 @@ Règles que Bidule vérifie au chargement (une extension qui les enfreint est af
 - l'`id` est le nom du dossier, et `package.json` s'appelle `@bidule/ext-<id>` ;
 - commandes, événements et réglages commencent par `<id>.` (sauf ceux des rôles qu'elle tient) ;
 - un chemin de page commence par `/` et n'est ni `/` ni `/reglages`, ni celui d'une autre extension ;
-- `engine` doit accepter la version du cœur de l'app.
+- `engine` doit accepter la version du cœur de l'app ;
+- `conflicts` (cœur 0.2.1) ne nomme que des ids valides, pas le sien : tant qu'une des extensions nommées est active,
+  une des deux est en erreur (celle qui n'est pas officielle, sinon celle qui déclare le conflit) et le dit. À
+  déclarer quand deux extensions écriraient la même chose, comme un module de temps à côté du Temps officiel ; un cœur
+  plus ancien ignore le champ.
 
 ### Le serveur
 

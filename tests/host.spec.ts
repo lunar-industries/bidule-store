@@ -7,15 +7,23 @@ import { ExtensionHost } from '#extensions/host'
 // Our modules in the core's real host (bidule's `node ace test`), not in their unit tests' fake context: what the core
 // refuses of an extension (a setting its manifest does not declare, a command or role it did not ask for) only shows
 // here. Run it with `scripts/check-host.sh` (it needs the modules linked in bidule/extensions: `npm run store:link`).
+//
+// The script runs it twice. First as the checkout is, with the official Temps on: `lunar-industries-temps` declares
+// that it cannot run beside it, so the core puts it in error and it must say so. Then with Temps left out
+// (LUNAR_WITHOUT_TEMPS=1, a folder of extensions without it): the module starts and does its work.
 const TOKEN = { 'x-bidule-token': 'dev' }
+const WITHOUT_TEMPS = process.env.LUNAR_WITHOUT_TEMPS === '1'
+const TEMPS = 'lunar-industries-temps'
 const MODULES = [
   'lunar-industries-branches',
   'lunar-industries-claude',
   'lunar-industries-common',
   'lunar-industries-containers',
   'lunar-industries-kanban',
-  'lunar-industries-temps',
+  TEMPS,
 ]
+// Those that run in this pass: the one in conflict with the official Temps does not run beside it.
+const RUNNING = MODULES.filter((id) => WITHOUT_TEMPS || id !== TEMPS)
 
 test.group('Lunar Industries modules · in the core’s host', (group) => {
   group.each.setup(() => testUtils.db().withGlobalTransaction())
@@ -24,11 +32,31 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     const res = await client.get('/api/extensions').headers(TOKEN)
     res.assertStatus(200)
     const listed: { id: string; error: string | null }[] = res.body().extensions ?? res.body()
-    for (const id of MODULES) {
+    for (const id of RUNNING) {
       const ext = listed.find((e) => e.id === id)
       assert.exists(ext, `${id} is not listed (npm run store:link)`)
       assert.isNull(ext?.error, `${id}: ${ext?.error}`)
     }
+  })
+
+  test('the module of time is in error beside the official Temps, and runs without it', async ({
+    client,
+    assert,
+  }) => {
+    const res = await client.get('/api/extensions').headers(TOKEN)
+    const listed: { id: string; error: string | null; active: boolean }[] = res.body()
+    const official = listed.find((e) => e.id === 'temps')
+    const ours = listed.find((e) => e.id === TEMPS)
+    assert.exists(ours, `${TEMPS} is not listed (npm run store:link)`)
+    if (WITHOUT_TEMPS) {
+      assert.notExists(official, 'the official Temps should be left out of this pass')
+      assert.isTrue(ours?.active)
+      return
+    }
+    assert.isTrue(official?.active, 'the official Temps should be on in this pass')
+    assert.isNull(official?.error)
+    assert.match(ours?.error ?? '', /ne peut pas tourner avec Temps : désactivez l'une des deux/)
+    assert.isFalse(ours?.active)
   })
 
   test('the Kanban reads the point kanban, and Claude contributes its two card actions to it', async ({
@@ -70,7 +98,7 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
 
   test('each starts, and what it reads of its own settings is allowed by the core', async ({ assert }) => {
     const host = await app.container.make(ExtensionHost)
-    for (const id of MODULES) {
+    for (const id of RUNNING) {
       await host.activate(id)
       assert.isTrue(host.isStarted(id), `${id} did not start`)
     }
@@ -102,6 +130,8 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
   })
 
   test('two objects merged in the core: the ids each one keeps go to the one left', async ({ assert }) => {
+    // Its tables are those of the module of time, which does not run (nor migrate) beside the official Temps.
+    if (!WITHOUT_TEMPS) return
     const host = await app.container.make(ExtensionHost)
     const at = '2026-10-01T08:00:00Z'
     await db.table('lunar_industries_temps_drafts').insert({ day: '2026-10-01', task_id: 'old', label: 'Dév', share: 20 })
@@ -136,14 +166,15 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
 
   // The routes that read the module's settings (the day's, the board's branches, the list…): none may fail, which is
   // what an extension asking for a setting or a command the core refuses does (an error 500, or its message).
-  for (const [id, path] of [
+  const routes = [
     ['lunar-industries-temps', 'days/2026-10-01'],
     ['lunar-industries-temps', 'summary'],
     ['lunar-industries-kanban', 'branches'],
     ['lunar-industries-branches', 'branches'],
     ['lunar-industries-containers', 'containers'],
     ['lunar-industries-claude', 'status'],
-  ] as const) {
+  ] as const
+  for (const [id, path] of routes.filter(([id]) => RUNNING.includes(id))) {
     test(`GET /api/ext/${id}/${path} answers without an error of the core`, async ({ client, assert }) => {
       const res = await client.get(`/api/ext/${id}/${path}`).headers(TOKEN)
       // 403: the experimental Claude sessions are off, by design. 409/502: a role without its provider or a tool
