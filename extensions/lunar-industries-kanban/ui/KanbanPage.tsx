@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   busy,
-  columnColor,
   MascotHead,
   openDialog,
   react,
@@ -10,11 +9,11 @@ import {
   useOn,
   useSettingValues,
   useVoice,
-  type Advice,
-  type KanbanContext,
   type SettingValues,
   type Task,
 } from '@bidule/sdk'
+// The point `kanban`'s contract, the official Kanban's, as types only (no dependency: this board replaces it).
+import type { Advice, KanbanContext } from '@bidule/ext-kanban/contract'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
 import {
   board as readBoard,
@@ -31,6 +30,7 @@ import {
   badgeOf,
   branchKey,
   branchLabel,
+  columnColor,
   dayKey,
   groupsOf,
   marksOf,
