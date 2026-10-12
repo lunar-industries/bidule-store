@@ -1,7 +1,8 @@
 // Lunar Industries - Branches: Simon's Branches page (quack-board), an unofficial module competing with Bidule's own
 // (`branches`). Each branch of the user's repos with the step it is at (task, review, CI, merge) and what to do next;
-// the repos, branches, task links, reviews and pipelines are the core's objects, the forge's client is `review.forge`'s.
-// Types only: the interface reads this file.
+// the repos, branches, task links, reviews and pipelines are the core's objects, read and linked through
+// lunar-industries-common (as its settings: integration branches, review targets, naming), the forge's client is
+// `review.forge`'s. Types only: the interface reads this file.
 //
 // Its routes, under /api/ext/lunar-industries-branches:
 //   GET  branches                      Listing
@@ -14,6 +15,7 @@
 //   POST branches/review               { repo, name, target } → { ok }
 //   PUT  repos/target                  { repo, target | null } → { ok }
 import type {} from '@bidule/ext-git/contract'
+import type {} from '@bidule/ext-lunar-industries-common/contract'
 import type { Ci, ReviewState } from '@bidule/sdk/objects'
 
 // The forge's extension id (github, gitlab), as its client says it.
@@ -51,7 +53,7 @@ export type ListedRepo = {
 export type Listing = {
   branches: ListedBranch[]
   repos: ListedRepo[]
-  // Réglages: where a repo's reviews go when it has not chosen (and has that branch).
+  // Réglages › Lunar Industries - Commun: where a repo's reviews go when it has not chosen (and has that branch).
   defaultTarget: string | null
 }
 
@@ -66,7 +68,7 @@ export type Job = { id: number; name: string; stage: string; status: string; man
 
 declare module '@bidule/sdk/contracts' {
   interface Events {
-    // A repo's review target changed (Réglages or the page).
+    // A repo's review target changed (in the page).
     'lunar-industries-branches.changed': Record<string, never>
   }
 }

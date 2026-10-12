@@ -1,25 +1,28 @@
 import type { ObjectsContext } from '@bidule/api/extensions'
+import type { BranchFilter, SharedBranch, SharedSettings } from '@bidule/ext-lunar-industries-common/contract'
 import type { ForgeClient } from '@bidule/sdk/forges'
 import type { StoredObject } from '@bidule/sdk/objects'
 import type { Job, ListedBranch, Links, ListedRepo, Listing } from '../contract.ts'
 import { BranchesError } from './errors.ts'
-import { issueOf, list, reviewDescription, templateOf } from './names.ts'
+import { issueOf, reviewDescription } from './names.ts'
 
-const K = 'lunar-industries-branches'
+// lunar-industries-common's commands: the branches as the core has them, a link by hand, the shared settings (the
+// integration branches, the review targets, the naming of the branches) and a repo's own target.
+export interface Shared {
+  branches(filter: BranchFilter): Promise<{ available: boolean; branches: SharedBranch[] }>
+  link(args: { repo: string; name: string; taskId: string | null }): Promise<{ linked: boolean }>
+  settings(): Promise<SharedSettings>
+  setTarget(args: { repo: string; target: string | null }): Promise<void>
+}
 
 export interface BranchesDeps {
-  // The core's objects the page reads: the repos and branches (git's), their tasks (links of the core, which it sets by
-  // hand), their reviews and pipelines (the forges'), the client on a repo's forge (`review.forge`), and that forge
-  // reading a branch again after a write there (`review.refresh`).
-  objects: Pick<ObjectsContext, 'list' | 'get' | 'related' | 'relations' | 'link' | 'unlink' | 'first'>
-  setting: (key: string) => Promise<unknown>
-  save: (key: string, value: string) => Promise<void>
+  // The core's objects the page reads itself: the repos (git's), a branch's task, the client on a repo's forge
+  // (`review.forge`), and that forge reading a branch again after a write there (`review.refresh`).
+  objects: Pick<ObjectsContext, 'list' | 'get' | 'first'>
+  shared: Shared
   // A repo's review target changed.
   changed: () => void
 }
-
-// A branch as the core has it, with what the listing adds left out.
-type Branch = Omit<ListedBranch, 'forge' | 'issueNumber'> & { id: string; repositoryId: string }
 
 // A forge's refusal (ForgeFailure: an Error with the HTTP status), as the page shows it.
 function refused(err: unknown): BranchesError {
@@ -29,73 +32,16 @@ function refused(err: unknown): BranchesError {
   return new BranchesError(message, typeof status === 'number' && status >= 500 ? 502 : 422)
 }
 
-function targetsOf(text: unknown): Record<string, string> {
-  try {
-    const parsed: unknown = JSON.parse(String(text || '{}'))
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    return Object.fromEntries(Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string' && Boolean(e[1])))
-  } catch {
-    return {}
-  }
-}
+// Neither a repo's default branch nor an integration one: a branch that belongs to a task.
+const ofTask = (b: SharedBranch) => !b.isDefault && !b.integration
 
 /**
  * Taken from quack-board (Simon's Branches page: board_controller, forge_controller, views.reviewTargets): the user's
  * branches with their repo's forge, and what can be done on the forge for one (review, pipeline, jobs), through the
- * client `review.forge` gives.
+ * client `review.forge` gives. The branches, their task and the settings are lunar-industries-common's.
  */
 export class BranchesService {
   constructor(protected deps: BranchesDeps) {}
-
-  async #text(key: string) {
-    return String((await this.deps.setting(`${K}.${key}`)) ?? '').trim()
-  }
-
-  async #template() {
-    return templateOf((await this.#text('naming')) || 'issue', (await this.#text('template')) || '{ref}-{slug}')
-  }
-
-  async #targets() {
-    return targetsOf(await this.deps.setting(`${K}.targets`))
-  }
-
-  // The branches of these repos, newest first: their task (the core's link), their latest review and their CI (the
-  // forges' objects), as git put them together before.
-  async #branches(repos: StoredObject<'repository'>[]): Promise<Branch[]> {
-    const { objects } = this.deps
-    const [branches, links, reviews, pipelines] = await Promise.all([
-      objects.list('branch'),
-      objects.relations({ kind: 'branch', fromType: 'task', toType: 'branch' }),
-      objects.list('review'),
-      objects.list('pipeline'),
-    ])
-    const byId = new Map(repos.map((r) => [r.id, r]))
-    const tasks = new Map(links.map((l) => [l.to.id, l.from.id]))
-    return branches
-      .flatMap((b): Branch[] => {
-        const repo = byId.get(b.repositoryId)
-        if (!repo) return []
-        const review = reviews.filter((r) => r.branchId === b.id).sort((x, y) => y.number - x.number)[0]
-        const pipeline = pipelines.find((p) => p.branchId === b.id)
-        return [
-          {
-            id: b.id,
-            repositoryId: repo.id,
-            repo: repo.path,
-            repoLabel: repo.label,
-            name: b.name,
-            isDefault: b.isDefault,
-            taskId: tasks.get(b.id) ?? null,
-            lastCommitAt: b.lastCommitAt,
-            headSha: b.headSha,
-            reviewNumber: review?.number ?? null,
-            reviewState: review?.state ?? null,
-            ci: review?.state === 'merged' ? 'merged' : review || pipeline ? (pipeline?.status ?? 'none') : null,
-          },
-        ]
-      })
-      .sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? ''))
-  }
 
   async #repo(path: string): Promise<StoredObject<'repository'>> {
     const [repo] = await this.deps.objects.list('repository', { where: { path } })
@@ -109,19 +55,15 @@ export class BranchesService {
   }
 
   // The branches of the user's repos (newest first), without the default and integration ones, and the repos with
-  // where their reviews can go.
+  // where their reviews can go (their default branch, then their integration ones).
   async list(): Promise<Listing> {
-    const repos = await this.deps.objects.list('repository')
-    const all = await this.#branches(repos)
-    const hidden = new Set(list(await this.#text('hidden')).map((n) => n.toLowerCase()))
-    const template = await this.#template()
-    const own = await this.#targets()
+    const { objects, shared } = this.deps
+    const [repos, { branches: all }, s] = await Promise.all([objects.list('repository'), shared.branches({}), shared.settings()])
     const forges = new Map(
       await Promise.all(repos.map(async (r) => [r.id, (await this.#forgeOf(r.id).catch(() => null))?.kind ?? null] as const))
     )
     const targets = new Map<string, string[]>()
-    for (const b of all) {
-      if (!b.isDefault && !hidden.has(b.name.toLowerCase())) continue
+    for (const b of all.filter((b) => !ofTask(b))) {
       const names = targets.get(b.repo) ?? []
       targets.set(b.repo, b.isDefault ? [b.name, ...names.filter((n) => n !== b.name)] : names.includes(b.name) ? names : [...names, b.name])
     }
@@ -131,24 +73,33 @@ export class BranchesService {
         label: r.label,
         forge: forges.get(r.id) ?? null,
         targets: targets.get(r.path) ?? [],
-        reviewTarget: own[r.path] ?? null,
+        reviewTarget: s.targets[r.path] ?? null,
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'fr'))
     return {
-      branches: all
-        .filter((b) => !b.isDefault && !hidden.has(b.name.toLowerCase()))
-        .map((b) => {
-          const { id: _id, repositoryId, ...shown } = b
-          return { ...shown, forge: forges.get(repositoryId) ?? null, issueNumber: issueOf(template, b.name) }
-        }),
+      branches: all.filter(ofTask).map(
+        (b): ListedBranch => ({
+          repo: b.repo,
+          repoLabel: b.repoLabel,
+          name: b.name,
+          isDefault: b.isDefault,
+          taskId: b.taskId,
+          lastCommitAt: b.lastCommitAt,
+          headSha: b.headSha,
+          reviewNumber: b.reviewNumber,
+          reviewState: b.reviewState,
+          ci: b.ci,
+          forge: forges.get(b.repositoryId) ?? null,
+          issueNumber: issueOf(s.template, b.name),
+        })
+      ),
       repos: listed,
-      defaultTarget: (await this.#text('reviewTarget')) || null,
+      defaultTarget: s.reviewTarget,
     }
   }
 
-  async #branch(repo: string, name: string): Promise<{ b: Branch; client: ForgeClient }> {
-    const r = await this.#repo(repo).catch(() => null)
-    const b = r ? (await this.#branches([r])).find((x) => x.name === name) : undefined
+  async #branch(repo: string, name: string): Promise<{ b: SharedBranch; client: ForgeClient }> {
+    const [b] = (await this.deps.shared.branches({ repo, name })).branches
     if (!b) throw new BranchesError('Branche inconnue', 404)
     const client = await this.#forgeOf(b.repositoryId)
     if (!client) throw new BranchesError(`${b.repoLabel} n'a pas de remote GitHub ou GitLab, ou pas de jeton pour sa forge`)
@@ -158,7 +109,7 @@ export class BranchesService {
   // A write on the forge, then the forge reads the branch again (`review.refresh`: its review and CI follow), before the
   // answer: the page reloads from it, and would show the state before the write otherwise. A read that fails does not
   // undo the write.
-  async #act<T>(b: Branch, work: () => Promise<T>): Promise<T> {
+  async #act<T>(b: SharedBranch, work: () => Promise<T>): Promise<T> {
     let done: T
     try {
       done = await work()
@@ -169,27 +120,16 @@ export class BranchesService {
     return done
   }
 
-  /**
-   * A branch linked to a task by hand (null: unlinked), in the core: the task's link (origin `manual`: the name's
-   * reference no longer moves it), or the `noTask` mark; its other tasks and the opposite mark go.
-   */
+  // A branch linked to a task by hand (null: unlinked), in the core: lunar-industries-common's link.
   async link(repo: string, name: string, taskId: string | null): Promise<void> {
-    const { objects } = this.deps
-    const r = await this.#repo(repo).catch(() => null)
-    const [b] = r ? await objects.list('branch', { where: { repositoryId: r.id, name } }) : []
-    if (!b) throw new BranchesError('Branche inconnue', 404)
-    const branch = { type: 'branch' as const, id: b.id }
-    if (taskId) await objects.link({ type: 'task', id: taskId }, 'branch', branch, 'manual')
-    else await objects.link(branch, 'noTask', branch, 'manual')
-    for (const l of await objects.related(b.id, { kind: 'branch', type: 'task' }))
-      if (!l.outgoing && l.id !== taskId) await objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
-    if (taskId) await objects.unlink(branch, 'noTask', branch)
+    const { linked } = await this.deps.shared.link({ repo, name, taskId })
+    if (!linked) throw new BranchesError('Branche ou tâche inconnue', 404)
   }
 
   // Where its review, its latest pipeline and its issue are: read on the forge now, for the branch shown.
   async links(repo: string, name: string): Promise<Links> {
     const { b, client } = await this.#branch(repo, name)
-    const issueNumber = issueOf(await this.#template(), name)
+    const issueNumber = issueOf((await this.deps.shared.settings()).template, name)
     try {
       const [review, pipeline, issue] = await Promise.all([
         client.review(name),
@@ -231,29 +171,27 @@ export class BranchesService {
     await this.#act(b, () => client.playJob(jobId))
   }
 
-  // A draft review towards the target asked, else the repo's, else the settings'; titled after the branch's task.
+  // A draft review towards the target asked, else the repo's, else the shared one; titled after the branch's task.
   async review(repo: string, name: string, target: string | null): Promise<void> {
     const { b, client } = await this.#branch(repo, name)
-    const into = target || (await this.#targets())[repo] || (await this.#text('reviewTarget')) || null
+    const s = await this.deps.shared.settings()
+    const into = target || s.targets[repo] || s.reviewTarget
     if (!into) throw new BranchesError('Choisis la branche cible de la MR')
     const task = b.taskId ? await this.deps.objects.get('task', b.taskId).catch(() => null) : null
     await this.#act(b, async () => {
       // A number in the name is no proof of an issue (2024-cleanup): « Closes # » would close one the branch has nothing
       // to do with, so it stays only when the forge has that issue.
-      const guess = issueOf(await this.#template(), name)
+      const guess = issueOf(s.template, name)
       const issueNumber = guess !== null && (await client.issue(guess)) ? guess : null
       const description = reviewDescription(issueNumber, task?.url ?? null)
       await client.createReview({ source: name, target: into, title: task?.title ?? name, description, draft: true })
     })
   }
 
-  // Where the repo's reviews go by default; null to fall back on the settings'.
+  // Where the repo's reviews go by default; null to fall back on the shared target.
   async setTarget(repo: string, target: string | null): Promise<void> {
     await this.#repo(repo)
-    const own = await this.#targets()
-    if (target) own[repo] = target
-    else delete own[repo]
-    await this.deps.save(`${K}.targets`, JSON.stringify(own))
+    await this.deps.shared.setTarget({ repo, target })
     this.deps.changed()
   }
 }

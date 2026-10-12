@@ -1,10 +1,5 @@
 // Taken from quack-board (domain/branch_links.ts and connectors/forge.ts): the issue a branch name carries, and the
-// text of the review opened for it.
-
-export const NAMINGS: Record<string, string> = { issue: '{issue}-{slug}', ref: '{ref}-{slug}' }
-
-// The naming of the settings: one of the two fixed ones, or the free template.
-export const templateOf = (naming: string, template: string) => NAMINGS[naming] ?? template
+// text of the review opened for it. The naming's template is lunar-industries-common's setting.
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const PARTS: Record<string, string> = { '{issue}': '(\\d+)', '{ref}': '[a-z0-9]+(?:[-_]?\\d+)?', '{slug}': '.+' }
@@ -24,10 +19,3 @@ export function issueOf(template: string, name: string): number | null {
 export function reviewDescription(issueNumber: number | null, taskUrl: string | null): string {
   return [issueNumber ? `Closes #${issueNumber}` : '', taskUrl ? `Tâche : ${taskUrl}` : ''].filter(Boolean).join('\n\n')
 }
-
-// A comma-separated setting as a list.
-export const list = (value: unknown) =>
-  String(value ?? '')
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean)
