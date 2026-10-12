@@ -6,9 +6,6 @@ import {
   openDialog,
   react,
   useHint,
-  useCardActions,
-  useKanbanParts,
-  useKanbanRevision,
   useOn,
   useSettingValues,
   useVoice,
@@ -43,6 +40,7 @@ import {
   type Tone,
 } from './layout.ts'
 import { LinkBranches } from './LinkBranches.tsx'
+import { useKanbanContributions } from './points.ts'
 
 // Per-viewer conveniences, kept in this browser only (a private window simply starts afresh).
 const TOGGLED = 'lunar-industries-kanban.toggled'
@@ -109,16 +107,16 @@ function useBranches(): [Branches, (b: Branches) => void] {
  * Taken from quack-board (Simon's Kanban): one column per status of the source, consecutive ones of a group under its
  * heading (À faire, En cours, Terminé ; the finished ones folded), the recent branches without a task to drop on a
  * card, each card's branch, due date and review or CI marks. The other extensions' parts (right-click actions,
- * badges, advice) come through the SDK like on any Kanban.
+ * badges, advice) come through the point `kanban`, like on any Kanban.
  */
 export function Kanban() {
   const [board, setBoard, error, reload] = useBoard()
   const [git, setGit] = useBranches()
   const values = useSettingValues()
-  const contributions = useKanbanParts()
-  // The actions of the card whose menu is open, by its task's group (an extension may offer some only on tasks to do).
-  const actionsFor = useCardActions(contributions.actions)
-  useKanbanRevision()
+  // `actionsFor`: the actions of the card whose menu is open, by its task's group (an extension may offer some only on
+  // tasks to do).
+  const contributions = useKanbanContributions()
+  const { actionsFor } = contributions
   const [toggled, setToggled] = useState(savedToggles)
   const [trayOpen, setTrayOpen] = useState(() => saved(TRAY) !== 'false')
   const [over, setOver] = useState<string | null>(null)
@@ -153,25 +151,27 @@ export function Kanban() {
     keep(TRAY, String(!trayOpen))
   }
 
-  // Optimistic: the card jumps to its new column at once; a failure snaps it back.
+  // Optimistic: the card jumps to its new column at once; a failure snaps it back. Once moved, the board is read
+  // again, as its provider wrote it.
   const move = async (task: Task, status: string) => {
     if (!ready || task.status === status) return
     const previous = ready
     setBoard({ ...ready, tasks: ready.tasks.map((t) => (t.id === task.id ? { ...t, status } : t)) })
     try {
-      const next = await busy(moveTask(task.id, status))
-      setBoard(next)
-      const done = next.columns.find((c) => c.name === status)?.group === 'done'
-      const name = task.ref ?? task.title
-      react(
-        'quack',
-        done ? `Coin coin ! ${name} est terminée !` : `${name} passe en ${columnLabel(status)}, coin !`,
-        `${task.title} → ${columnLabel(status)} dans ${next.source}`,
-      )
+      await busy(moveTask(task.id, status))
     } catch (err) {
       setBoard(previous)
       react('panic', errorMessage(err), errorMessage(err))
+      return
     }
+    reload()
+    const done = ready.columns.find((c) => c.name === status)?.group === 'done'
+    const name = task.ref ?? task.title
+    react(
+      'quack',
+      done ? `Coin coin ! ${name} est terminée !` : `${name} passe en ${columnLabel(status)}, coin !`,
+      `${task.title} → ${columnLabel(status)} dans ${ready.source}`,
+    )
   }
 
   const saveBranches = async (task: Task, refs: BranchRef[]) => {

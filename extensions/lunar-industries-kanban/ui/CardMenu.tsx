@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { react, runOnApi, useCommands, type KanbanParts, type Task } from '@bidule/sdk'
+import { react, runOnApi, useCommands, type Task } from '@bidule/sdk'
 import { errorMessage } from './api.ts'
+import type { KanbanAction } from './points.ts'
 
 export type MenuColumn = { name: string; label: string }
 
@@ -21,7 +22,7 @@ export function CardMenu({
   x: number
   y: number
   source: string
-  actions: KanbanParts['actions']
+  actions: KanbanAction[]
   // null without a provider of branches.
   link: (() => void) | null
   columns: MenuColumn[]
