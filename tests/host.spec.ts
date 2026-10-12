@@ -30,6 +30,19 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     }
   })
 
+  test('the Kanban reads the point kanban, and Claude contributes its two card actions to it', async ({
+    client,
+    assert,
+  }) => {
+    const res = await client.get('/api/extensions').headers(TOKEN)
+    const listed: { id: string; points: { id: string }[]; to: Record<string, { actions?: unknown[] }> }[] =
+      res.body()
+    const kanban = listed.find((e) => e.id === 'lunar-industries-kanban')
+    const claude = listed.find((e) => e.id === 'lunar-industries-claude')
+    assert.deepInclude(kanban?.points ?? [], { id: 'kanban', title: 'Cartes du Kanban' })
+    assert.lengthOf(claude?.to.kanban?.actions ?? [], 2)
+  })
+
   test('the settings page has a section for each, with fields of its own namespace and valid defaults', async ({
     client,
     assert,
