@@ -4,6 +4,7 @@ import type { GitSource } from '@bidule/ext-git/contract'
 import '../contract.ts'
 import { SessionError } from './errors.ts'
 import { branchAccess, forgeOf, refreshForge, taskAccess } from './objects.ts'
+import { PipelineChanges } from './pipeline_changes.ts'
 import { list, readSettings, reviewTargetOf } from './settings.ts'
 import { SessionService } from './sessions.ts'
 import { mergeListener, SessionStore } from './store.ts'
@@ -60,6 +61,9 @@ export async function repoWorktree(repo: string, branch: string) {
 export async function activate(context: ServerContext) {
   ctx = context
   store = new SessionStore(ctx.db)
+  // The pipelines the forges read again, as the core announces them: what wait_pipeline waits on.
+  const pipelines = new PipelineChanges()
+  ctx.events.on('objects.changed', ({ type }) => pipelines.changed(type))
   sessions = new SessionService({
     env: ctx.env,
     store,
@@ -70,7 +74,7 @@ export async function activate(context: ServerContext) {
       sessions: (id, status) => void ctx.events.emit('lunar-industries-claude.sessions', { id, status }),
       session: (id, message) => void ctx.events.emit('lunar-industries-claude.session', { id, message }),
     },
-    tools: workspaceTools({ env: ctx.env, git, branches, tasks, forgeOf: forge, refreshForge: refreshBranch, settings, store }),
+    tools: workspaceTools({ env: ctx.env, git, branches, tasks, forgeOf: forge, refreshForge: refreshBranch, pipelines, settings, store }),
     worktree: repoWorktree,
     plugins: [PLUGIN],
     apiKey,

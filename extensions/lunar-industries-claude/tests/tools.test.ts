@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { PipelineChanges } from '../server/pipeline_changes.ts'
 import { LOCKS_DIR } from '../server/slot_lock.ts'
 import type { Settings } from '../server/settings.ts'
 import { pipelineVerdict, workspaceServer, workspaceTools, type ToolContext } from '../server/tools.ts'
@@ -30,19 +31,19 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
     if (forgeReads.fail) throw new Error('la forge ne répond pas')
     forgeReads.branches.push(`${repo} ${branch}`)
   }
-  const tools = workspaceTools(
-    {
-      env: fakeEnv(),
-      git: async () => git,
-      branches: () => branches,
-      tasks: async () => tasks,
-      forgeOf: () => git.forgeOf(),
-      refreshForge,
-      settings: async () => settings,
-      store,
-    },
-    async () => {}
-  )
+  // The pipelines the core announces changed: the test says when (`pipelines.changed('pipeline')`).
+  const pipelines = new PipelineChanges()
+  const tools = workspaceTools({
+    env: fakeEnv(),
+    git: async () => git,
+    branches: () => branches,
+    tasks: async () => tasks,
+    forgeOf: () => git.forgeOf(),
+    refreshForge,
+    pipelines,
+    settings: async () => settings,
+    store,
+  })
   const asked: string[] = []
   const ctx = (allow = true, extra: Partial<ToolContext> = {}): ToolContext => ({
     sessionId: 's1',
@@ -59,7 +60,7 @@ function setup(options: { git?: FakeGit; forge?: FakeForge; settings?: Partial<S
     if (!tool) throw new Error(`no tool ${name}`)
     return tool.call(args, context)
   }
-  return { git, forge, tasks, branches, store, asked, ctx, call, tools, forgeReads }
+  return { git, forge, tasks, branches, store, asked, ctx, call, tools, forgeReads, pipelines }
 }
 
 describe('Claude tools', () => {
@@ -192,6 +193,46 @@ describe('Claude tools', () => {
       pipeline: 'https://gl/p/77',
       commit: 'pushed1',
     })
+  })
+
+  it('waits for the pipeline’s changes the core announces, not by asking the forge again and again', async () => {
+    const pipelines: Record<string, { id: number; status: 'running' | 'ok'; url: string }> = {
+      pushed1: { id: 77, status: 'running', url: 'https://gl/p/77' },
+    }
+    const jobs = [{ id: 1, name: 'build', stage: 'build', status: 'running', manual: false }]
+    const forge = new FakeForge({ factory: null }, pipelines, jobs)
+    let reads = 0
+    const pipeline = forge.pipeline.bind(forge)
+    forge.pipeline = async (sha: string) => (reads++, pipeline(sha))
+    const { call, forgeReads, pipelines: changes } = setup({ forge })
+    const waiting = call('wait_pipeline', { repo: 'app', branch: 'factory' })
+    // The forge reads the branch at once; the pipeline is read, still running.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(forgeReads.branches).toEqual(['/r/app factory'])
+    expect(reads).toBe(1)
+    // Another type changed: nothing is read.
+    changes.changed('review')
+    await new Promise((r) => setTimeout(r, 20))
+    expect(reads).toBe(1)
+    // The pipeline ended, and the forge said so: read once more, and done.
+    pipelines.pushed1.status = 'ok'
+    jobs[0].status = 'success'
+    changes.changed('pipeline')
+    expect(JSON.parse((await waiting).text)).toMatchObject({ state: 'done', pipeline: 'https://gl/p/77' })
+    expect(reads).toBe(2)
+  })
+
+  it('a pipeline that does not change ends at the time given', async () => {
+    const forge = new FakeForge({ factory: null }, { pushed1: { id: 77, status: 'running', url: 'https://gl/p/77' } }, [])
+    const { call } = setup({ forge })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const waiting = call('wait_pipeline', { repo: 'app', branch: 'factory', timeoutMinutes: 1 })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(JSON.parse((await waiting).text)).toMatchObject({ state: 'timeout', pipeline: 'https://gl/p/77' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('opens the draft MR of a branch pushed from a worktree, with its task’s title', async () => {
