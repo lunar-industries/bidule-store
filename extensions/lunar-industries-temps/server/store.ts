@@ -57,6 +57,15 @@ export interface TempsStore {
   followMerge(type: StoredType, from: string, into: string): Promise<void>
 }
 
+// What the module does when the core says two objects are one (objects.merged): the ids kept here go to the one left,
+// then `then` (today's proposal follows), which the core waits for.
+export function mergeListener(store: Pick<TempsStore, 'followMerge'>, then: () => Promise<void>) {
+  return async ({ type, from, into }: { type: StoredType; from: string; into: string }): Promise<void> => {
+    await store.followMerge(type, from, into)
+    await then()
+  }
+}
+
 const DRAFTS = 'lunar_industries_temps_drafts'
 const BRANCH_TASKS = 'lunar_industries_temps_branch_tasks'
 const DAYS = 'lunar_industries_temps_days'

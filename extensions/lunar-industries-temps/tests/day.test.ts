@@ -1,7 +1,8 @@
 // Taken from quack-board (tests/unit/day.spec.ts, Simon's « Day »), on fake roles and the store in memory.
 import { describe, expect, test } from 'vitest'
 import { dayStart } from '../server/engine.ts'
-import { setup } from './fakes.ts'
+import { mergeListener } from '../server/store.ts'
+import { MemoryStore, setup } from './fakes.ts'
 
 // Monday 21 to Friday 25 September 2026.
 const [MON, TUE] = ['2026-09-21', '2026-09-22']
@@ -166,5 +167,32 @@ describe('Day', () => {
         { taskId: 't1', label: 'Développement', share: 10 },
       ])
     ).rejects.toThrow(/deux fois/)
+  })
+})
+
+describe('Two objects of the core found to be one', () => {
+  test('the drafts, the branches remembered and the mirror keep the task left; then the proposal follows, awaited', async () => {
+    const store = new MemoryStore()
+    await store.draft(MON, [{ taskId: 'old', share: 20 }])
+    await store.rememberBranches([{ repo: '/r', branch: 'feat/x', taskId: 'old' }])
+    const entry = (id: string, day: string, taskId: string) => ({ id, day, taskId, label: 'Dév', share: 20, url: null, props: {}, lastEdited: null })
+    await store.recordLog([entry('e-old', MON, 'old'), entry('e-kept', TUE, 'kept')], MON, TUE)
+    let followed = 0
+    const merged = mergeListener(store, async () => {
+      followed++
+    })
+
+    await merged({ type: 'task', from: 'old', into: 'kept' })
+    expect((await store.drafts(MON)).map((r) => r.taskId)).toEqual(['kept'])
+    expect(await store.rememberedBranches()).toEqual([{ repo: '/r', branch: 'feat/x', taskId: 'kept' }])
+    expect((await store.logged([MON, TUE])).map((r) => [r.id, r.taskId])).toEqual([
+      ['e-old', 'kept'],
+      ['e-kept', 'kept'],
+    ])
+    expect(followed).toBe(1)
+
+    // An entry: the one left stays when the mirror has both.
+    await merged({ type: 'timeEntry', from: 'e-old', into: 'e-kept' })
+    expect((await store.logged([MON, TUE])).map((r) => r.id)).toEqual(['e-kept'])
   })
 })

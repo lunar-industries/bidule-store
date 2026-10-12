@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEvent, SessionMessage, SessionStatus } from '../contract.ts'
 import { SessionService, type StartInput } from '../server/sessions.ts'
+import { mergeListener } from '../server/store.ts'
 import { FakeGit, MemoryStore, fakeEnv, settingsWith } from './fakes.ts'
 
 // Taken from quack-board (tests/functional/claude.spec.ts, Simon's): the sessions, run by a fake Claude Code (the SDK
@@ -165,5 +166,17 @@ describe('Sessions with a fake Claude Code', () => {
     await store.save(row)
     await service.recover()
     expect((await store.find(row.id))?.status).toBe('saved')
+  })
+})
+
+describe('A task of the core merged into another', () => {
+  it('its sessions keep the task left; other merges leave them', async () => {
+    const store = new MemoryStore()
+    await store.save(store.fresh({ id: 's1', cwd: '/r', taskId: 'old', repos: [], title: 'x', mode: 'default', status: 'saved' }))
+    const merged = mergeListener(store)
+    await merged({ type: 'branch', from: 'old', into: 'kept' })
+    expect((await store.find('s1'))?.taskId).toBe('old')
+    await merged({ type: 'task', from: 'old', into: 'kept' })
+    expect((await store.find('s1'))?.taskId).toBe('kept')
   })
 })

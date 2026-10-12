@@ -6,7 +6,7 @@ import { SessionError } from './errors.ts'
 import { branchAccess, forgeOf, refreshForge, taskAccess } from './objects.ts'
 import { list, readSettings, reviewTargetOf } from './settings.ts'
 import { SessionService } from './sessions.ts'
-import { SessionStore } from './store.ts'
+import { mergeListener, SessionStore } from './store.ts'
 import { workspaceTools } from './tools.ts'
 import { addWorktree, baseOf, shellVia } from './worktrees.ts'
 
@@ -69,7 +69,5 @@ export async function activate(context: ServerContext) {
   })
   // No process survived the previous API: the sessions it ran are saved.
   await sessions.recover()
-  ctx.events.on('objects.merged', async ({ type, from, into }) => {
-    if (type === 'task') await store.followTask(from, into)
-  })
+  ctx.events.on('objects.merged', mergeListener(store))
 }

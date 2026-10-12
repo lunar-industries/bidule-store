@@ -125,6 +125,13 @@ const toRaw = (row: SessionRow) => ({
   updated_at: row.updatedAt,
 })
 
+// What the module does when the core says two objects are one (objects.merged): a task's sessions go to the one left.
+export function mergeListener(store: Pick<SessionStore, 'followTask'>) {
+  return async ({ type, from, into }: { type: string; from: string; into: string }): Promise<void> => {
+    if (type === 'task') await store.followTask(from, into)
+  }
+}
+
 export class SessionStore {
   constructor(protected db: Db) {}
 
