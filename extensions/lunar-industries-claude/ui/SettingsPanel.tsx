@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { react, saveSettingValues, useSettingValues } from '@bidule/sdk'
+import { execute, react, saveSettingValues, useSettingValues } from '@bidule/sdk'
 import type { ClaudePlace, RepoOverrides, RepoSettings } from '../contract.ts'
 import { api, errorMessage } from './api.ts'
 import { ChipField } from './ChipField.tsx'
@@ -21,9 +21,16 @@ const NOTIFICATIONS = [
   { value: 'slot', label: 'Créneau exécutable pris' },
 ]
 
-// A repo's own settings, as the panel asks them (empty: the module's, above).
-const FIELDS: { key: keyof RepoOverrides; title: string; placeholder?: string; hint?: string }[] = [
-  { key: 'reviewTarget', title: 'Branche cible des MR', placeholder: 'develop' },
+// A repo's own settings as the panel asks them: the module's (empty: the module's, above), and its review target,
+// which lunar-industries-common keeps for every module (empty: the one of Réglages › Lunar Industries - Commun).
+type RepoFields = RepoOverrides & { reviewTarget?: string }
+const FIELDS: { key: keyof RepoFields; title: string; placeholder?: string; hint?: string }[] = [
+  {
+    key: 'reviewTarget',
+    title: 'Branche cible des MR',
+    placeholder: 'develop',
+    hint: 'La même que dans la page Branches. Vide : celle de Réglages › Lunar Industries - Commun.',
+  },
   { key: 'stagingBranch', title: 'Branche de staging' },
   { key: 'productionBranch', title: 'Branche de production' },
   { key: 'stagingJob', title: 'Job de staging', hint: '{env} : l’environnement.' },
@@ -70,13 +77,15 @@ export function SettingsPanel() {
       setChecking(false)
     }
   }
-  useEffect(() => {
-    if (!enabled) return
-    void check()
-    void api.repos().then(
+  const loadRepos = () =>
+    api.repos().then(
       (r) => setRepos(r.repos),
       (err) => setReposError(errorMessage(err)),
     )
+  useEffect(() => {
+    if (!enabled) return
+    void check()
+    void loadRepos()
   }, [enabled])
 
   if (!enabled) return <p className="legend">Allume les sessions pour vérifier Claude Code et régler chaque dépôt.</p>
@@ -114,17 +123,18 @@ export function SettingsPanel() {
         <h3 id="lc-settings-repos">Par dépôt</h3>
         <p className="legend">Vide : le réglage du module, plus haut.</p>
         {reposError && <p className="test-result bad">{reposError}</p>}
-        {repos?.map((r) => <RepoForm key={r.path} repo={r} />)}
+        {repos?.map((r) => <RepoForm key={r.path} repo={r} onSaved={() => void loadRepos()} />)}
         {repos && !repos.length && <p className="legend">Aucun dépôt connu.</p>}
       </section>
     </>
   )
 }
 
-function RepoForm({ repo }: { repo: RepoSettings }) {
+// `onSaved`: the repos are read again (their review target is lunar-industries-common's, not in this module's setting).
+function RepoForm({ repo, onSaved }: { repo: RepoSettings; onSaved: () => void }) {
   const values = useSettingValues()
-  const saved = overridesOf(values?.[REPOS])[repo.path] ?? {}
-  const [draft, setDraft] = useState<RepoOverrides | null>(null)
+  const saved: RepoFields = { ...overridesOf(values?.[REPOS])[repo.path], reviewTarget: repo.reviewTarget ?? '' }
+  const [draft, setDraft] = useState<RepoFields | null>(null)
   const [saving, setSaving] = useState(false)
   const shown = draft ?? saved
 
@@ -132,12 +142,16 @@ function RepoForm({ repo }: { repo: RepoSettings }) {
     if (!draft) return
     setSaving(true)
     try {
+      const { reviewTarget, ...own } = draft
       const all = overridesOf(values?.[REPOS])
-      const kept = Object.fromEntries(Object.entries(draft).filter(([, v]) => typeof v === 'string' && v.trim()))
+      const kept = Object.fromEntries(Object.entries(own).filter(([, v]) => typeof v === 'string' && v.trim()))
       if (Object.keys(kept).length) all[repo.path] = kept
       else delete all[repo.path]
       await saveSettingValues({ [REPOS]: JSON.stringify(all) })
+      const target = reviewTarget?.trim() || null
+      if (target !== repo.reviewTarget) await execute('lunar-industries-common.setTarget', { repo: repo.path, target })
       setDraft(null)
+      onSaved()
       react('quack', `Réglages de ${repo.label} enregistrés, coin !`, `${repo.label} réglé`)
     } catch (err) {
       react('panic', errorMessage(err), errorMessage(err))

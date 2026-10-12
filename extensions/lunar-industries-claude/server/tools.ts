@@ -7,7 +7,7 @@ import type { ForgeClient, ForgeJob } from '@bidule/sdk/forges'
 import type { Task } from '@bidule/sdk/tasks'
 import type { BranchAccess, TaskAccess } from './objects.ts'
 import { sdk } from './sdk.ts'
-import { deployOf, issueOf, list, reviewTargetOf, slugify, templateOf, type Settings } from './settings.ts'
+import { deployOf, issueOf, list, reviewTargetOf, slugify, type Settings } from './settings.ts'
 import { acquire, lockHost, lockName, lockStatus, pidOfSession, release } from './slot_lock.ts'
 import { moveToInProgress, startTask } from './start_task.ts'
 import type { SessionStore } from './store.ts'
@@ -334,7 +334,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         }
         const results = await startTask(
           t,
-          { repos: targets, slug: slugify(slug ?? t.title), issue: issue || s.createIssue, review, checkout: 'keep', template: templateOf(s) },
+          { repos: targets, slug: slugify(slug ?? t.title), issue: issue || s.createIssue, review, checkout: 'keep', template: s.branchTemplate },
           git,
           deps.forgeOf,
           deps.branches()
@@ -482,7 +482,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         }
         const taskId = await deps.branches().taskOf(r.path, branch)
         const task = taskId ? await findTask(taskId).catch(() => null) : null
-        const text = [description ?? '', reviewDescription(issueOf(templateOf(s), branch), task?.url ?? null)].filter(Boolean).join('\n\n')
+        const text = [description ?? '', reviewDescription(issueOf(s.branchTemplate, branch), task?.url ?? null)].filter(Boolean).join('\n\n')
         const review = await client.createReview({ source: branch, target: into, title: title ?? task?.title ?? branch, description: text, draft })
         await readForge(r.path, branch)
         return { created: true, review }
@@ -634,7 +634,7 @@ export function workspaceTools(deps: ToolDeps, wait: (ms: number) => Promise<voi
         const repos = await (await deps.git()).repos()
         return {
           branchNaming: s.branchNaming,
-          branchTemplate: templateOf(s),
+          branchTemplate: s.branchTemplate,
           createIssue: s.createIssue,
           integrationBranches: s.integrationBranches,
           repos: repos.map((r) => ({ repo: r.label, path: r.path, reviewTarget: reviewTargetOf(s, r.path), deploy: deployOf(s, r.path) })),

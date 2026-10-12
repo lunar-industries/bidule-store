@@ -21,8 +21,13 @@ export const PLUGIN = fileURLToPath(new URL('../claude/plugin', import.meta.url)
 export const settings = () => readSettings(ctx)
 // git's actions (the repos, git itself, its worktrees), through the core.
 export const git = async () => ctx.objects.client<GitSource>('git')
-// The core's branches: a task's, with their review and CI; a branch's task, and linking one by hand.
-export const branches = () => branchAccess(ctx.objects)
+// The core's branches: a task's, with their review and CI; a branch's task, and linking one by hand. Through
+// lunar-industries-common (a dependency), as the review targets, the naming and the integration branches (settings).
+export const branches = () =>
+  branchAccess({
+    branches: (filter) => ctx.commands.execute('lunar-industries-common.branches', filter),
+    link: (args) => ctx.commands.execute('lunar-industries-common.link', args),
+  })
 // The core's tasks; null without any provider of them.
 export const tasks = async () => taskAccess(ctx)
 // The forge serving a repo, by its path (`review.forge`: GitHub, GitLab).

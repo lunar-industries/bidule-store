@@ -21,7 +21,7 @@ import {
   taskValidator,
   watchValidator,
 } from '@bidule/ext-lunar-industries-claude/server/validators'
-import type { SessionContext, UsageRow } from '../../contract.ts'
+import type { RepoSettings, SessionContext, UsageRow } from '../../contract.ts'
 
 // Tokens by model, for the interface. `priced`: the figures come from what the session's turns reported, so their
 // dollars mean something; read back from a transcript they do not, and the row says so.
@@ -70,11 +70,13 @@ export default class SessionsController {
     return { enabled: on, places: on ? await detect(ctx.env) : [] }
   }
 
-  // The repos the app knows, with what the module's settings say of each.
+  // The repos the app knows, with what the module's settings say of each, and their own review target.
   async repos() {
     const s = await settings()
     const repos = await (await git()).repos()
-    return { repos: repos.map((r) => ({ path: r.path, label: r.label, ...s.repos[r.path] })) }
+    return {
+      repos: repos.map((r): RepoSettings => ({ ...s.repos[r.path], path: r.path, label: r.label, reviewTarget: s.targets[r.path] ?? null })),
+    }
   }
 
   async index() {

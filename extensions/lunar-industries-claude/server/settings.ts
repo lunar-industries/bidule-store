@@ -1,7 +1,9 @@
 import type { ServerContext } from '@bidule/api/extensions'
 import type { RepoOverrides } from '../contract.ts'
 
-// The module's settings (bidule.json), read together: what the sessions and the tools need.
+// The module's settings (bidule.json), read together, with those the Lunar Industries modules share
+// (lunar-industries-common's: the review targets, the naming of the branches, the integration branches): what the
+// sessions and the tools need.
 export type Settings = {
   enabled: boolean
   root: string
@@ -9,8 +11,11 @@ export type Settings = {
   defaultMode: string
   defaultModel: string
   defaultEffort: string
-  reviewTarget: string
+  // Where a repo's reviews go when it has no target of its own (`targets`, by path); null: nobody said.
+  reviewTarget: string | null
+  targets: Record<string, string>
   branchNaming: string
+  // The naming's template ({issue}, {ref}, {slug}).
   branchTemplate: string
   createIssue: boolean
   integrationBranches: string[]
@@ -45,6 +50,7 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
   } catch {
     // Unreadable: no repo has settings of its own.
   }
+  const shared = await ctx.commands.execute('lunar-industries-common.settings', undefined)
   return {
     enabled: (await get('enabled')) === true,
     root: await text('root'),
@@ -52,11 +58,12 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
     defaultMode: (await text('defaultMode')) || 'default',
     defaultModel: await text('defaultModel'),
     defaultEffort: await text('defaultEffort'),
-    reviewTarget: await text('reviewTarget'),
-    branchNaming: (await text('branchNaming')) || 'issue',
-    branchTemplate: (await text('branchTemplate')) || '{ref}-{slug}',
+    reviewTarget: shared.reviewTarget,
+    targets: shared.targets,
+    branchNaming: shared.naming,
+    branchTemplate: shared.template,
     createIssue: (await get('createIssue')) === true,
-    integrationBranches: list(await get('integrationBranches')),
+    integrationBranches: shared.integrationBranches,
     deploy: {
       stagingBranch: await text('stagingBranch'),
       productionBranch: await text('productionBranch'),
@@ -73,8 +80,8 @@ export async function readSettings(ctx: ServerContext): Promise<Settings> {
 // What a repo overrides of the module's settings (empty: nothing).
 export const overridesOf = (s: Settings, repo: string): RepoOverrides => s.repos[repo] ?? {}
 
-// The branch a repo's reviews go to: its own, else the module's; null when nobody said.
-export const reviewTargetOf = (s: Settings, repo: string) => overridesOf(s, repo).reviewTarget?.trim() || s.reviewTarget || null
+// The branch a repo's reviews go to: its own, else the shared one; null when nobody said.
+export const reviewTargetOf = (s: Settings, repo: string) => s.targets[repo] || s.reviewTarget || null
 
 // Taken from quack-board (domain/deploy.ts): how a repo is deployed, its own values else the module's; null: nobody
 // said (the skills ask).
@@ -93,10 +100,6 @@ export function deployOf(s: Settings, repo: string) {
 }
 
 // ---------- branch names (taken from quack-board, domain/branch_links.ts)
-
-// The two fixed namings; the third, 'template', is the free template of the settings.
-const NAMINGS: Record<string, string> = { issue: '{issue}-{slug}', ref: '{ref}-{slug}' }
-export const templateOf = (s: Settings) => NAMINGS[s.branchNaming] ?? s.branchTemplate
 
 const SLUG_MAX = 60
 
