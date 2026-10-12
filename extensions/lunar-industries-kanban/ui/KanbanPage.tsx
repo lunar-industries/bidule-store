@@ -39,6 +39,7 @@ import {
   type Mark,
   type Tone,
 } from './layout.ts'
+import { latestOf } from './latest.ts'
 import { LinkBranches } from './LinkBranches.tsx'
 import { useKanbanContributions } from './points.ts'
 
@@ -69,12 +70,14 @@ const carries = (e: DragEvent, type: string) => e.dataTransfer.types.includes(ty
 const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
 const columnLabel = (name: string) => name || 'Sans statut'
 
-// The board, reloaded whenever the core says the tasks changed (a sync, a move from elsewhere).
+// The board, reloaded whenever the core says the tasks changed (a sync, a move from elsewhere); only the last reading
+// asked is shown.
 function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => void] {
   const [board, setBoard] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [readLatest] = useState(() => latestOf(readBoard))
   const reload = () =>
-    void readBoard().then(
+    void readLatest().then(
       (b) => {
         setBoard(b)
         setError(null)
