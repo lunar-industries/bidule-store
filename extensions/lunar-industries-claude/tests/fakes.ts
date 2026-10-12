@@ -267,17 +267,22 @@ export class MemoryStore extends SessionStore {
   }
 }
 
+// A watch of the fake environment: its folders, its listener, and whether it was closed.
+export type FakeWatch = { folders: string[]; onChange: (folder: string, name: string) => void; closed: boolean }
+
 /**
  * The tools' environment (ctx.env), as far as the module uses it. `run` runs the command on this machine, in its folder
  * (a fake of the environment's, which would run it inside WSL, a toolbox or on the host); `command` builds it as WSL's
- * go-between does (wsl.exe) when the kind says so.
+ * go-between does (wsl.exe) when the kind says so. `watch` keeps each watch in `watches`: a test says a change by
+ * calling its `onChange`.
  */
 export function fakeEnv(
   kind: EnvironmentKind = 'local',
-  options: { home?: string; distro?: string; run?: Environment['run'] } = {}
+  options: { home?: string; distro?: string; run?: Environment['run']; live?: boolean; watches?: FakeWatch[] } = {}
 ): Environment {
   const home = options.home ?? homedir()
   const distro = options.distro ?? 'Ubuntu'
+  const watches = options.watches ?? []
   const toEnv = (path: string) => (kind === 'wsl' ? (path.match(/^\\\\wsl(?:\.localhost|\$)\\[^\\]+(\\.*)?$/i)?.[1] ?? '/').replace(/\\/g, '/') : path)
   const env = {
     info: async () => ({
@@ -287,8 +292,13 @@ export function fakeEnv(
       toolbox: kind === 'toolbox' ? 'fedora' : null,
       home,
       problem: null,
-      live: true,
+      live: options.live ?? true,
     }),
+    watch: (folders: string[], onChange: (folder: string, name: string) => void) => {
+      const w: FakeWatch = { folders, onChange, closed: false }
+      watches.push(w)
+      return { close: () => void (w.closed = true) }
+    },
     run:
       options.run ??
       ((command) =>

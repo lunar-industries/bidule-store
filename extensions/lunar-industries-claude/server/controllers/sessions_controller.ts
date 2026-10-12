@@ -262,13 +262,12 @@ export default class SessionsController {
     return done(sessions.stop(params.id), 'Session inconnue')
   }
 
-  // A session of the terminal shown on the page: its transcript is read again while the page renews this.
+  // A session of the terminal shown on the page: followed by the system's notifications until the page says it stops.
   async watch({ params, request }: HttpContext) {
     await enabled()
     const { cwd } = await request.validateUsing(watchValidator)
     await knownFolder(cwd)
-    sessions.watch(params.id, cwd)
-    return ok
+    return sessions.watch(params.id, cwd)
   }
 
   async unwatch({ params }: HttpContext) {

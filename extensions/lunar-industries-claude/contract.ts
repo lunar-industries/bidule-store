@@ -12,7 +12,8 @@
 //   POST sessions/:id/decisions/:request Decision → { ok }
 //   PUT  sessions/:id/mode | model | effort | archive | task
 //   POST sessions/:id/interrupt | stop
-//   POST sessions/:id/watch, DELETE sessions/:id/watch   (a session of the terminal, read again while shown)
+//   POST sessions/:id/watch              { cwd } → WatchResult (a session of the terminal, followed while shown)
+//   DELETE sessions/:id/watch            { ok }
 //   GET  templates                       { templates: Template[] }
 //   GET  models                          { models: SessionModel[] }
 //   GET  repos                           { repos: RepoSettings[] }
@@ -20,6 +21,10 @@
 // The branches (a task's, a branch's task, a link by hand), the review targets, the naming of the branches and the
 // integration branches are lunar-industries-common's (its commands; its settings in Réglages).
 import type {} from '@bidule/ext-lunar-industries-common/contract'
+
+// A session of the terminal followed: `live` is false when its changes cannot be followed there (WSL without Perl, a
+// transcript not found), and the page reads it again on demand.
+export type WatchResult = { live: boolean }
 
 // running: Claude works; waiting: a decision is expected from the user; idle: Claude answered and waits for a
 // message; saved: no Claude Code process, the session can be taken up again.

@@ -1,5 +1,9 @@
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { changeOf, eventsOfMessage, modelOfOutput, modelValueOf } from '../server/sessions.ts'
+import { projectFolderName, transcriptFolder } from '../server/transcript.ts'
 
 // Taken from quack-board (tests/unit/claude_transcript.spec.ts, Simon's): a saved session is read from Claude Code's
 // transcript, its messages as Claude Code writes them.
@@ -87,5 +91,27 @@ describe('Claude transcript', () => {
       })
     ).toEqual({ file: 'c.ts', before: 'a\n…\nc', after: 'b\n…\nd' })
     expect(changeOf('Read', { file_path: 'a.ts' })).toBeNull()
+  })
+})
+
+describe('the folder of a transcript', () => {
+  const ID = '11111111-1111-4111-8111-111111111111'
+
+  it('the project folder its folder names first, else the project that has it; none for what is no session id', async () => {
+    const config = await mkdtemp(join(tmpdir(), 'lic-config-'))
+    const named = join(config, 'projects', projectFolderName('/r/my_app.v2'))
+    expect(named).toBe(join(config, 'projects', '-r-my-app-v2'))
+    await mkdir(named, { recursive: true })
+    await writeFile(join(named, `${ID}.jsonl`), '')
+    expect(await transcriptFolder(config, '/r/my_app.v2', ID)).toBe(named)
+    // Named otherwise (a long folder, a rule that changed): found among the projects.
+    const other = join(config, 'projects', 'elsewhere')
+    await mkdir(other)
+    await writeFile(join(other, 'aaaaaaaa-1111-4111-8111-111111111111.jsonl'), '')
+    expect(await transcriptFolder(config, '/r/my_app.v2', 'aaaaaaaa-1111-4111-8111-111111111111')).toBe(other)
+    expect(await transcriptFolder(config, undefined, ID)).toBe(named)
+    expect(await transcriptFolder(config, '/r/my_app.v2', '22222222-2222-4222-8222-222222222222')).toBeNull()
+    expect(await transcriptFolder(config, '/r/my_app.v2', '../elsewhere/x')).toBeNull()
+    expect(await transcriptFolder(join(config, 'missing'), undefined, ID)).toBeNull()
   })
 })
