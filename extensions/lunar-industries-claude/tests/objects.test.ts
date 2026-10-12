@@ -112,7 +112,7 @@ function fakeBranches() {
   const links: Link[] = []
   const same = (a: Ref, b: Ref) => a.type === b.type && a.id === b.id
   // The core's rule on branch names, as simple as these names need, on these branches: one linked or unlinked by hand
-  // keeps no link by name.
+  // keeps no link by name; a link by name goes only when the rule sees its task (one with a reference, here).
   const discover = (ids: string[]) => {
     for (const b of stored.branch.filter((x) => ids.includes(String(x.id)))) {
       const id = String(b.id)
@@ -121,7 +121,8 @@ function fakeBranches() {
       )
       const hit = byHand ? null : (Object.entries(refs).find(([, ref]) => String(b.name).startsWith(ref))?.[0] ?? null)
       for (let i = links.length - 1; i >= 0; i--)
-        if (links[i].kind === 'branch' && links[i].to.id === id && links[i].origin === 'ref' && links[i].from.id !== hit) links.splice(i, 1)
+        if (links[i].kind === 'branch' && links[i].to.id === id && links[i].origin === 'ref' && links[i].from.id !== hit && refs[links[i].from.id])
+          links.splice(i, 1)
       if (hit && !links.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
         links.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
     }
@@ -153,7 +154,7 @@ function fakeBranches() {
       if (current?.origin === 'manual' && origin !== 'manual') return
       if (current) current.origin = origin
       else links.push({ from, kind, to, origin })
-      if (origin !== 'ref') discover(said(from, kind, to))
+      discover(said(from, kind, to))
     },
     unlink: async (from: Ref, kind: string, to: Ref) => {
       const at = links.findIndex((l) => l.kind === kind && same(l.from, from) && same(l.to, to))

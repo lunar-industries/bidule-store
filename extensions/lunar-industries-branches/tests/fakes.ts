@@ -104,7 +104,8 @@ type World = ReturnType<typeof fakeWorld>['world']
 /**
  * The core's rule on branch names, run as the core does after a link or an unlink that says a branch's task, on that
  * branch alone: linked or unlinked by hand, it keeps no link by name; otherwise, when its name holds a task's
- * reference, it is linked to that task (origin `ref`), and only to it.
+ * reference, it is linked to that task (origin `ref`), and only to it. A link by name goes only when the rule sees
+ * its task (a task with a reference, here).
  */
 function discover(relations: Relation[], branches: Spec[], tasks: Task[], from: Ref, kind: string, to: Ref) {
   const id = kind === 'branch' && to.type === 'branch' ? to.id : kind === 'noTask' ? from.id : null
@@ -116,7 +117,8 @@ function discover(relations: Relation[], branches: Spec[], tasks: Task[], from: 
   const hit = byHand ? null : (tasks.find((t) => t.ref && b.name.toLowerCase().includes(t.ref.toLowerCase()))?.id ?? null)
   for (let i = relations.length - 1; i >= 0; i--) {
     const l = relations[i]
-    if (l.kind === 'branch' && l.to.id === id && l.origin === 'ref' && l.from.id !== hit) relations.splice(i, 1)
+    const seen = tasks.some((t) => t.id === l.from.id && t.ref)
+    if (l.kind === 'branch' && l.to.id === id && l.origin === 'ref' && l.from.id !== hit && seen) relations.splice(i, 1)
   }
   if (hit && !relations.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
     relations.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
@@ -195,7 +197,7 @@ function objectsOf({ branches, forge, refreshed, relations }: World, tasks: Task
       if (current?.origin === 'manual' && origin !== 'manual') return
       if (current) current.origin = origin
       else relations.push({ from, kind, to, origin })
-      if (origin !== 'ref') discover(relations, branches, tasks, from, kind, to)
+      discover(relations, branches, tasks, from, kind, to)
     },
     unlink: async (from: Ref, kind: string, to: Ref) => {
       const at = relations.findIndex((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
