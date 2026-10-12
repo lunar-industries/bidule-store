@@ -48,6 +48,9 @@
         "hidden": true
       }
     ],
+    "events": [
+      "lunar-industries-common.changed"
+    ],
     "settings": {
       "title": "Lunar Industries - Commun",
       "fields": [

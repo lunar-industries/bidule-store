@@ -1,7 +1,6 @@
 import type { ObjectsContext } from '@bidule/api/extensions'
 import type { BranchFilter, SharedBranch, SharedSettings } from '@bidule/ext-lunar-industries-common/contract'
 import type { ForgeClient } from '@bidule/sdk/forges'
-import type { StoredObject } from '@bidule/sdk/objects'
 import type { Job, ListedBranch, Links, ListedRepo, Listing } from '../contract.ts'
 import { BranchesError } from './errors.ts'
 import { issueOf, reviewDescription } from './names.ts'
@@ -20,8 +19,6 @@ export interface BranchesDeps {
   // (`review.forge`), and that forge reading a branch again after a write there (`review.refresh`).
   objects: Pick<ObjectsContext, 'list' | 'get' | 'first'>
   shared: Shared
-  // A repo's review target changed.
-  changed: () => void
 }
 
 // A forge's refusal (ForgeFailure: an Error with the HTTP status), as the page shows it.
@@ -42,12 +39,6 @@ const ofTask = (b: SharedBranch) => !b.isDefault && !b.integration
  */
 export class BranchesService {
   constructor(protected deps: BranchesDeps) {}
-
-  async #repo(path: string): Promise<StoredObject<'repository'>> {
-    const [repo] = await this.deps.objects.list('repository', { where: { path } })
-    if (!repo) throw new BranchesError('Dépôt inconnu', 404)
-    return repo
-  }
 
   // The client on a repo's project, from the forge serving it: null without one, or without its token.
   #forgeOf(repositoryId: string): Promise<ForgeClient | null> {
@@ -188,10 +179,9 @@ export class BranchesService {
     })
   }
 
-  // Where the repo's reviews go by default; null to fall back on the shared target.
+  // Where the repo's reviews go by default; null to fall back on the shared target. lunar-industries-common refuses a
+  // repo the core does not know (404) and tells the change (`lunar-industries-common.changed`).
   async setTarget(repo: string, target: string | null): Promise<void> {
-    await this.#repo(repo)
     await this.deps.shared.setTarget({ repo, target })
-    this.deps.changed()
   }
 }

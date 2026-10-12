@@ -55,7 +55,11 @@ declare module '@bidule/sdk/contracts' {
     // go. False when the core knows neither the branch nor the task.
     'lunar-industries-common.link': (args: { repo: string; name: string; taskId: string | null }) => { linked: boolean }
     'lunar-industries-common.settings': (args: void) => SharedSettings
-    // A repo's own review target (null: back to the shared one).
+    // A repo's own review target (null: back to the shared one); refused (404) for a repo the core does not know.
     'lunar-industries-common.setTarget': (args: { repo: string; target: string | null }) => void
+  }
+  interface Events {
+    // A repo's own review target changed (from the Branches page, from Claude's settings…).
+    'lunar-industries-common.changed': Record<string, never>
   }
 }

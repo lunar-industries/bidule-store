@@ -63,15 +63,26 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     }
   })
 
-  test('lunar-industries-common’s commands from the interface: a target saved and read back, bad arguments refused', async ({
+  test('lunar-industries-common’s commands from the interface: a known repo’s target saved and read back, the rest refused', async ({
     client,
     assert,
   }) => {
+    const host = await app.container.make(ExtensionHost)
+    // A repo of git's, as git puts it in the core.
+    await host.objects.put(
+      'git',
+      'repository',
+      [{ remoteId: '/r/app', fields: { path: '/r/app', label: 'app', remoteHost: null, remotePath: null, defaultBranch: 'main' } }],
+      { account: '' }
+    )
     const run = (id: string, args: unknown) => client.post(`/api/commands/${id}`).headers(TOKEN).json({ args })
     ;(await run('lunar-industries-common.setTarget', { repo: '/r/app', target: 'develop' })).assertStatus(200)
     const read = await run('lunar-industries-common.settings', null)
     read.assertStatus(200)
     assert.deepEqual(read.body().result.targets, { '/r/app': 'develop' })
+    const unknown = await run('lunar-industries-common.setTarget', { repo: '/elsewhere', target: 'main' })
+    assert.equal(unknown.status(), 404)
+    assert.equal(unknown.body().error, 'Dépôt inconnu')
     assert.equal((await run('lunar-industries-common.link', { repo: '' })).status(), 422)
     // Back as it was: the settings the core keeps in memory outlive the test's transaction.
     ;(await run('lunar-industries-common.setTarget', { repo: '/r/app', target: null })).assertStatus(200)

@@ -127,6 +127,7 @@ function sharedOf({ branches }: World, tasks: Task[], settings: SharedSettings, 
     },
     settings: async () => settings,
     setTarget: async ({ repo, target }) => {
+      if (!branches.some((b) => b.repo === repo)) throw Object.assign(new Error('Dépôt inconnu'), { status: 404 })
       const own = { ...settings.targets }
       if (target) own[repo] = target
       else delete own[repo]
@@ -161,11 +162,6 @@ function objectsOf({ branches, forge, refreshed }: World, tasks: Task[]): Branch
 export function service(world: World, { tasks = [], settings = {} }: { tasks?: Task[]; settings?: Partial<SharedSettings> } = {}) {
   const shared = { ...SETTINGS, ...settings }
   const links: string[] = []
-  let changed = 0
-  const s = new BranchesService({
-    objects: objectsOf(world, tasks),
-    shared: sharedOf(world, tasks, shared, links),
-    changed: () => void changed++,
-  })
-  return { s, shared, links, changed: () => changed }
+  const s = new BranchesService({ objects: objectsOf(world, tasks), shared: sharedOf(world, tasks, shared, links) })
+  return { s, shared, links }
 }

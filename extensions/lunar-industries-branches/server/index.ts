@@ -16,6 +16,5 @@ export async function activate(ctx: ServerContext) {
       settings: () => commands.execute('lunar-industries-common.settings', undefined),
       setTarget: (args) => commands.execute('lunar-industries-common.setTarget', args),
     },
-    changed: () => void ctx.events.emit('lunar-industries-branches.changed', {}),
   })
 }

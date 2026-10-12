@@ -142,10 +142,10 @@ describe('the task and the target', () => {
     await expect(s.link(app, 'tsk-7-paiement', 'gone')).rejects.toMatchObject({ status: 404 })
   })
 
-  test('a target kept per repo and announced; the review goes there, else to the shared one', async () => {
+  test('a target kept per repo by lunar-industries-common; the review goes there, else to the shared one', async () => {
     const forge = fakeForge()
     const { world } = fakeWorld(all(), forge.client)
-    const { s, shared, changed } = service(world, { settings: { reviewTarget: 'develop' } })
+    const { s, shared } = service(world, { settings: { reviewTarget: 'develop' } })
     await s.setTarget(app, 'main')
     expect(shared.targets).toEqual({ [app]: 'main' })
     expect((await s.list()).repos[0].reviewTarget).toBe('main')
@@ -154,7 +154,6 @@ describe('the task and the target', () => {
     expect(shared.targets).toEqual({})
     await s.review(app, 'tsk-7-paiement', null)
     expect(forge.reviews.map((r) => r.target)).toEqual(['main', 'develop'])
-    expect(changed()).toBe(2)
     await expect(s.setTarget('/elsewhere', 'main')).rejects.toMatchObject({ status: 404 })
   })
 })

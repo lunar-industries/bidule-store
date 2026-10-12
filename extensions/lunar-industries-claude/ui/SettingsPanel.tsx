@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { execute, react, saveSettingValues, useSettingValues } from '@bidule/sdk'
+import { execute, react, saveSettingValues, useOn, useSettingValues } from '@bidule/sdk'
 import type { ClaudePlace, RepoOverrides, RepoSettings } from '../contract.ts'
 import { api, errorMessage } from './api.ts'
 import { ChipField } from './ChipField.tsx'
@@ -87,6 +87,10 @@ export function SettingsPanel() {
     void check()
     void loadRepos()
   }, [enabled])
+  // A repo's review target changed (here, or in the Branches page): lunar-industries-common keeps them.
+  useOn('lunar-industries-common.changed', () => {
+    if (enabled) void loadRepos()
+  })
 
   if (!enabled) return <p className="legend">Allume les sessions pour vérifier Claude Code et régler chaque dépôt.</p>
 
@@ -123,15 +127,15 @@ export function SettingsPanel() {
         <h3 id="lc-settings-repos">Par dépôt</h3>
         <p className="legend">Vide : le réglage du module, plus haut.</p>
         {reposError && <p className="test-result bad">{reposError}</p>}
-        {repos?.map((r) => <RepoForm key={r.path} repo={r} onSaved={() => void loadRepos()} />)}
+        {repos?.map((r) => <RepoForm key={r.path} repo={r} />)}
         {repos && !repos.length && <p className="legend">Aucun dépôt connu.</p>}
       </section>
     </>
   )
 }
 
-// `onSaved`: the repos are read again (their review target is lunar-industries-common's, not in this module's setting).
-function RepoForm({ repo, onSaved }: { repo: RepoSettings; onSaved: () => void }) {
+// The review target is lunar-industries-common's (setTarget, whose event reads the repos again), the rest the module's.
+function RepoForm({ repo }: { repo: RepoSettings }) {
   const values = useSettingValues()
   const saved: RepoFields = { ...overridesOf(values?.[REPOS])[repo.path], reviewTarget: repo.reviewTarget ?? '' }
   const [draft, setDraft] = useState<RepoFields | null>(null)
@@ -151,7 +155,6 @@ function RepoForm({ repo, onSaved }: { repo: RepoSettings; onSaved: () => void }
       const target = reviewTarget?.trim() || null
       if (target !== repo.reviewTarget) await execute('lunar-industries-common.setTarget', { repo: repo.path, target })
       setDraft(null)
-      onSaved()
       react('quack', `Réglages de ${repo.label} enregistrés, coin !`, `${repo.label} réglé`)
     } catch (err) {
       react('panic', errorMessage(err), errorMessage(err))

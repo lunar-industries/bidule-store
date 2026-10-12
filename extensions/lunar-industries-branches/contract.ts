@@ -65,10 +65,3 @@ export type Links = {
 }
 
 export type Job = { id: number; name: string; stage: string; status: string; manual: boolean }
-
-declare module '@bidule/sdk/contracts' {
-  interface Events {
-    // A repo's review target changed (in the page).
-    'lunar-industries-branches.changed': Record<string, never>
-  }
-}
