@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   busy,
   columnColor,
@@ -82,15 +82,18 @@ function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => v
   const [board, setBoard] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [readLatest] = useState(() => latestOf(readBoard))
-  const reload = () =>
-    void readLatest().then(
-      (b) => {
-        setBoard(b)
-        setError(null)
-      },
-      (err) => setError(errorMessage(err)),
-    )
-  useEffect(reload, [])
+  const reload = useCallback(
+    () =>
+      void readLatest().then(
+        (b) => {
+          setBoard(b)
+          setError(null)
+        },
+        (err) => setError(errorMessage(err)),
+      ),
+    [readLatest],
+  )
+  useEffect(reload, [reload])
   useOn('objects.changed', ({ type }) => {
     if (type === 'task') reload()
   })
