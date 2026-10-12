@@ -38,7 +38,8 @@ permissions:
 
 # One run at a time: each one writes the index, and replaces the packages of the releases it publishes to
 # (`gh release upload --clobber`): two runs publishing the same version at once would leave packages whose sha256 is
-# not the one the index holds. The whole run is held, the checks included.
+# not the one the index holds. The whole run is held, the checks included. GitHub keeps one pending run only: a third
+# tag pushed while one runs and one waits cancels the waiting one. Several modules: one tag `lunar/all@<date>`.
 concurrency:
   group: store-index
   cancel-in-progress: false
@@ -251,8 +252,13 @@ jobs:
             out="release/store/$id"
             node scripts/pack-extension.mjs "$id" "$out"
             entry=$(ls "$out"/*.json)
-            # Bound on Linux but not here: an `any` package would take the place of the linux one, nothing is added.
-            [ "$(node -p "require('./$entry').platform")" = any ] && { echo "::notice::$id : aucun paquet propre à $RUNNER_OS"; continue; }
+            # Bound on Linux but not here: an `any` package would take the place of the linux one. It is removed, so
+            # that the artifact only carries the entries of the packages built for this system.
+            if [ "$(node -p "require('./$entry').platform")" = any ]; then
+              echo "::notice::$id : aucun paquet propre à $RUNNER_OS"
+              rm -rf "$out"
+              continue
+            fi
             node scripts/store-index.mjs --check published/index.json "$entry"
             built="$built $id"
           done

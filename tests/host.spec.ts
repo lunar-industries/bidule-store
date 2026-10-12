@@ -1,4 +1,5 @@
 import { test } from '@japa/runner'
+import type { ApiClient } from '@japa/api-client'
 import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
@@ -6,7 +7,9 @@ import { ExtensionHost } from '#extensions/host'
 
 // Our modules in the core's real host (bidule's `node ace test`), not in their unit tests' fake context: what the core
 // refuses of an extension (a setting its manifest does not declare, a command or role it did not ask for) only shows
-// here. Run it with `scripts/check-host.sh` (it needs the modules linked in bidule/extensions: `npm run store:link`).
+// here. Run it with `scripts/check-host.sh` (it needs the modules in bidule/extensions: `npm run store:link`, or the
+// copies the publication workflow makes). The modules are those the core lists as community ones: none is named here
+// but the module of time, whose conflict with the official Temps is checked.
 //
 // The script runs it twice. First as the checkout is, with the official Temps on: `lunar-industries-temps` declares
 // that it cannot run beside it, so the core puts it in error and it must say so. Then with Temps left out
@@ -14,29 +17,30 @@ import { ExtensionHost } from '#extensions/host'
 const TOKEN = { 'x-bidule-token': 'dev' }
 const WITHOUT_TEMPS = process.env.LUNAR_WITHOUT_TEMPS === '1'
 const TEMPS = 'lunar-industries-temps'
-const MODULES = [
-  'lunar-industries-branches',
-  'lunar-industries-claude',
-  'lunar-industries-common',
-  'lunar-industries-containers',
-  'lunar-industries-kanban',
-  TEMPS,
-]
-// Those that run in this pass: the one in conflict with the official Temps does not run beside it.
-const RUNNING = MODULES.filter((id) => WITHOUT_TEMPS || id !== TEMPS)
+// Whether a module runs in this pass: the one in conflict with the official Temps does not run beside it.
+const runs = (id: string) => WITHOUT_TEMPS || id !== TEMPS
+
+type Listed = { id: string; error: string | null; unofficial: boolean }
+type Group = {
+  id: string
+  fields: { key: string; type: string; default?: unknown; options?: { value: string }[] }[]
+}
 
 test.group('Lunar Industries modules · in the core’s host', (group) => {
   group.each.setup(() => testUtils.db().withGlobalTransaction())
 
-  test('each one is listed, without an error', async ({ client, assert }) => {
+  // This store's modules, as the core lists them: those its package marks `bidule.storeOnly`.
+  const storeModules = async (client: ApiClient) => {
     const res = await client.get('/api/extensions').headers(TOKEN)
     res.assertStatus(200)
-    const listed: { id: string; error: string | null }[] = res.body().extensions ?? res.body()
-    for (const id of RUNNING) {
-      const ext = listed.find((e) => e.id === id)
-      assert.exists(ext, `${id} is not listed (npm run store:link)`)
-      assert.isNull(ext?.error, `${id}: ${ext?.error}`)
-    }
+    const listed: Listed[] = res.body()
+    return listed.filter((e) => e.unofficial)
+  }
+
+  test('each one is listed, without an error', async ({ client, assert }) => {
+    const modules = await storeModules(client)
+    assert.isNotEmpty(modules, 'no module of this store is listed (npm run store:link)')
+    for (const ext of modules.filter(({ id }) => runs(id))) assert.isNull(ext.error, `${ext.id}: ${ext.error}`)
   })
 
   test('the module of time is in error beside the official Temps, and runs without it', async ({
@@ -76,15 +80,13 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     client,
     assert,
   }) => {
+    const ids = (await storeModules(client)).map((e) => e.id)
     const res = await client.get('/api/settings').headers(TOKEN)
     res.assertStatus(200)
-    const groups: { id: string; fields: { key: string; type: string; default?: unknown; options?: { value: string }[] }[] }[] =
-      res.body().groups
-    for (const id of MODULES) {
-      const group = groups.find((g) => g.id === id)
+    const groups: Group[] = res.body().groups
+    for (const id of ids) {
       // A module without settings has no section.
-      if (!group) continue
-      for (const field of group.fields) {
+      for (const field of groups.find((g) => g.id === id)?.fields ?? []) {
         assert.isTrue(field.key.startsWith(`${id}.`), `${field.key} is outside ${id}`)
         if (field.type === 'choice') {
           assert.isTrue(
@@ -96,9 +98,9 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     }
   })
 
-  test('each starts, and what it reads of its own settings is allowed by the core', async ({ assert }) => {
+  test('each starts, and what it reads of its own settings is allowed by the core', async ({ client, assert }) => {
     const host = await app.container.make(ExtensionHost)
-    for (const id of RUNNING) {
+    for (const { id } of (await storeModules(client)).filter((e) => runs(e.id))) {
       await host.activate(id)
       assert.isTrue(host.isStarted(id), `${id} did not start`)
     }
@@ -190,7 +192,7 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     ['lunar-industries-containers', 'containers'],
     ['lunar-industries-claude', 'status'],
   ] as const
-  for (const [id, path] of routes.filter(([id]) => RUNNING.includes(id))) {
+  for (const [id, path] of routes.filter(([id]) => runs(id))) {
     test(`GET /api/ext/${id}/${path} answers without an error of the core`, async ({ client, assert }) => {
       const res = await client.get(`/api/ext/${id}/${path}`).headers(TOKEN)
       // 403: the experimental Claude sessions are off, by design. 409/502: a role without its provider or a tool

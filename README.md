@@ -11,7 +11,7 @@ Bidule les marque « Communautaire · Lunar Industries ».
 
 ## Ajouter ce store dans Bidule
 
-Dans Réglages › Extensions › Stores, « Ajouter un store », avec :
+Dans Réglages › Stores, « Ajouter un store », avec :
 
 - le nom : `Lunar Industries` ;
 - l'adresse de l'index : `https://raw.githubusercontent.com/lunar-industries/bidule-store/main/index.json` ;
@@ -77,7 +77,30 @@ modules, et le test de contrat. Ensuite, il construit et signe chaque paquet ave
 Bidule, vérifie avec `scripts/store-index.mjs --check` qu'une version déjà publiée garde son manifeste, dépose le
 paquet dans la release `<id>-<version>` de ce dépôt, et écrit enfin l'entrée dans `index.json` sur `main`. Un module
 qui embarque du code propre à un système (une bibliothèque native, ou le Claude Code de l'Agent SDK) reçoit un paquet
-par système : Linux, Windows et macOS. Une seule publication tourne à la fois.
+par système : Linux, Windows et macOS.
+
+Une seule publication tourne à la fois, et GitHub ne garde qu'une seule publication en attente derrière elle : si
+l'on pousse plusieurs tags d'affilée, les publications en attente de trop sont annulées sans message. Pour publier
+plusieurs modules, poussez un seul tag `lunar/all@<date>`, ou attendez la fin d'une publication avant de pousser le
+tag suivant.
+
+Ce que le workflow attend de la branche de Bidule avec laquelle il construit (le `main` du fork privé, pour un tag) :
+`scripts/ci-env.mjs` (arrivé avec les vérifications de CI de Bidule) et l'option `--check` de
+`scripts/store-index.mjs` (arrivée avec le refus d'un manifeste changé). Tant que le `main` du fork n'est pas
+synchronisé avec celui de Bidule, le workflow s'arrête au début avec un message qui le dit.
+
+La première publication se fait dans cet ordre :
+
+1. synchroniser le `main` du fork privé `lunar-industries/bidule` avec celui de Bidule (cœur 0.2.1 publié) ;
+2. pousser le workflow et les modules sur `main` de ce dépôt ;
+3. pousser un tag `lunar/all@<date>` ;
+4. vérifier dans Actions que la publication passe, que les releases portent les paquets et que `index.json` les
+   liste ;
+5. ajouter ce store dans Bidule (Réglages › Stores) et installer un module ;
+6. ensuite seulement, proposer au store de Bidule de retirer les modules de son index et de suggérer ce store.
+
+Les journaux de ce workflow sont publics, comme ce dépôt. Quand une étape échoue, ils peuvent montrer des chemins et
+des messages du code privé de Bidule (un avertissement de compilation, une erreur de test) : c'est accepté.
 
 Secrets du dépôt : `BIDULE_SIGNING_KEY`, la clé privée ed25519 de ce store (format PEM), et `BIDULE_DEPLOY_KEY`, la
 clé SSH privée de déploiement du fork `lunar-industries/bidule`. La clé privée du store ne doit jamais être perdue :
