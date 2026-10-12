@@ -82,6 +82,22 @@
               "signature": "f/JDP8l5j/Cr5FBxTFdZuXnNsbecMEzLT1nAYhJ1ogJrFRj/zHH2B7FtIRRvDJg64qSqNPfLBDglD0SZbBf6Dw=="
             }
           }
+        },
+        "0.1.2": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-12",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-common-0.1.2/lunar-industries-common-0.1.2.tgz",
+              "size": 5497,
+              "sha256": "55667f9551df10466011b62938fc47e7942f2dde87645665ea9bf6392ccf7c5a",
+              "signature": "6DZgu5yNSgLvOlKDuNpUYFw+kjLEA65Ah73VmwEfv8Cd8TqNxJu06/YLFfktwxbFxRt2ZA2ZrbofMG+xLG49AA=="
+            }
+          }
         }
       }
     },
@@ -130,6 +146,24 @@
               "signature": "8a6J+O50Q3/FgsxPt5Z10P8wsVxw/qZBSaqXExzEqpQbRFrIjI/n8fdXhaYynl/UCkK7vHef02XqswJm2KtpDg=="
             }
           }
+        },
+        "0.5.4": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-12",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-kanban-0.5.4/lunar-industries-kanban-0.5.4.tgz",
+              "size": 15677,
+              "sha256": "e18630a895c0297440cead0891c46ca2d15a89fd2e3796110970f844039693c0",
+              "signature": "IDPYAXQNgQuRmb7h3DU397QXkUx9sb6pYR5YV680X/niM8Zy9mBxbRNzlHocDvvCz5/+l+SbAykWN2eQpaKGBw=="
+            }
+          }
         }
       }
     },
@@ -152,6 +186,24 @@
               "size": 31354,
               "sha256": "bcc3b38ff6252ec604c2dfc7e611ccaec9e4571bdff49aacd1f98437c07e0972",
               "signature": "clGk5NX8eA7qN6hl3Z+W/lsa6dskN60+KZe5UIXM4ot6LqkimRDVjuA9QA1h8zN0HpYIhw8Hh1O8mqq6eoUZDQ=="
+            }
+          }
+        },
+        "0.4.4": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-12",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-temps-0.4.4/lunar-industries-temps-0.4.4.tgz",
+              "size": 31404,
+              "sha256": "20cce0624cdb11ef939b3219e742bf9e383b508a8d74c8a47cc6ae521b974eee",
+              "signature": "3JEjiX8PS+kvzVizK35EQ6cilKyAJDnc2KJflbe4ZWxz3Gvr8ZzXDHL5Qz/Gtp+mvnUJN+YSL5GqA11yLNk5Dg=="
             }
           }
         }
