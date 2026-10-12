@@ -22,9 +22,12 @@ class CommandError extends Error {
   }
 }
 
-// What a command prints on stdout, and on stderr too (a container's logs come out of both). The engines run where
-// the outside tools run (ctx.env): inside WSL on Windows, in the toolbox or on the Flatpak's host, or here; from the
-// home folder there. The environment builds the command, so that it never runs somewhere else.
+// The engines run where the outside tools run (ctx.env): inside WSL on Windows, in the toolbox or on the Flatpak's
+// host, or here; from the home folder there. The environment builds or runs each command, so that it never runs
+// somewhere else.
+
+// What a command prints on stdout, and on stderr too (a container's logs come out of both): ctx.env.run gives stdout
+// only, so this one is started on what ctx.env.command builds.
 function run(
   env: Environment,
   cli: string,
@@ -42,8 +45,31 @@ function run(
     )
   })
 }
-const exec = async (env: Environment, cli: string, args: string[], timeout?: number) =>
-  (await run(env, cli, args, timeout)).stdout
+
+// What a failed command of the environment printed on one of its outputs (ctx.env.run gives them with the error).
+const printed = (err: unknown, output: 'stdout' | 'stderr'): string => {
+  const text = typeof err === 'object' && err !== null ? Reflect.get(err, output) : undefined
+  return typeof text === 'string' ? text : ''
+}
+
+// What a command prints on stdout, run by the environment (ctx.env.run).
+async function exec(env: Environment, cli: string, args: string[], timeout = 15_000): Promise<string> {
+  try {
+    return await env.run({ argv: [cli, ...args], timeout })
+  } catch (err) {
+    const message = printed(err, 'stderr').trim() || (err instanceof Error ? err.message : String(err))
+    throw new CommandError(message, printed(err, 'stdout'))
+  }
+}
+
+// `events` is listened to again after it ends: 10 s later the first time, then twice as long each time it ends again,
+// up to 10 min; back to 10 s after a run that lasted more than a minute (the engine was there, then restarted).
+const EVENTS_RETRY_MS = 10_000
+const EVENTS_RETRY_MAX_MS = 10 * 60_000
+const EVENTS_STEADY_MS = 60_000
+
+export const nextRetry = (previous: number | null, lasted: number) =>
+  previous === null || lasted > EVENTS_STEADY_MS ? EVENTS_RETRY_MS : Math.min(previous * 2, EVENTS_RETRY_MAX_MS)
 
 // What `docker inspect` and `podman inspect` both give (Podman follows Docker's format), as far as the page needs.
 type Bindings = Record<string, { HostIp?: string; HostPort?: string }[] | null> | null
@@ -213,7 +239,9 @@ export class ContainerCli {
   constructor(
     readonly cli: 'docker' | 'podman',
     readonly name: string,
-    protected env: Environment
+    protected env: Environment,
+    // Starts a long command the environment built (events, and what the page follows); another one in the tests.
+    protected start: typeof spawn = spawn
   ) {}
 
   get id(): string {
@@ -295,20 +323,26 @@ export class ContainerCli {
     let stopped = false
     let debounce: NodeJS.Timeout | undefined
     let retry: NodeJS.Timeout | undefined
+    // The last wait before listening again (see nextRetry).
+    let wait: number | null = null
     const start = () => {
+      const startedAt = Date.now()
       const { file, args, cwd } = this.env.command({
         argv: [this.cli, 'events', '--format', '{{json .}}', '--filter', 'type=container'],
       })
-      child = spawn(file, args, { stdio: ['ignore', 'pipe', 'ignore'], cwd, windowsHide: true })
+      child = this.start(file, args, { stdio: ['ignore', 'pipe', 'ignore'], cwd, windowsHide: true })
       // One change often comes as several events (create, start, attach…): they count once.
       child.stdout?.on('data', () => {
         clearTimeout(debounce)
         debounce = setTimeout(onChange, 300)
       })
       child.on('error', () => {})
-      // The engine restarted, or the command died: listen again a little later.
-      child.on('exit', () => {
-        if (!stopped) retry = setTimeout(start, 10_000)
+      // The engine restarted, or the command died (or could not start): listen again later, ever later while it keeps
+      // ending at once.
+      child.on('close', () => {
+        if (stopped) return
+        wait = nextRetry(wait, Date.now() - startedAt)
+        retry = setTimeout(start, wait)
       })
     }
     start()
