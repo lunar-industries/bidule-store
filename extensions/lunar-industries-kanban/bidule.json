@@ -3,6 +3,9 @@
   "version": "0.5.0",
   "title": "Lunar Industries - Kanban",
   "engine": "^0.2.0",
+  "dependencies": {
+    "lunar-industries-common": "^0.1.0"
+  },
   "contributes": {
     "needs": [
       {
@@ -66,13 +69,6 @@
             }
           ],
           "default": "5"
-        },
-        {
-          "key": "lunar-industries-kanban.hiddenBranches",
-          "type": "text",
-          "title": "Branches d’intégration",
-          "help": "Séparées par des virgules, absentes du bac des branches sans tâche et de la fenêtre « Lier des branches » (la branche par défaut de chaque dépôt l’est toujours).",
-          "default": "main, master, develop, launchpad, factory, orbit"
         },
         {
           "key": "lunar-industries-kanban.hidden",

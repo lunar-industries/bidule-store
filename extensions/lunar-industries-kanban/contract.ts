@@ -1,10 +1,12 @@
 // Lunar Industries - Kanban: Simon's Kanban (quack-board), an unofficial one competing with Bidule's own (`kanban`).
 // The board itself comes from the core's routes over the tasks (/api/board, /api/tasks/…), as for any Kanban; the
 // branches of the cards are the core's objects (branches, their repository, review and pipeline, their task's link),
-// through the module's own routes, under /api/ext/lunar-industries-kanban:
+// read and linked by lunar-industries-common's commands, through the module's own routes, under
+// /api/ext/lunar-industries-kanban:
 //   GET branches                 { available, branches: KanbanBranch[] }   (available: someone provides branches)
 //   PUT tasks/:id/branches       { branches: BranchRef[] } → { branches: KanbanBranch[] }
 //   GET review?repo&name         { url }  (the branch's review, else its pipeline)
+import type {} from '@bidule/ext-lunar-industries-common/contract'
 import type { Ci, ReviewState } from '@bidule/sdk/objects'
 
 // A branch by its repository's path and its name.
