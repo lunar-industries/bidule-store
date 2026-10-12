@@ -8,12 +8,12 @@ export type KanbanAction = PointData<'kanban'>['actions'][number]
 const GROUPS: TaskGroup[] = ['todo', 'doing', 'done']
 const isGroup = (value: unknown): value is TaskGroup => GROUPS.some((g) => g === value)
 
-// A card action as the point's contract says it: a command and a title, known groups, a setting of the contributing
-// extension's own; null otherwise.
-function readAction(raw: unknown, extension: string): KanbanAction | null {
+// A card action as the point's contract says it: one of the contributing extension's commands and a title, known
+// groups, a setting of that extension's own; null otherwise.
+function readAction(raw: unknown, extension: string, commands: string[]): KanbanAction | null {
   if (typeof raw !== 'object' || raw === null || !('command' in raw) || !('title' in raw)) return null
   const { command, title } = raw
-  if (typeof command !== 'string' || typeof title !== 'string') return null
+  if (typeof command !== 'string' || typeof title !== 'string' || !commands.includes(command)) return null
   const action: KanbanAction = { command, title }
   if ('groups' in raw && raw.groups !== undefined) {
     if (!Array.isArray(raw.groups)) return null
@@ -28,15 +28,22 @@ function readAction(raw: unknown, extension: string): KanbanAction | null {
   return action
 }
 
+// What was refused is said once: each reading checks the contributions again.
+const warned = new Set<string>()
+
 // A contribution's data: its valid actions (none when it gives none); an invalid one is dropped, with a warning
-// naming the extension, and a contribution whose actions are not a list is refused.
-export function parseKanban(data: unknown, extension: string): PointData<'kanban'> | null {
+// naming the extension said once, and a contribution whose actions are not a list is refused.
+export function parseKanban(data: unknown, extension: string, commands: string[]): PointData<'kanban'> | null {
   const raw = typeof data === 'object' && data !== null && 'actions' in data ? data.actions : []
   if (!Array.isArray(raw)) return null
   return {
     actions: raw.flatMap((a: unknown) => {
-      const action = readAction(a, extension)
-      if (!action) console.warn(`${extension} : une action de carte invalide est écartée`, a)
+      const action = readAction(a, extension, commands)
+      const key = `${extension}\n${JSON.stringify(a)}`
+      if (!action && !warned.has(key)) {
+        warned.add(key)
+        console.warn(`${extension} : une action de carte invalide est écartée`, a)
+      }
       return action ? [action] : []
     }),
   }
