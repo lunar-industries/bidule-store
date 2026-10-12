@@ -98,6 +98,22 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     }
   })
 
+  test('a setting dated in milliseconds by an older migration is repaired, and the settings load again', async ({
+    client,
+    assert,
+  }) => {
+    const key = 'lunar-industries-kanban.staleDays'
+    await db.from('settings').where('key', key).delete()
+    await db.table('settings').insert({ key, value: '7', created_at: Date.now(), updated_at: Date.now() })
+    const file = app.makePath('../../extensions/lunar-industries-common/database/migrations/1791797500000_repair_settings_dates.ts')
+    const { default: Repair } = await import(file)
+    await new Repair(db.connection(), file).execUp()
+    const row = await db.from('settings').where('key', key).select('created_at', 'updated_at').firstOrFail()
+    assert.match(row.created_at, /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/)
+    assert.match(row.updated_at, /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/)
+    ;(await client.get('/api/settings').headers(TOKEN)).assertStatus(200)
+  })
+
   test('each starts, and what it reads of its own settings is allowed by the core', async ({ client, assert }) => {
     const host = await app.container.make(ExtensionHost)
     for (const { id } of (await storeModules(client)).filter((e) => runs(e.id))) {

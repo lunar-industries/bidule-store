@@ -1,4 +1,5 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
+import { DateTime } from 'luxon'
 import { settingsToKeep } from '../../server/settings_to_keep.ts'
 
 // The settings the modules each kept, now shared: what the user saved in them is taken over once
@@ -31,7 +32,9 @@ export default class extends BaseSchema {
       }
       const kept = settingsToKeep(stored, used)
       if (!kept.size) return
-      const now = new Date()
+      // As Lucid writes a date in SQLite: a Date would be stored as milliseconds, which the core's Setting model cannot
+      // read, and then no setting at all would load.
+      const now = DateTime.local().toFormat('yyyy-MM-dd HH:mm:ss')
       await db
         .table(this.tableName)
         .multiInsert([...kept].map(([key, value]) => ({ key, value, created_at: now, updated_at: now })))

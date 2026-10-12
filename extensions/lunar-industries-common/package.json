@@ -1,6 +1,6 @@
 {
   "name": "@bidule/ext-lunar-industries-common",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Ce que les modules Lunar Industries partagent : les branches telles que le cœur les a (tâche, revue, CI), le lien d'une branche à une tâche fait à la main, et les réglages communs (branches d'intégration, cibles des MR, nommage des branches)",
   "type": "module",

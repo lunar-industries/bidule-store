@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-common",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "title": "Lunar Industries - Commun",
   "engine": "^0.3.0",
   "contributes": {

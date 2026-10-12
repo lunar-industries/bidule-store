@@ -1,4 +1,5 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
+import { DateTime } from 'luxon'
 import { deployBranchesToKeep, OLD_DEPLOY_BRANCHES } from '../../server/settings.ts'
 
 // The production branches no longer have a default: an install that used the module with the old one, never saved,
@@ -17,7 +18,9 @@ export default class extends BaseSchema {
       for (const table of TABLES) used ||= Boolean(await db.from(table).select('day').first())
       const value = deployBranchesToKeep(row?.value, used)
       if (value === null) return
-      const now = new Date()
+      // As Lucid writes a date in SQLite: a Date would be stored as milliseconds, which the core's Setting model cannot
+      // read, and then no setting at all would load.
+      const now = DateTime.local().toFormat('yyyy-MM-dd HH:mm:ss')
       await db.table(this.tableName).insert({ key: KEY, value, created_at: now, updated_at: now })
     })
   }
