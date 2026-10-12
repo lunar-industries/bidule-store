@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "title": "Lunar Industries - Claude",
-  "engine": "^0.2.0",
+  "engine": "^0.2.1",
   "activation": [
     "onEvent:objects.merged"
   ],
@@ -53,22 +53,24 @@
         "group": "Lunar Industries - Claude"
       }
     ],
-    "kanban": {
-      "actions": [
-        {
-          "command": "lunar-industries-claude.startTask",
-          "title": "Démarrer…",
-          "setting": "lunar-industries-claude.enabled",
-          "groups": [
-            "todo"
-          ]
-        },
-        {
-          "command": "lunar-industries-claude.newSession",
-          "title": "Session Claude…",
-          "setting": "lunar-industries-claude.enabled"
-        }
-      ]
+    "to": {
+      "kanban": {
+        "actions": [
+          {
+            "command": "lunar-industries-claude.startTask",
+            "title": "Démarrer…",
+            "setting": "lunar-industries-claude.enabled",
+            "groups": [
+              "todo"
+            ]
+          },
+          {
+            "command": "lunar-industries-claude.newSession",
+            "title": "Session Claude…",
+            "setting": "lunar-industries-claude.enabled"
+          }
+        ]
+      }
     },
     "events": [
       "lunar-industries-claude.sessions",

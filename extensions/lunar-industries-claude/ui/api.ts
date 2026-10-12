@@ -1,4 +1,4 @@
-import type { Board } from '@bidule/sdk'
+import { readTasks, type Board } from '@bidule/sdk'
 import type {
   Attachments,
   ClaudePlace,
@@ -63,10 +63,11 @@ export const api = {
   repos: () => get<{ repos: RepoSettings[] }>('repos'),
 }
 
-// The core's board (its `task` objects): the tasks a session starts from or gets attached to.
+// The user's tasks in the core (its `task` objects): those a session starts from or gets attached to; null without a
+// provider of tasks, or when they cannot be read.
 export async function board(): Promise<Board | null> {
-  const b = await json<Board>('/api/board').catch(() => null)
-  return b && b.source ? b : null
+  const b = await readTasks().catch(() => null)
+  return b && b.source !== null ? b : null
 }
 
 // What to tell the user.
