@@ -179,3 +179,6 @@ export function parseList(value: unknown): string[] {
     return []
   }
 }
+
+// The branch tray (setting `lunar-industries-kanban.trayOpen`): open unless the user closed it (« false »).
+export const trayIsOpen = (value: unknown) => value !== 'false'

@@ -5,6 +5,7 @@ import {
   MascotHead,
   openDialog,
   react,
+  saveSettingValues,
   useHint,
   useCardActions,
   useKanbanParts,
@@ -14,6 +15,7 @@ import {
   useVoice,
   type Advice,
   type KanbanContext,
+  type SettingValues,
   type Task,
 } from '@bidule/sdk'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
@@ -38,30 +40,34 @@ import {
   orphansOf,
   parseList,
   shortBranch,
+  trayIsOpen,
   type Column,
   type Mark,
   type Tone,
 } from './layout.ts'
 import { LinkBranches } from './LinkBranches.tsx'
 
-// Per-viewer conveniences, kept in this browser only (a private window simply starts afresh).
+// The columns folded or unfolded against their default, and whether the branch tray is open: hidden settings of the
+// module, kept by the API (the page's own storage starts empty at each launch of the app, a new port being a new
+// origin).
 const TOGGLED = 'lunar-industries-kanban.toggled'
 const TRAY = 'lunar-industries-kanban.trayOpen'
-function saved(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
+
+// A hidden setting shown changed at once: what was just written stands until the API's value moves (to it, or to
+// another window's), or until the write fails (the mascot says why).
+function useWrittenSetting(key: string, values: SettingValues | null): [unknown, (raw: string) => void] {
+  const [written, setWritten] = useState<{ from: unknown; raw: string } | null>(null)
+  const stored = values?.[key]
+  const write = (raw: string) => {
+    setWritten({ from: stored, raw })
+    saveSettingValues({ [key]: raw }).catch((err: unknown) => {
+      setWritten(null)
+      const message = errorMessage(err)
+      react('panic', message, message)
+    })
   }
+  return [written && written.from === stored ? written.raw : stored, write]
 }
-function keep(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    // Storage refused: the choice lasts as long as the page.
-  }
-}
-const savedToggles = (): ReadonlySet<string> => new Set(parseList(saved(TOGGLED)))
 
 // What a drag carries: a card (to another column) or a branch of the tray (onto a card).
 const TASK_TYPE = 'application/x-lik-task'
@@ -119,8 +125,10 @@ export function Kanban() {
   // The actions of the card whose menu is open, by its task's group (an extension may offer some only on tasks to do).
   const actionsFor = useCardActions(contributions.actions)
   useKanbanRevision()
-  const [toggled, setToggled] = useState(savedToggles)
-  const [trayOpen, setTrayOpen] = useState(() => saved(TRAY) !== 'false')
+  const [toggledRaw, writeToggled] = useWrittenSetting(TOGGLED, values)
+  const toggled = useMemo((): ReadonlySet<string> => new Set(parseList(toggledRaw)), [toggledRaw])
+  const [trayRaw, writeTray] = useWrittenSetting(TRAY, values)
+  const trayOpen = trayIsOpen(trayRaw)
   const [over, setOver] = useState<string | null>(null)
   const [branchOver, setBranchOver] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ task: Task; x: number; y: number } | null>(null)
@@ -145,13 +153,9 @@ export function Kanban() {
   const toggleFold = (name: string) => {
     const next = new Set(toggled)
     if (!next.delete(name)) next.add(name)
-    setToggled(next)
-    keep(TOGGLED, JSON.stringify([...next]))
+    writeToggled(JSON.stringify([...next]))
   }
-  const toggleTray = () => {
-    setTrayOpen(!trayOpen)
-    keep(TRAY, String(!trayOpen))
-  }
+  const toggleTray = () => writeTray(String(!trayOpen))
 
   // Optimistic: the card jumps to its new column at once; a failure snaps it back.
   const move = async (task: Task, status: string) => {
