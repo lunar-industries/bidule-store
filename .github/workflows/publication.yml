@@ -1,0 +1,328 @@
+# Publishes this store's modules (extensions/<id>): each package built and signed by Bidule's own scripts, uploaded to
+# a release of this repository (`<id>-<version>`, never marked « latest »: each one is one version of one module), then
+# added to the index.json of main, the one Bidule reads. See « Publier une version » in the README.
+#
+#   - a tag `lunar/<id>@<version>` publishes that module (its bidule.json must say that version);
+#     `lunar/<id>@<version>-<anything>` publishes that version again (its packages rebuilt, a system added);
+#   - a tag `lunar/all@<anything>` (a date): every module whose version is not in the index yet;
+#   - by hand (Actions › Publication › Run workflow): one id, or `all`, and the ref of Bidule to build with.
+#
+# Bidule's code is private: lunar-industries/bidule is cloned with a deploy key (its main, or the ref given by hand),
+# and this store's modules are copied into that checkout for the run, as Bidule's own extensions.yml does with its
+# store. Nothing is built while the checks fail: each module's tests (vitest), the types, and scripts/check-host.sh
+# (the modules in the core's real extension host). Every module is built on Linux. One bound to a system (a native
+# library, or a dependency made for some systems only, like the Claude Code the Agent SDK ships) gets a linux-x64
+# package there, and is built again on Windows and macOS for theirs; the index is written once all are uploaded.
+#
+# Secrets: BIDULE_SIGNING_KEY (this store's ed25519 private key, PEM; the public one is in the README) and
+# BIDULE_DEPLOY_KEY (a read-only SSH deploy key of lunar-industries/bidule). The releases and the index are written
+# with the run's own token.
+name: Publication
+
+on:
+  push:
+    tags: ['lunar/*']
+  workflow_dispatch:
+    inputs:
+      id:
+        description: 'Module à publier (ou all)'
+        required: true
+        default: all
+      bidule-ref:
+        description: 'Branche, tag ou commit de lunar-industries/bidule avec lequel construire'
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+# One run at a time: each one writes the index, and replaces the packages of the releases it publishes to
+# (`gh release upload --clobber`): two runs publishing the same version at once would leave packages whose sha256 is
+# not the one the index holds. The whole run is held, the checks included.
+concurrency:
+  group: store-index
+  cancel-in-progress: false
+
+env:
+  # A tag builds with Bidule's main; by hand, with the ref asked.
+  BIDULE_REF: ${{ inputs.bidule-ref || 'main' }}
+  # Nothing here runs Electron: no download.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  linux:
+    name: Vérifications, puis paquets Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    outputs:
+      ids: ${{ steps.which.outputs.ids }}
+      bound: ${{ steps.build.outputs.bound }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: lunar-industries/bidule
+          ref: ${{ env.BIDULE_REF }}
+          ssh-key: ${{ secrets.BIDULE_DEPLOY_KEY }}
+          persist-credentials: false
+      # This store at the tag (or the branch run by hand), where check-host.sh expects it: bidule/bidule-store.
+      - uses: actions/checkout@v7
+        with:
+          path: bidule-store
+          persist-credentials: false
+      # The index as main holds it now (the tag's commit may be older): what is already published.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: published
+          sparse-checkout: index.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      # Without them, the run would fail late, or publish without checking the index first.
+      - name: Bidule's scripts this workflow relies on
+        run: |
+          if [ ! -f scripts/ci-env.mjs ] || ! grep -q -- '--check' scripts/store-index.mjs; then
+            echo "::error::lunar-industries/bidule@$BIDULE_REF n'a pas scripts/ci-env.mjs ou store-index.mjs --check : son main doit suivre celui de Bidule"
+            exit 1
+          fi
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # The store's modules beside Bidule's extensions, for this run only (unknown to the lockfile: npm install).
+      - name: The store's modules
+        run: |
+          for dir in bidule-store/extensions/*/; do
+            id=$(basename "$dir")
+            [ -f "$dir/bidule.json" ] || continue
+            [ -e "extensions/$id" ] && { echo "::error::$id existe déjà dans Bidule : un module du store garde son propre id"; exit 1; }
+            cp -r "$dir" "extensions/$id"
+          done
+          npm install --no-audit --no-fund
+      # The interfaces' typed clients (ui/registry) are generated from the API's routes, which need core/api/.env.
+      - run: node scripts/ci-env.mjs && npm run codegen -w @bidule/api
+
+      - name: Which modules
+        id: which
+        env:
+          WANTED: ${{ inputs.id }}
+        run: |
+          version=""
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            spec="${GITHUB_REF_NAME#lunar/}"; WANTED="${spec%@*}"; version="${spec#*@}"; version="${version%%-*}"
+          fi
+          if [ "$WANTED" = all ]; then
+            # Every module whose version the index does not have yet.
+            ids=$(node -e "
+              const fs = require('fs')
+              const index = fs.existsSync('published/index.json') ? require('./published/index.json') : { extensions: {} }
+              const out = fs.readdirSync('bidule-store/extensions').filter((id) => {
+                const file = './bidule-store/extensions/' + id + '/bidule.json'
+                return fs.existsSync(file) && !index.extensions[id]?.versions?.[require(file).version]
+              })
+              console.log(out.join(' '))")
+          else
+            # Only a module of this store: Bidule's own extensions, in the same checkout, are never signed here.
+            if [[ ! "$WANTED" =~ ^[a-z][a-z0-9-]*$ ]] || [ ! -f "bidule-store/extensions/$WANTED/bidule.json" ]; then
+              echo "::error::« $WANTED » n'est pas un module de ce store"
+              exit 1
+            fi
+            if [ -n "$version" ]; then
+              actual=$(node -p "require('./bidule-store/extensions/$WANTED/bidule.json').version")
+              [ "$actual" = "$version" ] || { echo "::error::bidule.json de $WANTED dit $actual, le tag $version"; exit 1; }
+            fi
+            ids=$WANTED
+          fi
+          echo "ids=$ids" >> "$GITHUB_OUTPUT"
+
+      - name: The modules' tests
+        env:
+          IDS: ${{ steps.which.outputs.ids }}
+        run: |
+          for id in $IDS; do
+            if [ -f "extensions/$id/tests/vitest.config.ts" ]; then
+              (cd "extensions/$id" && npx vitest run --config tests/vitest.config.ts)
+            else
+              echo "::notice::$id n'a pas de tests (tests/vitest.config.ts)"
+            fi
+          done
+      - run: npm run typecheck
+      - name: The modules in the core's host
+        run: sh bidule-store/scripts/check-host.sh
+
+      # The signing key is given to this step only, the run's token to the next one only.
+      - name: Build and sign
+        id: build
+        env:
+          BIDULE_SIGNING_KEY: ${{ secrets.BIDULE_SIGNING_KEY }}
+          IDS: ${{ steps.which.outputs.ids }}
+        run: |
+          bound=""
+          for id in $IDS; do
+            out="release/store/$id"
+            node scripts/pack-extension.mjs "$id" "$out"
+            entry=$(ls "$out"/*.json)
+            # Refused before the upload, which would replace the published package (a manifest changed since).
+            node scripts/store-index.mjs --check published/index.json "$entry"
+            # Bound to this system: Windows and macOS build their own.
+            [ "$(node -p "require('./$entry').platform")" = any ] || bound="$bound $id"
+          done
+          echo "bound=${bound# }" >> "$GITHUB_OUTPUT"
+      - name: Publish the packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IDS: ${{ steps.which.outputs.ids }}
+        run: |
+          for id in $IDS; do
+            version=$(node -p "require('./extensions/$id/bidule.json').version")
+            tag="$id-$version"
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+              || gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$id $version" --notes "$id $version" --latest=false
+            gh release upload "$tag" "release/store/$id"/*.tgz --repo "$GITHUB_REPOSITORY" --clobber
+            echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$tag $(ls "release/store/$id"/*.json)" >> release/store/entries-linux
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: entries-linux
+          path: |
+            release/store/**/*.json
+            release/store/entries-*
+          if-no-files-found: ignore
+
+  # The modules bound to a system, built again on the other systems' runners.
+  others:
+    name: Paquets ${{ matrix.os }}
+    needs: linux
+    if: needs.linux.outputs.bound != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: lunar-industries/bidule
+          ref: ${{ env.BIDULE_REF }}
+          ssh-key: ${{ secrets.BIDULE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          path: bidule-store
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: published
+          sparse-checkout: index.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: The store's modules
+        run: |
+          for dir in bidule-store/extensions/*/; do
+            id=$(basename "$dir")
+            [ -f "$dir/bidule.json" ] || continue
+            [ -e "extensions/$id" ] && { echo "::error::$id existe déjà dans Bidule : un module du store garde son propre id"; exit 1; }
+            cp -r "$dir" "extensions/$id"
+          done
+          npm install --no-audit --no-fund
+      - run: node scripts/ci-env.mjs && npm run codegen -w @bidule/api
+
+      - name: Build and sign
+        id: build
+        env:
+          BIDULE_SIGNING_KEY: ${{ secrets.BIDULE_SIGNING_KEY }}
+          BOUND: ${{ needs.linux.outputs.bound }}
+        run: |
+          built=""
+          for id in $BOUND; do
+            out="release/store/$id"
+            node scripts/pack-extension.mjs "$id" "$out"
+            entry=$(ls "$out"/*.json)
+            # Bound on Linux but not here: an `any` package would take the place of the linux one, nothing is added.
+            [ "$(node -p "require('./$entry').platform")" = any ] && { echo "::notice::$id : aucun paquet propre à $RUNNER_OS"; continue; }
+            node scripts/store-index.mjs --check published/index.json "$entry"
+            built="$built $id"
+          done
+          echo "built=${built# }" >> "$GITHUB_OUTPUT"
+      - name: Publish the packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILT: ${{ steps.build.outputs.built }}
+        run: |
+          for id in $BUILT; do
+            version=$(node -p "require('./extensions/$id/bidule.json').version")
+            # The release exists: the Linux job made it.
+            gh release upload "$id-$version" "release/store/$id"/*.tgz --repo "$GITHUB_REPOSITORY" --clobber
+            echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$id-$version $(ls "release/store/$id"/*.json)" >> "release/store/entries-$RUNNER_OS"
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: entries-${{ matrix.os }}
+          path: |
+            release/store/**/*.json
+            release/store/entries-*
+          if-no-files-found: ignore
+
+  # Written last, on the index as main holds it now (another run, or a commit by hand, may have changed it since);
+  # tried again if someone pushed in between. A system that failed leaves its packages out: the others are added.
+  index:
+    name: Index
+    needs: [linux, others]
+    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # store-index.mjs, from the same Bidule as the packages.
+      - uses: actions/checkout@v7
+        with:
+          repository: lunar-industries/bidule
+          ref: ${{ env.BIDULE_REF }}
+          ssh-key: ${{ secrets.BIDULE_DEPLOY_KEY }}
+          sparse-checkout: scripts
+          persist-credentials: false
+      # Keeps its credentials (the run's token), the index being pushed with them.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: store
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: entries-*
+          path: release/store
+          merge-multiple: true
+      - name: Update the index
+        env:
+          IDS: ${{ needs.linux.outputs.ids }}
+        run: |
+          ls release/store/entries-* >/dev/null 2>&1 || exit 0
+          cd store
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for attempt in 1 2 3 4 5; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            cat ../release/store/entries-* | while read -r base entry; do node ../scripts/store-index.mjs index.json "$base" "../$entry"; done
+            git add index.json
+            git diff --cached --quiet && exit 0
+            git commit -qm "index: $IDS"
+            git push -q origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1

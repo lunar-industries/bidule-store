@@ -52,5 +52,37 @@ Les tests d'un module se lancent depuis son dossier :
 la racine de Bidule, fait tourner `tests/host.spec.ts` dans l'hôte d'extensions réel du cœur : il vérifie que chaque
 module y est chargé sans erreur, qu'il démarre, et que le cœur ne refuse aucun de ses réglages.
 
+## Publier une version
+
+Le workflow `.github/workflows/publication.yml` publie les modules. Pour publier la version d'un module, montez sa
+version dans son `bidule.json` et son `package.json`, poussez ce commit sur `main`, puis poussez un tag qui nomme le
+module et cette version :
+
+```sh
+git tag lunar/lunar-industries-temps@0.4.0
+git push origin lunar/lunar-industries-temps@0.4.0
+```
+
+- `lunar/<id>@<version>` publie ce module ; la version du tag doit être celle de son `bidule.json`.
+- `lunar/<id>@<version>-<n'importe quoi>` publie à nouveau la même version, avec des paquets reconstruits (pour
+  ajouter un système qui lui manquait, par exemple).
+- `lunar/all@<date>` publie chaque module dont la version n'est pas encore dans l'index.
+- À la main, dans Actions › Publication › Run workflow : un id ou `all`, et la branche de Bidule avec laquelle
+  construire.
+
+Le code de Bidule est privé : le workflow clone le fork `lunar-industries/bidule` avec une clé de déploiement en
+lecture seule (sa branche `main`, ou celle donnée à la main), puis copie les modules de ce dépôt dans ce checkout.
+Avant de construire quoi que ce soit, il lance les tests de chaque module publié, le typecheck de Bidule avec les
+modules, et le test de contrat. Ensuite, il construit et signe chaque paquet avec `scripts/pack-extension.mjs` de
+Bidule, vérifie avec `scripts/store-index.mjs --check` qu'une version déjà publiée garde son manifeste, dépose le
+paquet dans la release `<id>-<version>` de ce dépôt, et écrit enfin l'entrée dans `index.json` sur `main`. Un module
+qui embarque du code propre à un système (une bibliothèque native, ou le Claude Code de l'Agent SDK) reçoit un paquet
+par système : Linux, Windows et macOS. Une seule publication tourne à la fois.
+
+Secrets du dépôt : `BIDULE_SIGNING_KEY`, la clé privée ed25519 de ce store (format PEM), et `BIDULE_DEPLOY_KEY`, la
+clé SSH privée de déploiement du fork `lunar-industries/bidule`. La clé privée du store ne doit jamais être perdue :
+sans elle, aucune mise à jour ne pourrait plus être signée, et une nouvelle clé obligerait chacun à retirer puis à
+rajouter le store.
+
 Le guide pour tenir un store est celui du store de Bidule :
 [docs/creer-un-store.md](https://github.com/verhaegheteddy/bidule-store/blob/main/docs/creer-un-store.md).
