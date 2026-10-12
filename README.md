@@ -1,34 +1,56 @@
-# Bidule : le store
+# Lunar Industries : un store de modules pour Bidule
 
-Ce dépôt public distribue [Bidule](https://github.com/verhaegheteddy/bidule) : les paquets et l'index viennent de
-la CI de l'app ; seules les sources des modules communautaires (`extensions/`) s'écrivent ici.
+Ce dépôt public est le store de Lunar Industries pour [Bidule](https://github.com/verhaegheteddy/bidule). Il propose
+les modules `lunar-industries-*`, qui concurrencent des modules officiels de Bidule (Kanban, Branches, Temps, Claude,
+Conteneurs) avec leur propre id. Ce n'est pas le store de Bidule : ses paquets sont signés par la clé de ce store, et
+Bidule les marque « Communautaire · Lunar Industries ».
 
-- **L'app** : les releases `vX.Y.Z` (installateurs Windows et macOS, Flatpak). L'app y cherche ses mises à jour.
-- **Linux** : `flatpak install --user https://verhaegheteddy.github.io/bidule-store/flatpak/bidule.flatpakref`
-  (dépôt Flatpak signé, sur les GitHub Pages de ce dépôt ; mises à jour avec celles du système).
-- **Les extensions** : `index.json` et leurs paquets signés, dans les releases `<id>-<version>`. L'app les installe
-  depuis Réglages › Extensions.
+- `index.json`, sur la branche `main` : l'index du store, que Bidule lit.
+- Les releases `<id>-<version>` : les paquets signés de chaque version d'un module.
+- `extensions/<id>` : les sources des modules.
 
-## Créer votre propre store
+## Ajouter ce store dans Bidule
 
-Bidule accepte d'autres stores que celui-ci (Réglages › Extensions › Stores) : un `index.json`, des paquets signés
-avec votre clé. Le guide : [docs/creer-un-store.md](docs/creer-un-store.md) ; l'outil qui signe et indexe un paquet :
-`tools/sign-package.mjs` (Node seul).
+Dans Réglages › Extensions › Stores, « Ajouter un store », avec :
 
-## Les modules communautaires
+- le nom : `Lunar Industries` ;
+- l'adresse de l'index : `https://raw.githubusercontent.com/lunar-industries/bidule-store/main/index.json` ;
+- la clé publique :
 
-`extensions/<id>` : les sources des modules qui concurrencent les officiels (Kanban, Branches, Temps, Claude,
-Conteneurs…), sur le même modèle qu'une extension de Bidule, avec leur propre id et `"bidule": { "storeOnly": true }`
-dans leur `package.json`. Ils respectent les contrats des modules officiels ; on désactive l'officiel dans
-Réglages › Extensions pour installer le leur. Les modules `lunar-industries-*` partagent une extension sans page,
-`lunar-industries-common` (les branches lues dans le cœur, le lien d'une branche à une tâche, les réglages communs) :
-chacun la déclare dans ses dépendances, et le store l'installe avec lui. `lunar-industries-temps` déclare son conflit
-avec Temps (`conflicts` du manifeste) : si les deux sont actifs, le cœur met le module en erreur, et il faut donc
-désactiver Temps avant de s'en servir. `lunar-industries-containers` demande ses moteurs à l'extension officielle
-`docker` (ses actions `docker.inspect`, `docker.logs`, `docker.usage`…), dont il dépend. Ils se construisent, se signent et se
-publient par le workflow Extensions de Bidule ; on y travaille en clonant ce dépôt dans le checkout de Bidule
-(`bidule-store/`) puis `npm run store:link` (voir `docs/distribution.md` de Bidule).
+  ```
+  -----BEGIN PUBLIC KEY-----
+  MCowBQYDK2VwAyEAAlodwhEpD729b8IuSYKpXsGO3wLfo9cQZfqT2QARcoM=
+  -----END PUBLIC KEY-----
+  ```
 
-Un module communautaire peut aussi vivre dans le store de son auteur, signé par la clé de ce store : Bidule peut
-suggérer ce store dans Réglages › Stores (voir « Être suggéré par Bidule » dans
-[docs/creer-un-store.md](docs/creer-un-store.md)).
+L'empreinte de cette clé est `SHA256:wrC7OJl9hufN6AXZApt2ejhePZiFis/CIfT7J1YzOfA`. Quand Bidule suggère ce store
+(sous « Stores suggérés par Bidule »), il montre cette empreinte : comparez-la avant de l'ajouter.
+
+Un module de ce store remplace un module officiel : désactivez l'officiel dans Réglages › Extensions avant
+d'installer le module Lunar Industries qui le remplace.
+
+## Passer du store de Bidule à celui-ci
+
+Les premières versions des modules `lunar-industries-*` ont été publiées par le store de Bidule. Un module installé
+depuis ce store-là y reste attaché : il ne reçoit plus de mises à jour une fois retiré de son index, et Bidule ne le
+fait pas passer à un autre store sans votre accord. Pour le reprendre depuis ce store-ci : retirez-le dans Réglages ›
+Extensions, redémarrez Bidule, puis installez-le depuis ce store. Le retrait n'enlève que le dossier du paquet : les
+tables, les réglages et les secrets du module restent, et le module les retrouve.
+
+## Travailler sur les modules
+
+Les modules se construisent avec le code de Bidule. Clonez ce dépôt dans un checkout de Bidule, sous le nom
+`bidule-store/`, puis liez ses modules :
+
+```sh
+git clone git@github.com:lunar-industries/bidule-store.git bidule-store
+npm run store:link
+```
+
+Les tests d'un module se lancent depuis son dossier :
+`npx vitest run --config tests/vitest.config.ts`. Le test de contrat, `sh bidule-store/scripts/check-host.sh` depuis
+la racine de Bidule, fait tourner `tests/host.spec.ts` dans l'hôte d'extensions réel du cœur : il vérifie que chaque
+module y est chargé sans erreur, qu'il démarre, et que le cœur ne refuse aucun de ses réglages.
+
+Le guide pour tenir un store est celui du store de Bidule :
+[docs/creer-un-store.md](https://github.com/verhaegheteddy/bidule-store/blob/main/docs/creer-un-store.md).
