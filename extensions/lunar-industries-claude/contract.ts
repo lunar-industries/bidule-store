@@ -157,13 +157,14 @@ export type SessionModel = { value: string; label: string; description: string; 
 export type Template = { name: string; description: string }
 
 // The Claude Code the sessions run: the one of the tools' environment (this machine, PowerShell, WSL, a toolbox, the
-// Flatpak's host).
+// Flatpak's host). `apiKey`: the module has the user's Anthropic API key, which the sessions use instead of the login.
 export type ClaudePlace = {
   where: string
   version: string | null
   loggedIn: boolean
   email: string | null
   subscription: string | null
+  apiKey: boolean
   error: string | null
 }
 

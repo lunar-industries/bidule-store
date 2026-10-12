@@ -89,6 +89,28 @@ describe('Sessions with a fake Claude Code', () => {
     expect(told.sessions.map(([, status]) => status)).toEqual(['running', 'idle', 'saved'])
   })
 
+  it('Claude Code’s own login by default; the module’s API key when the user gave one', async () => {
+    const id = await start('bonjour')
+    await until(() => service.loginOf(id) !== null)
+    expect(service.loginOf(id)).toBe('subscription')
+    await service.close(id)
+
+    const keyed = new SessionService({
+      env: fakeEnv(),
+      store,
+      settings: async () => settingsWith({ root: repo }),
+      git: async () => Object.assign(new FakeGit(), { repoList: [{ path: repo, label: 'app' }] }),
+      tasks: async () => null,
+      tell: { sessions: () => {}, session: () => {} },
+      executable: FAKE,
+      apiKey: async () => 'sk-test',
+    })
+    const other = await keyed.start({ repos: [repo], prompt: 'bonjour', mode: 'default' })
+    await until(() => keyed.loginOf(other) !== null)
+    expect(keyed.loginOf(other)).toBe('apiKey')
+    await keyed.close(other)
+  })
+
   it('« Toujours » gives Claude Code back the rule it proposed', async () => {
     const id = await start('lance un outil')
     const card = await asked(id)

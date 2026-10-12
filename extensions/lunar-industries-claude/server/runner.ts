@@ -75,17 +75,21 @@ export function claudeIn(env: Environment): Promise<string> {
   return lookup
 }
 
+const API_KEY = 'ANTHROPIC_API_KEY'
+
 /**
  * The environment of a session's Claude Code: this process's, without what would change who pays or where it runs.
  * Claude Code refuses to start inside another Claude Code session (the app may be launched from one), and an API key
- * would bill the use instead of the user's subscription.
+ * of this process would bill the use instead of the user's subscription: only the module's own key (a secret of its
+ * settings), when the user gave one, is used.
  */
-export function sessionEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function sessionEnv(apiKey = '', env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {
-    if (value === undefined || key.startsWith('CLAUDE') || key === 'ANTHROPIC_API_KEY') continue
+    if (value === undefined || key.startsWith('CLAUDE') || key === API_KEY) continue
     out[key] = value
   }
+  if (apiKey) out[API_KEY] = apiKey
   return out
 }
 
@@ -103,19 +107,26 @@ const definedOnly = (env: Record<string, string | undefined>): Record<string, st
  * this process reaches it: the environment makes it its own), started through ctx.env.command; the SDK talks to it
  * through stdin and stdout, which the environment's go-between (wsl.exe, toolbox, flatpak-spawn) relays. On this
  * machine (here, or in PowerShell), the environment the SDK prepared goes with the process, as its own spawn does;
- * elsewhere only the SDK's variables go, through the go-between. `start`: node's spawn (another one in the tests).
+ * elsewhere only the SDK's variables go, through the go-between. The API key, a secret, stays off the command line
+ * where it can: wsl.exe takes it from the process's environment (WSLENV); a toolbox and the Flatpak's host only take
+ * variables as arguments of their go-between. `start`: node's spawn (another one in the tests).
  */
 export function spawnIn(env: Environment, kind: EnvironmentKind, claude: string, folder: string, start: typeof spawn = spawn) {
   const local = kind === 'local' || kind === 'powershell'
   return (options: SpawnOptions): SpawnedProcess => {
-    const { file, args, cwd } = env.command({
-      argv: [claude, ...options.args],
-      cwd: folder,
-      env: local ? undefined : forwardedEnv(options.env),
-    })
+    const forwarded = forwardedEnv(options.env)
+    const { [API_KEY]: apiKey, ...others } = forwarded
+    const viaWslEnv = kind === 'wsl' && apiKey !== undefined
+    const there = local ? undefined : viaWslEnv ? others : forwarded
+    const { file, args, cwd } = env.command({ argv: [claude, ...options.args], cwd: folder, env: there })
+    const here = local
+      ? definedOnly(options.env)
+      : viaWslEnv
+        ? { ...definedOnly(process.env), [API_KEY]: apiKey, WSLENV: [process.env['WSLENV'], API_KEY].filter(Boolean).join(':') }
+        : undefined
     return start(file, args, {
       cwd,
-      env: local ? definedOnly(options.env) : undefined,
+      env: here,
       // stderr is not read: left piped, a chatty Claude Code would fill it and block.
       stdio: ['pipe', 'pipe', 'ignore'],
       signal: options.signal,
@@ -168,11 +179,12 @@ export function parseAuthStatus(stdout: string): Pick<ClaudePlace, 'loggedIn' | 
 
 /**
  * The Claude Code the sessions run: the one of the tools' environment (this machine, PowerShell, WSL's distro, the
- * toolbox, the Flatpak's host). Its version, and whether it is logged in. Nothing is sent to Claude.
+ * toolbox, the Flatpak's host). Its version, whether it is logged in, and whether the module has an API key of its own
+ * (`apiKey`: the sessions then use it). Nothing is sent to Claude.
  */
-export async function detect(env: Environment): Promise<ClaudePlace[]> {
+export async function detect(env: Environment, apiKey = false): Promise<ClaudePlace[]> {
   const info = await env.info()
-  const missing = (error: string): ClaudePlace => ({ where: info.label, version: null, loggedIn: false, email: null, subscription: null, error })
+  const missing = (error: string): ClaudePlace => ({ where: info.label, version: null, loggedIn: false, email: null, subscription: null, apiKey, error })
   if (info.problem) return [missing(info.problem)]
   const claude = await claudeIn(env).catch((err: Error) => err)
   if (claude instanceof Error) return [missing(claude.message)]
@@ -180,7 +192,7 @@ export async function detect(env: Environment): Promise<ClaudePlace[]> {
   try {
     // « 2.1.283 (Claude Code) »
     const version = (await ask(['--version'])).split(' ')[0] || null
-    return [{ where: info.label, version, ...parseAuthStatus(await ask(['auth', 'status'])), error: null }]
+    return [{ where: info.label, version, ...parseAuthStatus(await ask(['auth', 'status'])), apiKey, error: null }]
   } catch (err) {
     return [missing((err instanceof Error ? err.message : String(err)).split('\n')[0])]
   }

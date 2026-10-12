@@ -180,6 +180,8 @@ export interface SessionDeps {
   worktree?: (repo: string, branch: string) => Promise<{ path: string }>
   // The folders of the plugins every session loads (the module's skills, claude/plugin).
   plugins?: string[]
+  // The user's Anthropic API key (a secret of the module's settings); empty: Claude Code's own login.
+  apiKey?: () => Promise<string>
   // Another Claude Code than the one of the environment, started by the SDK itself (a fake one, in the tests).
   executable?: string
 }
@@ -444,10 +446,12 @@ export class SessionService {
     return placeOf(folder, this.deps.env, executable ? async () => executable : undefined)
   }
 
-  // How a session's Claude Code is started: the environment's (placeOf), or the SDK's own spawn of a fake one.
+  // How a session's Claude Code is started: the environment's (placeOf), or the SDK's own spawn of a fake one; with the
+  // user's API key when there is one.
   async #claudeOptions(place: Place) {
+    const apiKey = (await this.deps.apiKey?.()) ?? ''
     const { executable } = this.deps
-    return { env: sessionEnv(), ...(executable ? { pathToClaudeCodeExecutable: executable } : place.options) }
+    return { env: sessionEnv(apiKey), ...(executable ? { pathToClaudeCodeExecutable: executable } : place.options) }
   }
 
   // At the module's start: no process survived the previous API, the sessions it ran are saved.

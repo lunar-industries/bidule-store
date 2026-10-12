@@ -123,6 +123,16 @@ describe('Claude runner · starting it', () => {
     expect(started[0].env).toBeUndefined()
     expect(forwardedEnv({ CLAUDE_X: '1', HOME: '/h', MCP_TIMEOUT: '5', GONE: undefined })).toEqual({ CLAUDE_X: '1', MCP_TIMEOUT: '5' })
   })
+
+  it('the API key never goes on wsl.exe’s command line: WSLENV takes it there', () => {
+    const { started, start } = recorder()
+    spawnIn(fakeEnv('wsl'), 'wsl', CLAUDE, '\\\\wsl.localhost\\Ubuntu\\home\\me\\app', start)(
+      sdkSpawn({ CLAUDE_CODE_ENTRYPOINT: 'sdk-ts', ANTHROPIC_API_KEY: 'sk-secret' })
+    )
+    expect(started[0].args.join(' ')).not.toContain('sk-secret')
+    expect(started[0].env?.['ANTHROPIC_API_KEY']).toBe('sk-secret')
+    expect(started[0].env?.['WSLENV']?.split(':')).toContain('ANTHROPIC_API_KEY')
+  })
 })
 
 describe('Claude runner · paths inside WSL', () => {
@@ -134,16 +144,22 @@ describe('Claude runner · paths inside WSL', () => {
 })
 
 describe('Claude runner · environment and detection', () => {
-  it('a session’s environment has no Claude Code variable and no API key', () => {
-    const env = sessionEnv({
+  it('a session’s environment has no Claude Code variable, and no API key but the module’s own', () => {
+    const mine = {
       PATH: '/usr/bin',
       CLAUDECODE: '1',
       CLAUDE_CODE_ENTRYPOINT: 'cli',
-      ANTHROPIC_API_KEY: 'sk-x',
+      ANTHROPIC_API_KEY: 'sk-of-the-shell',
       ANTHROPIC_BASE_URL: 'https://proxy',
       HOME: '/home/me',
+    }
+    expect(sessionEnv('', mine)).toEqual({ PATH: '/usr/bin', ANTHROPIC_BASE_URL: 'https://proxy', HOME: '/home/me' })
+    expect(sessionEnv('sk-of-the-module', mine)).toEqual({
+      PATH: '/usr/bin',
+      ANTHROPIC_BASE_URL: 'https://proxy',
+      HOME: '/home/me',
+      ANTHROPIC_API_KEY: 'sk-of-the-module',
     })
-    expect(env).toEqual({ PATH: '/usr/bin', ANTHROPIC_BASE_URL: 'https://proxy', HOME: '/home/me' })
   })
 
   it('reads the login from `claude auth status`', () => {
@@ -161,14 +177,14 @@ describe('Claude runner · environment and detection', () => {
         return argv[1] === '--version' ? '2.1.289 (Claude Code)\n' : JSON.stringify({ loggedIn: true, email: 'me@example.com' })
       },
     })
-    expect(await detect(env)).toEqual([
-      { where: 'Ce poste', version: '2.1.289', loggedIn: true, email: 'me@example.com', subscription: null, error: null },
+    expect(await detect(env, true)).toEqual([
+      { where: 'Ce poste', version: '2.1.289', loggedIn: true, email: 'me@example.com', subscription: null, apiKey: true, error: null },
     ])
     expect(asked.slice(1)).toEqual([
       [CLAUDE, '--version'],
       [CLAUDE, 'auth', 'status'],
     ])
     const none = await detect(fakeEnv('local', { run: async () => '' }))
-    expect(none[0]).toMatchObject({ version: null, error: 'Claude Code introuvable dans Ce poste' })
+    expect(none[0]).toMatchObject({ version: null, apiKey: false, error: 'Claude Code introuvable dans Ce poste' })
   })
 })

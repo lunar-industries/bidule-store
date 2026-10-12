@@ -19,6 +19,8 @@ export let sessions: SessionService
 export const PLUGIN = fileURLToPath(new URL('../claude/plugin', import.meta.url))
 
 export const settings = () => readSettings(ctx)
+// The user's Anthropic API key (Réglages, kept in the system's keychain); empty: Claude Code's own login.
+export const apiKey = () => ctx.secrets.get('lunar-industries-claude.apiKey')
 // git's actions (the repos, git itself, its worktrees), through the core.
 export const git = async () => ctx.objects.client<GitSource>('git')
 // The core's branches: a task's, with their review and CI; a branch's task, and linking one by hand. Through
@@ -71,6 +73,7 @@ export async function activate(context: ServerContext) {
     tools: workspaceTools({ env: ctx.env, git, branches, tasks, forgeOf: forge, refreshForge: refreshBranch, settings, store }),
     worktree: repoWorktree,
     plugins: [PLUGIN],
+    apiKey,
   })
   // No process survived the previous API: the sessions it ran are saved.
   await sessions.recover()

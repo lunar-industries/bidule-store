@@ -387,23 +387,26 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
   )
 }
 
-// The Claude Code the sessions run (this machine's, WSL's), and whether it is logged in.
+// The Claude Code the sessions run (the one of the tools' environment), and whether it is logged in or the module has
+// an API key.
 export function Places({ places, checking }: { places: ClaudePlace[] | null; checking: boolean }) {
   if (!places?.length) return <span className="legend">{checking || !places ? 'Recherche de Claude Code…' : 'Aucun Claude Code trouvé.'}</span>
   return (
     <>
       {places.map((p) => (
         <div key={p.where} className="lc-check">
-          <span className={`tag lc-tone-${p.error ? 'bad' : p.loggedIn ? 'ok' : 'warn'}`}>
-            {p.error ? 'introuvable' : p.loggedIn ? 'prêt' : 'à connecter'}
+          <span className={`tag lc-tone-${p.error ? 'bad' : p.loggedIn || p.apiKey ? 'ok' : 'warn'}`}>
+            {p.error ? 'introuvable' : p.loggedIn || p.apiKey ? 'prêt' : 'à connecter'}
           </span>
           <span className="lc-check-text">
             <strong>Claude Code {p.where === 'Ce poste' ? 'sur ce poste' : `dans ${p.where}`}</strong>
             <span className="legend">
               {p.error ??
-                (p.loggedIn
-                  ? [`Version ${p.version ?? '?'}`, p.email, p.subscription].filter(Boolean).join(' · ')
-                  : 'Dans un terminal, lancez « claude » puis « /login », une seule fois.')}
+                (p.apiKey
+                  ? [`Version ${p.version ?? '?'}`, 'clé d’API des réglages'].join(' · ')
+                  : p.loggedIn
+                    ? [`Version ${p.version ?? '?'}`, p.email, p.subscription].filter(Boolean).join(' · ')
+                    : 'Dans un terminal, lancez « claude » puis « /login », une seule fois.')}
             </span>
           </span>
         </div>

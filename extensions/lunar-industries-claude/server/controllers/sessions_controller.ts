@@ -1,6 +1,6 @@
 import { basename, join, sep } from 'node:path'
 import type { HttpContext } from '@adonisjs/core/http'
-import { branches, ctx, enabled, git, sessions, settings, store, tasks } from '@bidule/ext-lunar-industries-claude/server/index'
+import { apiKey, branches, ctx, enabled, git, sessions, settings, store, tasks } from '@bidule/ext-lunar-industries-claude/server/index'
 import { SessionError } from '@bidule/ext-lunar-industries-claude/server/errors'
 import { detect, placeOf } from '@bidule/ext-lunar-industries-claude/server/runner'
 import { reviewTargetOf } from '@bidule/ext-lunar-industries-claude/server/settings'
@@ -64,10 +64,11 @@ const done = (found: boolean, message = 'Session terminée') => {
 // Taken from quack-board (ClaudesController, Simon's): the Claude sessions run by the Agent SDK, their conversation,
 // their decisions, their settings, and what the page shows beside them.
 export default class SessionsController {
-  // Whether the sessions are on, and the Claude Code they run (the one of the tools' environment).
+  // Whether the sessions are on, and the Claude Code they run (the one of the tools' environment), with or without the
+  // user's API key.
   async status() {
     const on = (await settings()).enabled
-    return { enabled: on, places: on ? await detect(ctx.env) : [] }
+    return { enabled: on, places: on ? await detect(ctx.env, Boolean(await apiKey())) : [] }
   }
 
   // The repos the app knows, with what the module's settings say of each, and their own review target.
