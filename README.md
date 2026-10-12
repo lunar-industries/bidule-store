@@ -22,7 +22,10 @@ Conteneurs…), sur le même modèle qu'une extension de Bidule, avec leur propr
 dans leur `package.json`. Ils respectent les contrats des modules officiels ; on désactive l'officiel dans
 Réglages › Extensions pour installer le leur. Les modules `lunar-industries-*` partagent une extension sans page,
 `lunar-industries-common` (les branches lues dans le cœur, le lien d'une branche à une tâche, les réglages communs) :
-chacun la déclare dans ses dépendances, et le store l'installe avec lui. Ils se construisent, se signent et se
+chacun la déclare dans ses dépendances, et le store l'installe avec lui. `lunar-industries-temps` déclare son conflit
+avec Temps (`conflicts` du manifeste) : si les deux sont actifs, le cœur met le module en erreur, et il faut donc
+désactiver Temps avant de s'en servir. `lunar-industries-containers` demande ses moteurs à l'extension officielle
+`docker` (ses actions `docker.inspect`, `docker.logs`, `docker.usage`…), dont il dépend. Ils se construisent, se signent et se
 publient par le workflow Extensions de Bidule ; on y travaille en clonant ce dépôt dans le checkout de Bidule
 (`bidule-store/`) puis `npm run store:link` (voir `docs/distribution.md` de Bidule).
 
