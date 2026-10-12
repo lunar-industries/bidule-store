@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-temps",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "title": "Lunar Industries - Temps",
-  "engine": "^0.2.0",
+  "engine": "^0.2.1",
   "activation": [
     "onEvent:objects.changed",
     "onEvent:objects.merged"

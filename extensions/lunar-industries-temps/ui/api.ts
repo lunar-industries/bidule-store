@@ -1,4 +1,4 @@
-import type { Board } from '@bidule/sdk'
+import { act, readTasks, type Board } from '@bidule/sdk'
 import type { DaySummary, DayView, LineInput, Summary } from '../contract.ts'
 
 // The module's routes (contract.ts lists them).
@@ -31,14 +31,14 @@ export const api = {
   summary: () => get<Summary>('summary'),
 }
 
-// The core's board (its `task` objects): the tasks a line goes to, and the columns (« passer en … »).
+// The user's tasks in the core (its `task` objects): those a line goes to, and the statuses (« passer en … »); null
+// without a provider of tasks, or when they cannot be read.
 export async function board(): Promise<Board | null> {
-  const b = await json<Board>('/api/board').catch(() => null)
-  return b && b.source ? b : null
+  const b = await readTasks().catch(() => null)
+  return b && b.source !== null ? b : null
 }
 
-// Writes a task's new status in the source (« passer en … »).
-export const moveTask = (id: string, status: string) =>
-  json<Board>(`/api/tasks/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+// Its provider writes a task's new status in its tool (« passer en … »).
+export const moveTask = (id: string, status: string) => act('task', 'task.move', id, { status })
 
 export const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err))

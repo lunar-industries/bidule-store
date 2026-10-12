@@ -505,7 +505,8 @@ export function TempsPage() {
   // Nothing is written to the source until the user asks.
   const startTask = (taskId: string, status: string) =>
     void run(async () => {
-      setBoard(await moveTask(taskId, status))
+      await moveTask(taskId, status)
+      loadBoard()
       react('quack', `${tasks.find((t) => t.id === taskId)?.title ?? 'La tâche'} passe en ${status}, coin !`)
     })
   const startButton = (taskId: string, column: string) => (
