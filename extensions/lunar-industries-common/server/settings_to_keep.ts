@@ -56,9 +56,14 @@ function union(stored: Map<string, string>, keys: readonly string[]): string | u
   return [...names.values()].join(', ')
 }
 
-// The first saved value that is not empty.
-const first = (stored: Map<string, string>, keys: readonly string[], valid: (v: string) => boolean = () => true) =>
-  keys.map((k) => textOf(stored.get(k))?.trim()).find((v) => v && valid(v))
+// The first saved value that is not empty, and the place of its key in `keys` (-1 when none).
+function firstOf(stored: Map<string, string>, keys: readonly string[], valid: (v: string) => boolean = () => true) {
+  const values = keys.map((k) => textOf(stored.get(k))?.trim())
+  const at = values.findIndex((v) => v && valid(v))
+  return { value: at < 0 ? undefined : values[at], at }
+}
+const first = (stored: Map<string, string>, keys: readonly string[], valid?: (v: string) => boolean) =>
+  firstOf(stored, keys, valid).value
 
 // Each repo's own target: Claude's per-repo settings, then the Branches page's, which wins.
 function targets(stored: Map<string, string>): Record<string, string> | undefined {
@@ -77,8 +82,9 @@ function targets(stored: Map<string, string>): Record<string, string> | undefine
  * The shared settings to save, by key, as the table keeps them, from the stored rows of the old keys and of the new
  * ones (`stored`, key → value). A shared setting already saved is left alone. The integration branches are the union
  * of the lists saved in the modules; when none was saved but the modules served before (`used`), the old default they
- * all followed; on a new install, nothing (the shared default applies). The review target, the naming and its
- * template come from the Branches page, else from Claude.
+ * all followed; on a new install, nothing (the shared default applies). The review target and the naming come from
+ * the Branches page, else from Claude; the template from the module whose naming was kept (a free template goes with
+ * its naming), else from the first that saved one.
  */
 export function settingsToKeep(stored: Map<string, string>, used: boolean): Map<string, string> {
   const out = new Map<string, string>()
@@ -87,8 +93,10 @@ export function settingsToKeep(stored: Map<string, string>, used: boolean): Map<
   }
   keep('integrationBranches', union(stored, OLD_KEYS.integrationBranches) ?? (used ? OLD_INTEGRATION : undefined))
   keep('reviewTarget', first(stored, OLD_KEYS.reviewTarget))
-  keep('naming', first(stored, OLD_KEYS.naming, (v) => NAMINGS.includes(v)))
-  keep('template', first(stored, OLD_KEYS.template))
+  const naming = firstOf(stored, OLD_KEYS.naming, (v) => NAMINGS.includes(v))
+  keep('naming', naming.value)
+  const sameModule = naming.at < 0 ? undefined : first(stored, [OLD_KEYS.template[naming.at]])
+  keep('template', sameModule ?? first(stored, OLD_KEYS.template))
   const own = targets(stored)
   keep('targets', own && JSON.stringify(own))
   return out

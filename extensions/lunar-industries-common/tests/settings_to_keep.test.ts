@@ -51,6 +51,28 @@ describe('the settings the modules kept, taken over at install', () => {
     })
   })
 
+  test('the template goes with the naming kept: the free template of the module whose naming it is', () => {
+    const claudeOnly = rows({
+      'lunar-industries-branches.template': 'b/{ref}',
+      'lunar-industries-claude.branchNaming': 'template',
+      'lunar-industries-claude.branchTemplate': 'c/{ref}-{slug}',
+    })
+    expect(kept(claudeOnly, false)).toEqual({
+      'lunar-industries-common.naming': 'template',
+      'lunar-industries-common.template': 'c/{ref}-{slug}',
+    })
+    const both = rows({
+      'lunar-industries-branches.naming': 'issue',
+      'lunar-industries-branches.template': '{ref}-{slug}',
+      'lunar-industries-claude.branchNaming': 'template',
+      'lunar-industries-claude.branchTemplate': 'c/{ref}',
+    })
+    expect(kept(both, false)).toMatchObject({
+      'lunar-industries-common.naming': 'issue',
+      'lunar-industries-common.template': '{ref}-{slug}',
+    })
+  })
+
   test('a naming that is not an option is ignored', () => {
     expect(kept(rows({ 'lunar-industries-branches.naming': 'other' }), false)).toEqual({})
   })
