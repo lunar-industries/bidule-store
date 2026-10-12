@@ -68,7 +68,7 @@ export default class SessionsController {
   // user's API key.
   async status() {
     const on = (await settings()).enabled
-    return { enabled: on, places: on ? await detect(ctx.env, Boolean(await apiKey())) : [] }
+    return { enabled: on, places: on ? await detect(ctx.env, await apiKey()) : [] }
   }
 
   // The repos the app knows, with what the module's settings say of each, and their own review target.

@@ -42,17 +42,34 @@ found=$("\${shell:-sh}" -ilc 'command -v claude' </dev/null 2>/dev/null | tail -
 [ -x "$found" ] || found="$HOME/.local/bin/claude"
 [ -x "$found" ] && printf '%s\\n' "$found"
 `
-// In PowerShell: the program `claude` names on its PATH.
+// In PowerShell: every program `claude` names on its PATH, one a line, in UTF-8 (a path may hold accents).
 const POWERSHELL = [
   'powershell.exe',
   '-NoProfile',
   '-NonInteractive',
   '-Command',
-  '(Get-Command claude -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source',
+  '[Console]::OutputEncoding=[Text.Encoding]::UTF8; (Get-Command claude -CommandType Application -All -ErrorAction Stop).Source',
 ]
 // Claude Code installed by npm on Windows is a script (claude.cmd, claude.ps1): Node refuses to start one without a
 // shell (CVE-2024-27980), and a shell would read the SDK's arguments its own way.
 const NPM_ON_WINDOWS = 'Claude Code est installé par npm : installez-le par l’installateur natif (claude.exe)'
+
+/**
+ * The `claude` a lookup found, from its answer: the last line of the login shell's (it may print a banner first); in
+ * PowerShell, the first claude.exe of the PATH, before any script of npm, which is refused when it is all there is.
+ * `label` names the environment in the error.
+ */
+export function claudeOf(out: string, powershell: boolean, label: string): string {
+  const lines = out
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const claude = powershell ? lines.find((l) => /\.exe$/i.test(l)) : lines.at(-1)
+  if (claude) return claude
+  if (powershell && lines.some((l) => /\.(cmd|bat|ps1)$/i.test(l))) throw new Error(NPM_ON_WINDOWS)
+  throw new Error(`Claude Code introuvable dans ${label}`)
+}
 
 const found = new WeakMap<Environment, Promise<string>>()
 
@@ -61,12 +78,10 @@ export function claudeIn(env: Environment): Promise<string> {
   let lookup = found.get(env)
   if (!lookup) {
     lookup = env.info().then(async (info) => {
-      const ask = info.kind === 'powershell' ? { argv: POWERSHELL } : { argv: ['sh', '-s'], stdin: LOOKUP }
+      const powershell = info.kind === 'powershell'
+      const ask = powershell ? { argv: POWERSHELL } : { argv: ['sh', '-s'], stdin: LOOKUP }
       const out = await env.run({ ...ask, timeout: 30_000 }).catch(() => '')
-      const claude = out.replace(/\r/g, '').trim().split('\n').pop()
-      if (!claude) throw new Error(`Claude Code introuvable dans ${info.label}`)
-      if (/\.(cmd|bat|ps1)$/i.test(claude)) throw new Error(NPM_ON_WINDOWS)
-      return claude
+      return claudeOf(out, powershell, info.label)
     })
     found.set(env, lookup)
     // A failure (WSL stopped, claude not installed yet) is looked up again next time.
@@ -177,22 +192,57 @@ export function parseAuthStatus(stdout: string): Pick<ClaudePlace, 'loggedIn' | 
   }
 }
 
+// What a command of the environment prints, started on what it builds with these variables only (`vars`), as a session's
+// Claude Code is on this machine; the error says what it wrote on stderr.
+function output(env: Environment, argv: string[], vars: Record<string, string>, start: typeof spawn): Promise<string> {
+  const { file, args, cwd } = env.command({ argv })
+  return new Promise((resolve, reject) => {
+    const child = start(file, args, { cwd, env: vars, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: 30_000 })
+    let out = ''
+    let err = ''
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', (text: string) => (out += text))
+    child.stderr?.on('data', (text: string) => (err += text))
+    child.on('error', reject)
+    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(err.trim() || `${argv[0]} : code ${code}`))))
+  })
+}
+
 /**
  * The Claude Code the sessions run: the one of the tools' environment (this machine, PowerShell, WSL's distro, the
  * toolbox, the Flatpak's host). Its version, whether it is logged in, and whether the module has an API key of its own
- * (`apiKey`: the sessions then use it). Nothing is sent to Claude.
+ * (`apiKey`: the sessions then use it). Asked as the sessions run it: on this machine, with the session's environment
+ * (sessionEnv: no variable of another Claude Code, the module's key only); elsewhere through ctx.env.run, whose
+ * process gets none of this one's variables. Nothing is sent to Claude. `start`: node's spawn (another in the tests).
  */
-export async function detect(env: Environment, apiKey = false): Promise<ClaudePlace[]> {
+export async function detect(env: Environment, apiKey = '', start: typeof spawn = spawn): Promise<ClaudePlace[]> {
   const info = await env.info()
-  const missing = (error: string): ClaudePlace => ({ where: info.label, version: null, loggedIn: false, email: null, subscription: null, apiKey, error })
+  const keyed = Boolean(apiKey)
+  const missing = (error: string): ClaudePlace => ({
+    where: info.label,
+    version: null,
+    loggedIn: false,
+    email: null,
+    subscription: null,
+    apiKey: keyed,
+    error,
+  })
   if (info.problem) return [missing(info.problem)]
   const claude = await claudeIn(env).catch((err: Error) => err)
   if (claude instanceof Error) return [missing(claude.message)]
-  const ask = async (args: string[]) => (await env.run({ argv: [claude, ...args], timeout: 30_000 })).replace(/\r/g, '').trim()
+  const local = info.kind === 'local' || info.kind === 'powershell'
+  const ask = async (args: string[]) =>
+    (local
+      ? await output(env, [claude, ...args], sessionEnv(apiKey), start)
+      : await env.run({ argv: [claude, ...args], timeout: 30_000 })
+    )
+      .replace(/\r/g, '')
+      .trim()
   try {
     // « 2.1.283 (Claude Code) »
     const version = (await ask(['--version'])).split(' ')[0] || null
-    return [{ where: info.label, version, ...parseAuthStatus(await ask(['auth', 'status'])), apiKey, error: null }]
+    return [{ where: info.label, version, ...parseAuthStatus(await ask(['auth', 'status'])), apiKey: keyed, error: null }]
   } catch (err) {
     return [missing((err instanceof Error ? err.message : String(err)).split('\n')[0])]
   }

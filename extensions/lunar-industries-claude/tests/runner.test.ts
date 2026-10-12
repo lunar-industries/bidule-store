@@ -1,9 +1,11 @@
+import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import type { spawn } from 'node:child_process'
 import type { SpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import type { EnvironmentCommand } from '@bidule/api/extensions'
 import { describe, expect, it } from 'vitest'
-import { claudeIn, detect, forwardedEnv, parseAuthStatus, pathInWsl, placeOf, sessionEnv, spawnIn } from '../server/runner.ts'
+import { claudeIn, claudeOf, detect, forwardedEnv, parseAuthStatus, pathInWsl, placeOf, sessionEnv, spawnIn } from '../server/runner.ts'
 import { fakeEnv } from './fakes.ts'
 
 // Taken from quack-board (tests/unit/claude_runner.spec.ts, Simon's), on a fake of the tools' environment.
@@ -86,8 +88,17 @@ describe('Claude runner · finding claude', () => {
     expect(await claudeIn(exe)).toBe('C:\\Users\\me\\.local\\bin\\claude.exe')
     expect(asked[0].argv[0]).toBe('powershell.exe')
     expect(asked[0].argv.at(-1)).toContain('Get-Command claude -CommandType Application')
+    expect(asked[0].argv.at(-1)).toMatch(/^\[Console\]::OutputEncoding=\[Text\.Encoding\]::UTF8;/)
     const npm = fakeEnv('powershell', { run: async () => 'C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd' })
     await expect(claudeIn(npm)).rejects.toThrow(/installez-le par l’installateur natif/)
+  })
+
+  it('in PowerShell, a claude.exe further down the PATH goes before an npm script found first', () => {
+    const out = 'C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd\r\nC:\\Users\\Zoé\\.local\\bin\\claude.exe\r\n'
+    expect(claudeOf(out, true, 'PowerShell')).toBe('C:\\Users\\Zoé\\.local\\bin\\claude.exe')
+    expect(() => claudeOf('C:\\npm\\claude.ps1\r\n', true, 'PowerShell')).toThrow(/installé par npm/)
+    expect(() => claudeOf('', true, 'PowerShell')).toThrow('Claude Code introuvable dans PowerShell')
+    expect(claudeOf('banner\n/usr/bin/claude\n', false, 'Ce poste')).toBe('/usr/bin/claude')
   })
 })
 
@@ -168,23 +179,54 @@ describe('Claude runner · environment and detection', () => {
     expect(parseAuthStatus('not json')).toEqual({ loggedIn: false, email: null, subscription: null })
   })
 
-  it('the status asks the environment’s claude its version and its login, through ctx.env', async () => {
+  // What claude answers: its version, and its login.
+  const answer = (argv: string[]) =>
+    argv[1] === '--version' ? '2.1.289 (Claude Code)\n' : JSON.stringify({ loggedIn: true, email: 'me@example.com' })
+
+  it('away from this machine, the status asks the environment’s claude through ctx.env.run', async () => {
     const asked: string[][] = []
-    const env = fakeEnv('local', {
+    const env = fakeEnv('toolbox', {
       run: async ({ argv }) => {
         asked.push(argv)
-        if (argv[0] === 'sh') return `${CLAUDE}\n`
-        return argv[1] === '--version' ? '2.1.289 (Claude Code)\n' : JSON.stringify({ loggedIn: true, email: 'me@example.com' })
+        return argv[0] === 'sh' ? `${CLAUDE}\n` : answer(argv)
       },
     })
-    expect(await detect(env, true)).toEqual([
-      { where: 'Ce poste', version: '2.1.289', loggedIn: true, email: 'me@example.com', subscription: null, apiKey: true, error: null },
+    expect(await detect(env)).toEqual([
+      { where: 'Toolbox (fedora)', version: '2.1.289', loggedIn: true, email: 'me@example.com', subscription: null, apiKey: false, error: null },
     ])
     expect(asked.slice(1)).toEqual([
       [CLAUDE, '--version'],
       [CLAUDE, 'auth', 'status'],
     ])
-    const none = await detect(fakeEnv('local', { run: async () => '' }))
-    expect(none[0]).toMatchObject({ version: null, apiKey: false, error: 'Claude Code introuvable dans Ce poste' })
+    const none = await detect(fakeEnv('toolbox', { run: async () => '' }))
+    expect(none[0]).toMatchObject({ version: null, apiKey: false, error: 'Claude Code introuvable dans Toolbox (fedora)' })
+  })
+
+  it('on this machine, it starts claude with the sessions’ environment: no variable of another Claude Code, the module’s key', async () => {
+    const started: { argv: string[]; env?: Record<string, string> }[] = []
+    const start = ((file: string, args: string[], options: { env?: Record<string, string> }) => {
+      started.push({ argv: [file, ...args], env: options.env })
+      const child = Object.assign(new EventEmitter(), { stdout: new Readable({ read() {} }), stderr: new Readable({ read() {} }) })
+      // As a process: its output, then its end once the output is read.
+      child.stdout.on('end', () => child.emit('close', 0))
+      child.stdout.push(answer([file, ...args]))
+      child.stdout.push(null)
+      return child
+    }) as unknown as typeof spawn
+    const before = process.env['CLAUDECODE']
+    process.env['CLAUDECODE'] = '1'
+    try {
+      const env = fakeEnv('local', { run: async () => `${CLAUDE}\n` })
+      expect(await detect(env, 'sk-of-the-module', start)).toMatchObject([{ version: '2.1.289', loggedIn: true, apiKey: true, error: null }])
+    } finally {
+      if (before === undefined) delete process.env['CLAUDECODE']
+      else process.env['CLAUDECODE'] = before
+    }
+    expect(started.map((s) => s.argv)).toEqual([
+      [CLAUDE, '--version'],
+      [CLAUDE, 'auth', 'status'],
+    ])
+    expect(started[0].env?.['CLAUDECODE']).toBeUndefined()
+    expect(started[0].env?.['ANTHROPIC_API_KEY']).toBe('sk-of-the-module')
   })
 })
