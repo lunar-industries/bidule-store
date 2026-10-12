@@ -1,7 +1,7 @@
 import type { Board, Task } from '@bidule/sdk'
 import { describe, expect, test } from 'vitest'
 import type { KanbanBranch } from '../contract.ts'
-import { badgeOf, branchKey, branchLabel, groupsOf, linkRows, marksOf, orphansOf, shortBranch, trayIsOpen } from '../ui/layout.ts'
+import { badgeOf, branchKey, branchLabel, columnColor, groupsOf, linkRows, marksOf, orphansOf, shortBranch, trayIsOpen } from '../ui/layout.ts'
 
 const task = (id: string, status: string, patch: Partial<Task> = {}): Task => ({
   id,
@@ -152,5 +152,13 @@ describe('settings', () => {
     // Not stored yet (the settings not read), or anything else: open, the default.
     expect(trayIsOpen(undefined)).toBe(true)
     expect(trayIsOpen('')).toBe(true)
+  })
+})
+
+describe('columnColor', () => {
+  test("gives the colour of a status of these names, the provider's otherwise", () => {
+    expect(columnColor({ name: 'En cours', color: 'butter', group: 'doing' })).toBe('var(--col-doing)')
+    expect(columnColor({ name: 'Prod', color: 'mint', group: 'done' })).toBe('var(--col-prod)')
+    expect(columnColor({ name: 'Idées', color: 'pink', group: 'todo' })).toBe('var(--pink)')
   })
 })

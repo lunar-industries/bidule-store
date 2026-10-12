@@ -111,8 +111,10 @@ les commandes qui s'exécutent dans l'interface, un composant `background` toujo
 d'extension des autres modules (`points: { kanban: { advice, badges } }` pour les cartes du Kanban), que son manifeste
 annonce par `contributes.to.<point>` avec `"ui": true`. Un module qui ouvre un point aux autres le déclare dans
 `contributes.points` et lit ce qu'on lui donne par `useContributions` (voir « Points d'extension » dans
-`docs/extensions.md` de Bidule). Avant le cœur 0.2.1, la part du Kanban s'exportait sous `kanban`, annoncée par
-`contributes.kanban` ; le cœur lit encore cette forme jusqu'à 0.3.0.
+`docs/extensions.md` de Bidule). Le contrat du point `kanban` est dans `extensions/kanban/contract.ts` de Bidule,
+qu'on importe en type seulement (`import type { Advice } from '@bidule/ext-kanban/contract'`). Avant le cœur 0.2.1,
+la part du Kanban s'exportait sous `kanban`, annoncée par `contributes.kanban` : le cœur 0.3.0 ne lit plus cette
+forme.
 
 ### Le paquet
 

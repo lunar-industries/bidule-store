@@ -2,7 +2,7 @@
   "id": "lunar-industries-containers",
   "version": "0.3.0",
   "title": "Lunar Industries - Conteneurs",
-  "engine": "^0.2.1",
+  "engine": "^0.3.0",
   "dependencies": {
     "docker": "^0.2.0"
   },

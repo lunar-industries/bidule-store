@@ -1,9 +1,11 @@
 import { useContributions, useSettingValues, type PointData, type SettingValues, type TaskGroup } from '@bidule/sdk'
+// The point's contract, the official Kanban's (its declaration of the point `kanban`), as types only.
+import type { KanbanAction } from '@bidule/ext-kanban/contract'
 
 // The point `kanban` (contributes.points in bidule.json), the same as the official Kanban's: what the other extensions
 // give the cards (advice, badges, right-click actions), read here as by any Kanban. Its checks and the filter of the
 // actions are this module's own copy: an extension never imports another one's code.
-export type KanbanAction = PointData<'kanban'>['actions'][number]
+export type { KanbanAction }
 
 const GROUPS: TaskGroup[] = ['todo', 'doing', 'done']
 const isGroup = (value: unknown): value is TaskGroup => GROUPS.some((g) => g === value)

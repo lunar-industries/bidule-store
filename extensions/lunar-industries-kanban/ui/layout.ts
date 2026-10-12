@@ -1,4 +1,4 @@
-import type { Board, Task, TaskColumn, TaskGroup } from '@bidule/sdk'
+import { statusColor, type Board, type Task, type TaskColumn, type TaskGroup } from '@bidule/sdk'
 import type { KanbanBranch } from '../contract.ts'
 
 // Taken from quack-board (Simon's kanban.ts and core/format.ts): what the board shows, without drawing it.
@@ -28,6 +28,21 @@ export const orphansOf = (branches: KanbanBranch[], now = Date.now(), onBoard?: 
       b.reviewState !== 'merged' &&
       b.ci !== 'merged'
   )
+
+// The colours of the statuses of these names (the theme's `--col-*`), this board's own choice as the official one's.
+const NAMED: [RegExp, string][] = [
+  [/^(à|a) faire|^todo|^to do|backlog/i, 'var(--col-todo)'],
+  [/^en cours|in progress|doing/i, 'var(--col-doing)'],
+  [/bloqu|block/i, 'var(--col-blocked)'],
+  [/staging|test|recette|review/i, 'var(--col-staging)'],
+  [/prod/i, 'var(--col-prod)'],
+  [/^fini|^termin|^done|complete/i, 'var(--col-done)'],
+]
+
+// A column's dot: the colour of a status of these names, its provider's otherwise.
+export function columnColor(column: TaskColumn): string {
+  return NAMED.find(([name]) => name.test(column.name))?.[1] ?? statusColor(column)
+}
 
 export interface Column extends TaskColumn {
   // A status the tasks have but the source no longer lists.

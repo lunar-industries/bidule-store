@@ -2,7 +2,7 @@
   "id": "lunar-industries-temps",
   "version": "0.4.2",
   "title": "Lunar Industries - Temps",
-  "engine": "^0.2.1",
+  "engine": "^0.3.0",
   "conflicts": ["temps"],
   "dependencies": {
     "lunar-industries-common": "^0.1.0"

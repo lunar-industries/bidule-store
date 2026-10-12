@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "title": "Lunar Industries - Claude",
-  "engine": "^0.2.1",
+  "engine": "^0.3.0",
   "dependencies": {
     "lunar-industries-common": "^0.1.0"
   },
