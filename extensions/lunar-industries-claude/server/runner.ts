@@ -1,55 +1,71 @@
-import { execFile, spawn } from 'node:child_process'
-import { createRequire } from 'node:module'
+import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import type { Options, SpawnedProcess, SpawnOptions } from '@anthropic-ai/claude-agent-sdk'
-import type { Environment } from '@bidule/api/extensions'
+import type { Environment, EnvironmentKind } from '@bidule/api/extensions'
 import type { ClaudePlace } from '../contract.ts'
 import { parseWslPath } from './wsl.ts'
 
 /**
- * Taken from quack-board (connectors/claude_runner.ts, Simon's): where Claude Code runs for a folder. It runs where the
- * outside tools run (ctx.env), like git: inside WSL on Windows (the distro's own Claude Code: Linux paths and tools, and
- * the login made there), in the toolbox or on the Flatpak's host on Linux. On this machine itself (and in PowerShell,
- * where Claude Code is installed on Windows), the Claude Code the SDK ships for this system.
+ * Taken from quack-board (connectors/claude_runner.ts, Simon's): where Claude Code runs for a folder. Bidule ships no
+ * tool: Claude Code is the one of the outside tools' environment (ctx.env), like git, found and started through it.
+ * Inside WSL on Windows (the distro's own Claude Code: Linux paths and tools, and the login made there), in PowerShell
+ * (its claude.exe), in the toolbox or on the Flatpak's host on Linux, and on this machine itself.
  */
 
-// Where a Claude Code that is not this process's runs.
-export interface ClaudeRemote {
-  // How the environment is named (« WSL (Debian) », « Toolbox (fedora-toolbox-42) »…).
+// The Claude Code that runs for a folder.
+export interface ClaudeAt {
+  // How the environment is named (« WSL (Debian) », « Toolbox (fedora-toolbox-42) », « Ce poste »…).
   label: string
   // Absolute path of `claude` there.
   claude: string
+  // On this machine (here, or in PowerShell): it sees this process's files and paths.
+  local: boolean
 }
 
 export interface Place {
   // The session's folder, as Claude Code sees it (a Linux path inside WSL).
   cwd: string
-  // Where its sessions are saved, as this process reaches it; undefined: this machine's ~/.claude.
+  // Where its sessions are saved, as this process reaches it; undefined: this machine's (~/.claude, or the user's
+  // CLAUDE_CONFIG_DIR, which the SDK reads).
   configDir: string | undefined
-  // null: the SDK's own Claude Code, run by this process.
-  remote: ClaudeRemote | null
+  at: ClaudeAt
   // What the SDK needs to run that Claude Code.
   options: Pick<Options, 'pathToClaudeCodeExecutable' | 'spawnClaudeCodeProcess'>
 }
 
-// `claude` lives in a folder the user's shell adds to PATH (~/.local/bin): asked to their interactive login shell.
-// The last line of its output is the answer (an interactive shell may print a banner first).
-const LOOKUP = `shell=$(getent passwd "$(id -un)" | cut -d: -f7)
+// `claude` lives in a folder the user's shell adds to PATH (~/.local/bin): asked to their interactive login shell (the
+// one of their account, else $SHELL: macOS has no getent). The last line of its output is the answer (an interactive
+// shell may print a banner first); nothing when it is not there.
+const LOOKUP = `shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
+shell=\${shell:-$SHELL}
 found=$("\${shell:-sh}" -ilc 'command -v claude' </dev/null 2>/dev/null | tail -n 1)
 [ -x "$found" ] || found="$HOME/.local/bin/claude"
-printf '%s\\n' "$found"
+[ -x "$found" ] && printf '%s\\n' "$found"
 `
+// In PowerShell: the program `claude` names on its PATH.
+const POWERSHELL = [
+  'powershell.exe',
+  '-NoProfile',
+  '-NonInteractive',
+  '-Command',
+  '(Get-Command claude -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source',
+]
+// Claude Code installed by npm on Windows is a script (claude.cmd, claude.ps1): Node refuses to start one without a
+// shell (CVE-2024-27980), and a shell would read the SDK's arguments its own way.
+const NPM_ON_WINDOWS = 'Claude Code est installé par npm : installez-le par l’installateur natif (claude.exe)'
 
 const found = new WeakMap<Environment, Promise<string>>()
 
-// The `claude` of an environment other than this process's.
+// The `claude` of the tools' environment.
 export function claudeIn(env: Environment): Promise<string> {
   let lookup = found.get(env)
   if (!lookup) {
     lookup = env.info().then(async (info) => {
-      const out = await env.run({ argv: ['sh', '-s'], stdin: LOOKUP, timeout: 30_000 }).catch(() => '')
+      const ask = info.kind === 'powershell' ? { argv: POWERSHELL } : { argv: ['sh', '-s'], stdin: LOOKUP }
+      const out = await env.run({ ...ask, timeout: 30_000 }).catch(() => '')
       const claude = out.replace(/\r/g, '').trim().split('\n').pop()
       if (!claude) throw new Error(`Claude Code introuvable dans ${info.label}`)
+      if (/\.(cmd|bat|ps1)$/i.test(claude)) throw new Error(NPM_ON_WINDOWS)
       return claude
     })
     found.set(env, lookup)
@@ -79,14 +95,27 @@ const FORWARDED = /^(CLAUDE|ANTHROPIC|MCP_|DISABLE_|ENABLE_|DEBUG)/
 export const forwardedEnv = (env: Record<string, string | undefined>): Record<string, string> =>
   Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined && FORWARDED.test(entry[0])))
 
-// For the SDK's `spawnClaudeCodeProcess`: the environment's `claude` with the same arguments, in the session's folder (as
-// this process reaches it: the environment makes it its own); the SDK talks to it through stdin and stdout, which the
-// environment's go-between (wsl.exe, toolbox, flatpak-spawn) relays.
-export function spawnIn(env: Environment, claude: string, folder: string) {
+const definedOnly = (env: Record<string, string | undefined>): Record<string, string> =>
+  Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined))
+
+/**
+ * For the SDK's `spawnClaudeCodeProcess`: the environment's `claude` with the SDK's arguments, in the session's folder (as
+ * this process reaches it: the environment makes it its own), started through ctx.env.command; the SDK talks to it
+ * through stdin and stdout, which the environment's go-between (wsl.exe, toolbox, flatpak-spawn) relays. On this
+ * machine (here, or in PowerShell), the environment the SDK prepared goes with the process, as its own spawn does;
+ * elsewhere only the SDK's variables go, through the go-between. `start`: node's spawn (another one in the tests).
+ */
+export function spawnIn(env: Environment, kind: EnvironmentKind, claude: string, folder: string, start: typeof spawn = spawn) {
+  const local = kind === 'local' || kind === 'powershell'
   return (options: SpawnOptions): SpawnedProcess => {
-    const { file, args, cwd } = env.command({ argv: [claude, ...options.args], cwd: folder, env: forwardedEnv(options.env) })
-    return spawn(file, args, {
+    const { file, args, cwd } = env.command({
+      argv: [claude, ...options.args],
+      cwd: folder,
+      env: local ? undefined : forwardedEnv(options.env),
+    })
+    return start(file, args, {
       cwd,
+      env: local ? definedOnly(options.env) : undefined,
       // stderr is not read: left piped, a chatty Claude Code would fill it and block.
       stdio: ['pipe', 'pipe', 'ignore'],
       signal: options.signal,
@@ -95,23 +124,22 @@ export function spawnIn(env: Environment, claude: string, folder: string) {
   }
 }
 
-// Where a folder's Claude Code runs and keeps its sessions.
+// Where a folder's Claude Code runs and keeps its sessions; refused, with the reason, when it is not there.
 export async function placeOf(
   folder: string,
   env: Environment,
   lookup: (env: Environment) => Promise<string> = claudeIn
 ): Promise<Place> {
   const info = await env.info()
-  // Here (or in PowerShell): the SDK's own Claude Code, in the folder as it is.
-  if (info.kind === 'local' || info.kind === 'powershell') return { cwd: folder, configDir: undefined, remote: null, options: {} }
   if (info.problem) throw new Error(info.problem)
   if (info.kind === 'wsl' && !parseWslPath(folder)) throw new Error(`Les outils tournent dans WSL, les dépôts doivent être dans WSL : ${folder}`)
   const claude = await lookup(env)
+  const local = info.kind === 'local' || info.kind === 'powershell'
   return {
     cwd: env.toEnv(folder),
-    configDir: join(info.home, '.claude'),
-    remote: { label: info.label, claude },
-    options: { pathToClaudeCodeExecutable: claude, spawnClaudeCodeProcess: spawnIn(env, claude, folder) },
+    configDir: local ? undefined : join(info.home, '.claude'),
+    at: { label: info.label, claude, local },
+    options: { pathToClaudeCodeExecutable: claude, spawnClaudeCodeProcess: spawnIn(env, info.kind, claude, folder) },
   }
 }
 
@@ -122,26 +150,6 @@ export function pathInWsl(path: string): string {
   const drive = path.match(/^([A-Za-z]):[\\/](.*)$/)
   if (!drive) return path
   return `/mnt/${drive[1].toLowerCase()}/${drive[2].replace(/\\/g, '/')}`
-}
-
-// The packages that may hold the Claude Code the SDK ships, in the order the SDK tries them.
-export function bundledCandidates(platform: NodeJS.Platform, arch: string): string[] {
-  const base = '@anthropic-ai/claude-agent-sdk'
-  const names = platform === 'linux' ? [`${base}-linux-${arch}`, `${base}-linux-${arch}-musl`] : [`${base}-${platform}-${arch}`]
-  return names.map((n) => `${n}/claude${platform === 'win32' ? '.exe' : ''}`)
-}
-
-// The Claude Code the SDK runs on this machine, or null when its package is missing.
-export function bundledClaude(): string | null {
-  const require = createRequire(import.meta.url)
-  for (const candidate of bundledCandidates(process.platform, process.arch)) {
-    try {
-      return require.resolve(candidate)
-    } catch {
-      // Not installed for this libc or system.
-    }
-  }
-  return null
 }
 
 // What `claude auth status` prints: a JSON object.
@@ -158,44 +166,22 @@ export function parseAuthStatus(stdout: string): Pick<ClaudePlace, 'loggedIn' | 
   }
 }
 
-function run(command: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, { timeout: 30_000, windowsHide: true, env: sessionEnv() }, (err, stdout) =>
-      err ? reject(err) : resolve(stdout.replace(/\r/g, '').trim())
-    )
-  })
-}
-
-async function statusOf(where: string, ask: (args: string[]) => Promise<string>): Promise<ClaudePlace> {
-  try {
-    // « 2.1.283 (Claude Code) »
-    const version = (await ask(['--version'])).split(' ')[0] || null
-    return { where, version, ...parseAuthStatus(await ask(['auth', 'status'])), error: null }
-  } catch (err) {
-    const error = (err instanceof Error ? err.message : String(err)).split('\n')[0]
-    return { where, version: null, loggedIn: false, email: null, subscription: null, error }
-  }
-}
-
 /**
- * The Claude Code the sessions run: the one of the tools' environment (WSL's distro, the toolbox, the Flatpak's host),
- * or the one the SDK ships for this machine. Its version, and whether it is logged in. Nothing is sent to Claude.
+ * The Claude Code the sessions run: the one of the tools' environment (this machine, PowerShell, WSL's distro, the
+ * toolbox, the Flatpak's host). Its version, and whether it is logged in. Nothing is sent to Claude.
  */
 export async function detect(env: Environment): Promise<ClaudePlace[]> {
   const info = await env.info()
-  if (info.kind === 'local' || info.kind === 'powershell') {
-    const local = bundledClaude()
-    if (!local) {
-      return [{ where: info.label, version: null, loggedIn: false, email: null, subscription: null, error: 'Le Claude Code du SDK manque pour ce système' }]
-    }
-    return [await statusOf(info.label, (args) => run(local, args))]
-  }
-  if (info.problem) {
-    return [{ where: info.label, version: null, loggedIn: false, email: null, subscription: null, error: info.problem }]
-  }
+  const missing = (error: string): ClaudePlace => ({ where: info.label, version: null, loggedIn: false, email: null, subscription: null, error })
+  if (info.problem) return [missing(info.problem)]
   const claude = await claudeIn(env).catch((err: Error) => err)
-  if (claude instanceof Error) {
-    return [{ where: info.label, version: null, loggedIn: false, email: null, subscription: null, error: claude.message }]
+  if (claude instanceof Error) return [missing(claude.message)]
+  const ask = async (args: string[]) => (await env.run({ argv: [claude, ...args], timeout: 30_000 })).replace(/\r/g, '').trim()
+  try {
+    // « 2.1.283 (Claude Code) »
+    const version = (await ask(['--version'])).split(' ')[0] || null
+    return [{ where: info.label, version, ...parseAuthStatus(await ask(['auth', 'status'])), error: null }]
+  } catch (err) {
+    return [missing((err instanceof Error ? err.message : String(err)).split('\n')[0])]
   }
-  return [await statusOf(info.label, (args) => env.run({ argv: [claude, ...args], timeout: 30_000 }).then((out) => out.replace(/\r/g, '').trim()))]
 }

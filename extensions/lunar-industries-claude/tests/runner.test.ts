@@ -1,6 +1,9 @@
 import { join } from 'node:path'
+import type { spawn } from 'node:child_process'
+import type { SpawnOptions } from '@anthropic-ai/claude-agent-sdk'
+import type { EnvironmentCommand } from '@bidule/api/extensions'
 import { describe, expect, it } from 'vitest'
-import { bundledCandidates, forwardedEnv, parseAuthStatus, pathInWsl, placeOf, sessionEnv, spawnIn } from '../server/runner.ts'
+import { claudeIn, detect, forwardedEnv, parseAuthStatus, pathInWsl, placeOf, sessionEnv, spawnIn } from '../server/runner.ts'
 import { fakeEnv } from './fakes.ts'
 
 // Taken from quack-board (tests/unit/claude_runner.spec.ts, Simon's), on a fake of the tools' environment.
@@ -11,15 +14,31 @@ const claudeMissing = async () => {
   throw new Error('Claude Code introuvable')
 }
 
+// A spawn that records what it is asked, instead of starting anything.
+function recorder() {
+  const started: { file: string; args: string[]; cwd?: string; env?: Record<string, string | undefined> }[] = []
+  const start = ((file: string, args: string[], options: { cwd?: string; env?: Record<string, string | undefined> }) => {
+    started.push({ file, args, cwd: options.cwd, env: options.env })
+    return {}
+  }) as unknown as typeof spawn
+  return { started, start }
+}
+
+// What the SDK gives `spawnClaudeCodeProcess`.
+const sdkSpawn = (env: Record<string, string | undefined>) =>
+  ({ command: CLAUDE, args: ['--output-format', 'stream-json'], env, signal: new AbortController().signal }) as SpawnOptions
+
 describe('Claude runner · where Claude Code runs', () => {
-  it('on this machine, a folder runs the SDK’s own Claude Code', async () => {
-    const place = await placeOf('/home/me/app', fakeEnv('local'), claudeMissing)
-    expect(place).toEqual({ cwd: '/home/me/app', configDir: undefined, remote: null, options: {} })
+  it('on this machine, the claude its login shell finds runs, in the folder as it is; its sessions are this machine’s', async () => {
+    const place = await placeOf('/home/me/app', fakeEnv('local'), claudeIs)
+    expect(place).toMatchObject({ cwd: '/home/me/app', configDir: undefined, at: { label: 'Ce poste', claude: CLAUDE, local: true } })
+    expect(place.options.pathToClaudeCodeExecutable).toBe(CLAUDE)
+    expect(place.options.spawnClaudeCodeProcess).toBeTypeOf('function')
   })
 
-  it('in PowerShell, too: the Claude Code installed on Windows is the SDK’s', async () => {
-    const place = await placeOf('C:\\dev\\app', fakeEnv('powershell'), claudeMissing)
-    expect(place).toEqual({ cwd: 'C:\\dev\\app', configDir: undefined, remote: null, options: {} })
+  it('in PowerShell, the claude.exe of Windows, on this machine too', async () => {
+    const place = await placeOf('C:\\dev\\app', fakeEnv('powershell'), async () => 'C:\\Users\\me\\.local\\bin\\claude.exe')
+    expect(place).toMatchObject({ cwd: 'C:\\dev\\app', configDir: undefined, at: { local: true, claude: 'C:\\Users\\me\\.local\\bin\\claude.exe' } })
   })
 
   it('in WSL, a repo of the distro runs the distro’s, in its Linux path', async () => {
@@ -28,9 +47,8 @@ describe('Claude runner · where Claude Code runs', () => {
     expect(place.cwd).toBe('/home/me/app')
     // Joined as the platform joins (with backslashes on Windows, where this path is real).
     expect(place.configDir).toBe(join('\\\\wsl.localhost\\Ubuntu\\home\\me', '.claude'))
-    expect(place.remote).toEqual({ label: 'WSL (Ubuntu)', claude: CLAUDE })
+    expect(place.at).toEqual({ label: 'WSL (Ubuntu)', claude: CLAUDE, local: false })
     expect(place.options.pathToClaudeCodeExecutable).toBe(CLAUDE)
-    expect(place.options.spawnClaudeCodeProcess).toBeTypeOf('function')
   })
 
   it('in WSL, a repo on the Windows side is refused', async () => {
@@ -42,22 +60,54 @@ describe('Claude runner · where Claude Code runs', () => {
     const place = await placeOf('/home/me/app', env, claudeIs)
     expect(place.cwd).toBe('/home/me/app')
     expect(place.configDir).toBe('/home/me/.claude')
-    expect(place.remote).toEqual({ label: 'Toolbox (fedora)', claude: CLAUDE })
+    expect(place.at).toEqual({ label: 'Toolbox (fedora)', claude: CLAUDE, local: false })
   })
 
-  it('without Claude Code in the environment, the folder has no place (and the reason is said)', async () => {
-    await expect(placeOf('/home/me/app', fakeEnv('toolbox'), claudeMissing)).rejects.toThrow(/introuvable/)
+  it('without Claude Code in the environment, the folder has no place (and the reason is said), on this machine too', async () => {
+    for (const kind of ['local', 'powershell', 'toolbox'] as const) {
+      await expect(placeOf('/home/me/app', fakeEnv(kind), claudeMissing)).rejects.toThrow(/introuvable/)
+    }
+  })
+})
+
+describe('Claude runner · finding claude', () => {
+  it('asks the login shell of the environment, through ctx.env; nothing found is said', async () => {
+    const asked: EnvironmentCommand[] = []
+    const env = fakeEnv('local', { run: async (c) => (asked.push(c), 'banner\n/home/me/.local/bin/claude\n') })
+    expect(await claudeIn(env)).toBe(CLAUDE)
+    expect(asked[0].argv).toEqual(['sh', '-s'])
+    expect(asked[0].stdin).toContain('command -v claude')
+    await expect(claudeIn(fakeEnv('toolbox', { run: async () => '' }))).rejects.toThrow('Claude Code introuvable dans Toolbox (fedora)')
   })
 
-  it('the environment starts the claude it found, with the SDK’s arguments and its variables only', () => {
+  it('in PowerShell, the claude.exe Get-Command finds; a claude.cmd of npm is refused, with the reason', async () => {
+    const asked: EnvironmentCommand[] = []
+    const exe = fakeEnv('powershell', { run: async (c) => (asked.push(c), 'C:\\Users\\me\\.local\\bin\\claude.exe\r\n') })
+    expect(await claudeIn(exe)).toBe('C:\\Users\\me\\.local\\bin\\claude.exe')
+    expect(asked[0].argv[0]).toBe('powershell.exe')
+    expect(asked[0].argv.at(-1)).toContain('Get-Command claude -CommandType Application')
+    const npm = fakeEnv('powershell', { run: async () => 'C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd' })
+    await expect(claudeIn(npm)).rejects.toThrow(/installez-le par l’installateur natif/)
+  })
+})
+
+describe('Claude runner · starting it', () => {
+  it('on this machine, the claude found is started with the environment the SDK prepared', () => {
+    const { started, start } = recorder()
+    spawnIn(fakeEnv('local'), 'local', CLAUDE, '/home/me/app', start)(sdkSpawn({ PATH: '/usr/bin', CLAUDE_CODE_ENTRYPOINT: 'sdk-ts', GONE: undefined }))
+    expect(started).toEqual([
+      { file: CLAUDE, args: ['--output-format', 'stream-json'], cwd: '/home/me/app', env: { PATH: '/usr/bin', CLAUDE_CODE_ENTRYPOINT: 'sdk-ts' } },
+    ])
+  })
+
+  it('away from this machine, only the SDK’s variables go, through the go-between', () => {
+    const { started, start } = recorder()
     const wsl = fakeEnv('wsl', { distro: 'Ubuntu' })
-    const command = wsl.command({
-      argv: [CLAUDE, '--output-format', 'stream-json'],
-      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\app',
-      env: forwardedEnv({ CLAUDE_CODE_ENTRYPOINT: 'sdk-ts', PATH: 'C:\\Windows', APPDATA: 'C:\\x', DEBUG: '1' }),
-    })
-    expect(command.file).toBe('wsl.exe')
-    expect(command.args).toEqual([
+    spawnIn(wsl, 'wsl', CLAUDE, '\\\\wsl.localhost\\Ubuntu\\home\\me\\app', start)(
+      sdkSpawn({ CLAUDE_CODE_ENTRYPOINT: 'sdk-ts', PATH: 'C:\\Windows', APPDATA: 'C:\\x', DEBUG: '1' })
+    )
+    expect(started[0].file).toBe('wsl.exe')
+    expect(started[0].args).toEqual([
       '-d',
       'Ubuntu',
       '--cd',
@@ -70,7 +120,8 @@ describe('Claude runner · where Claude Code runs', () => {
       '--output-format',
       'stream-json',
     ])
-    expect(spawnIn(wsl, CLAUDE, '\\\\wsl.localhost\\Ubuntu\\home\\me\\app')).toBeTypeOf('function')
+    expect(started[0].env).toBeUndefined()
+    expect(forwardedEnv({ CLAUDE_X: '1', HOME: '/h', MCP_TIMEOUT: '5', GONE: undefined })).toEqual({ CLAUDE_X: '1', MCP_TIMEOUT: '5' })
   })
 })
 
@@ -95,17 +146,29 @@ describe('Claude runner · environment and detection', () => {
     expect(env).toEqual({ PATH: '/usr/bin', ANTHROPIC_BASE_URL: 'https://proxy', HOME: '/home/me' })
   })
 
-  it('the SDK’s Claude Code is looked for in the package of the system', () => {
-    expect(bundledCandidates('linux', 'x64')).toEqual([
-      '@anthropic-ai/claude-agent-sdk-linux-x64/claude',
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl/claude',
-    ])
-    expect(bundledCandidates('darwin', 'arm64')).toEqual(['@anthropic-ai/claude-agent-sdk-darwin-arm64/claude'])
-  })
-
   it('reads the login from `claude auth status`', () => {
     const out = JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'me@example.com', subscriptionType: 'pro' })
     expect(parseAuthStatus(out)).toEqual({ loggedIn: true, email: 'me@example.com', subscription: 'pro' })
     expect(parseAuthStatus('not json')).toEqual({ loggedIn: false, email: null, subscription: null })
+  })
+
+  it('the status asks the environment’s claude its version and its login, through ctx.env', async () => {
+    const asked: string[][] = []
+    const env = fakeEnv('local', {
+      run: async ({ argv }) => {
+        asked.push(argv)
+        if (argv[0] === 'sh') return `${CLAUDE}\n`
+        return argv[1] === '--version' ? '2.1.289 (Claude Code)\n' : JSON.stringify({ loggedIn: true, email: 'me@example.com' })
+      },
+    })
+    expect(await detect(env)).toEqual([
+      { where: 'Ce poste', version: '2.1.289', loggedIn: true, email: 'me@example.com', subscription: null, error: null },
+    ])
+    expect(asked.slice(1)).toEqual([
+      [CLAUDE, '--version'],
+      [CLAUDE, 'auth', 'status'],
+    ])
+    const none = await detect(fakeEnv('local', { run: async () => '' }))
+    expect(none[0]).toMatchObject({ version: null, error: 'Claude Code introuvable dans Ce poste' })
   })
 })

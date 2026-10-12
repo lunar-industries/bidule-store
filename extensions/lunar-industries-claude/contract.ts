@@ -156,7 +156,8 @@ export type SessionModel = { value: string; label: string; description: string; 
 // A first message the new session window offers: a skill.
 export type Template = { name: string; description: string }
 
-// The Claude Code the sessions run: this machine's (the SDK's), or WSL's on Windows.
+// The Claude Code the sessions run: the one of the tools' environment (this machine, PowerShell, WSL, a toolbox, the
+// Flatpak's host).
 export type ClaudePlace = {
   where: string
   version: string | null

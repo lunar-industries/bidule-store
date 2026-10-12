@@ -34,7 +34,7 @@ import {
   type WatchResult,
 } from '../contract.ts'
 import type { TaskAccess } from './objects.ts'
-import { pathInWsl, placeOf, sessionEnv } from './runner.ts'
+import { pathInWsl, placeOf, sessionEnv, type Place } from './runner.ts'
 import { sdk } from './sdk.ts'
 import type { Settings } from './settings.ts'
 import type { ModelUsage, SessionRow, SessionStore, UsageByModel } from './store.ts'
@@ -180,7 +180,7 @@ export interface SessionDeps {
   worktree?: (repo: string, branch: string) => Promise<{ path: string }>
   // The folders of the plugins every session loads (the module's skills, claude/plugin).
   plugins?: string[]
-  // Another Claude Code than the one found for the folder (a fake one, in the tests).
+  // Another Claude Code than the one of the environment, started by the SDK itself (a fake one, in the tests).
   executable?: string
 }
 
@@ -438,6 +438,18 @@ export class SessionService {
     this.deps.tell.session(id, message)
   }
 
+  // Where a folder's Claude Code runs (see placeOf); a fake one, in the tests, needs no lookup.
+  #place(folder: string): Promise<Place> {
+    const { executable } = this.deps
+    return placeOf(folder, this.deps.env, executable ? async () => executable : undefined)
+  }
+
+  // How a session's Claude Code is started: the environment's (placeOf), or the SDK's own spawn of a fake one.
+  async #claudeOptions(place: Place) {
+    const { executable } = this.deps
+    return { env: sessionEnv(), ...(executable ? { pathToClaudeCodeExecutable: executable } : place.options) }
+  }
+
   // At the module's start: no process survived the previous API, the sessions it ran are saved.
   recover(): Promise<void> {
     return this.deps.store.recover()
@@ -478,7 +490,8 @@ export class SessionService {
     // in its own folder, the repo's for a session of the terminal the app did not start.
     const settings = await this.deps.settings()
     const cwd = input.cwd ?? known?.cwd ?? (resume ? repos[0] : await this.#root(repos))
-    const place = await placeOf(cwd, this.deps.env)
+    const place = await this.#place(cwd)
+    const claude = await this.#claudeOptions(place)
     const past = resume ? await this.#saved(id, cwd) : null
     const row =
       known ??
@@ -516,7 +529,7 @@ export class SessionService {
     this.#publish(id, { type: 'status', status: 'running' })
     for (const e of past?.events ?? []) this.#push(session, e)
     if (past) this.#push(session, { kind: 'info', text: 'Session reprise' })
-    if (place.remote) this.#push(session, { kind: 'info', text: `Dans ${place.remote.label} : ${place.remote.claude}` })
+    if (!place.at.local) this.#push(session, { kind: 'info', text: `Dans ${place.at.label} : ${place.at.claude}` })
     this.#push(session, { kind: 'user', text: shownText(prompt, attached) })
     void this.#prepare(session, prompt, input.worktrees ?? [], attached)
 
@@ -532,10 +545,8 @@ export class SessionService {
       prompt: this.#inbox(session),
       options: {
         cwd: place.cwd,
-        env: sessionEnv(),
         ...(resume ? { resume: id } : { sessionId: id }),
-        ...place.options,
-        ...(this.deps.executable ? { pathToClaudeCodeExecutable: this.deps.executable } : {}),
+        ...claude,
         permissionMode: mode satisfies PermissionMode,
         ...(model ? { model } : {}),
         ...(effort ? { effort } : {}),
@@ -548,7 +559,7 @@ export class SessionService {
         // The text as it is written, shown before its message is complete.
         includePartialMessages: true,
         // The module's skills, where that Claude Code reaches them (a Linux path inside WSL).
-        plugins: (this.deps.plugins ?? []).map((path) => ({ type: 'local' as const, path: place.remote ? pathInWsl(path) : path })),
+        plugins: (this.deps.plugins ?? []).map((path) => ({ type: 'local' as const, path: place.at.local ? path : pathInWsl(path) })),
         // The workspace's tools: they ask the user themselves before writing, whatever the mode, so #ask lets them
         // through (not allowedTools, which would skip canUseTool and make the SDK warn).
         ...(tools.length ? { mcpServers: { [SERVER]: workspaceServer(tools, context) } } : {}),
@@ -612,12 +623,12 @@ export class SessionService {
     const byRepo = await Promise.all(
       folders.map(async (repo) => {
         // A folder whose Claude Code cannot be found (WSL without it) lists nothing.
-        const place = await placeOf(repo, this.deps.env).catch(() => null)
+        const place = await this.#place(repo).catch(() => null)
         if (!place) return []
         // Worktrees only where the SDK resolves them by itself: from Windows it would have to run git, which lives
         // in WSL.
         const infos = await readHistory(place.configDir, (h) =>
-          h.listSessions({ dir: place.cwd, limit: 30, includeWorktrees: !place.remote })
+          h.listSessions({ dir: place.cwd, limit: 30, includeWorktrees: place.at.local })
         ).catch(() => [])
         return infos.map((info): SessionSummary => {
           // The row it has only if a task was attached to it afterwards.
@@ -667,7 +678,7 @@ export class SessionService {
 
   // The row of a session of the terminal, made when something has to be kept about it (its task, its model…).
   async #terminalRow(id: string, cwd: string, taskId: string | null): Promise<SessionRow | null> {
-    const place = await placeOf(cwd, this.deps.env).catch(() => null)
+    const place = await this.#place(cwd).catch(() => null)
     const info = await readHistory(place?.configDir, (h) => h.getSessionInfo(id, place ? { dir: place.cwd } : {})).catch(() => undefined)
     if (!info) return null
     const row = this.deps.store.fresh({
@@ -766,7 +777,7 @@ export class SessionService {
    * hold, stay out.
    */
   async tokensOf(id: string, cwd?: string): Promise<UsageByModel> {
-    const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
     const messages = await readHistory(place?.configDir, (h) => h.getSessionMessages(id, place ? { dir: place.cwd } : {})).catch(() => [])
     const totals: UsageByModel = {}
     for (const m of messages) {
@@ -792,7 +803,7 @@ export class SessionService {
   }
 
   async #saved(id: string, cwd?: string) {
-    const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
     const messages = await readHistory(place?.configDir, (h) => h.getSessionMessages(id, place ? { dir: place.cwd } : {})).catch(() => [])
     if (!messages.length) return null
     const events = messages.flatMap(eventsOfMessage)
@@ -822,7 +833,7 @@ export class SessionService {
     const entry: Watched = { watcher: null, mark: null, sent: 0, reading: false, again: false, live: false, quiet: null }
     this.#watched.set(id, entry)
     for (const old of [...this.#watched.keys()].slice(0, -MAX_WATCHED)) this.unwatch(old)
-    const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
     const configDir = place?.configDir ?? process.env['CLAUDE_CONFIG_DIR'] ?? localConfigDir()
     const folder = await transcriptFolder(configDir, place?.cwd, id)
     // Stopped meanwhile (unwatched, or a newer one came), or nothing to watch.
@@ -873,7 +884,7 @@ export class SessionService {
   // The transcript's size and date first, which are cheap; its lines only when they changed.
   async #readOnce(id: string, entry: Watched): Promise<void> {
     const cwd = this.#folders.get(id)
-    const place = cwd ? await placeOf(cwd, this.deps.env).catch(() => null) : null
+    const place = cwd ? await this.#place(cwd).catch(() => null) : null
     const info = await readHistory(place?.configDir, (h) => h.getSessionInfo(id, place ? { dir: place.cwd } : {})).catch(() => undefined)
     const mark = info ? `${info.lastModified}:${info.fileSize ?? ''}` : null
     if (!mark || mark === entry.mark) return
@@ -1021,7 +1032,7 @@ export class SessionService {
 
   async #probeModels(repos: string[]): Promise<SessionModel[]> {
     const root = await this.#root(repos).catch(() => null)
-    const place = root ? await placeOf(root, this.deps.env).catch(() => null) : null
+    const place = root ? await this.#place(root).catch(() => null) : null
     if (!place) return []
     let wake = () => {}
     const quiet = new Promise<void>((resolve) => (wake = resolve))
@@ -1033,9 +1044,7 @@ export class SessionService {
       })(),
       options: {
         cwd: place.cwd,
-        env: sessionEnv(),
-        ...place.options,
-        ...(this.deps.executable ? { pathToClaudeCodeExecutable: this.deps.executable } : {}),
+        ...(await this.#claudeOptions(place)),
         settingSources: [],
       },
     })

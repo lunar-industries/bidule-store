@@ -64,7 +64,7 @@ const done = (found: boolean, message = 'Session terminée') => {
 // Taken from quack-board (ClaudesController, Simon's): the Claude sessions run by the Agent SDK, their conversation,
 // their decisions, their settings, and what the page shows beside them.
 export default class SessionsController {
-  // Whether the sessions are on, and the Claude Code they run (on Windows, the one of WSL's default distro).
+  // Whether the sessions are on, and the Claude Code they run (the one of the tools' environment).
   async status() {
     const on = (await settings()).enabled
     return { enabled: on, places: on ? await detect(ctx.env) : [] }
@@ -137,7 +137,7 @@ export default class SessionsController {
         task: null,
         repos: [],
         worktrees: [],
-        where: where?.remote?.label ?? 'Ce poste',
+        where: where?.at.label ?? 'Ce poste',
         login: null,
         slot: [],
         costUsd: null,
@@ -172,7 +172,7 @@ export default class SessionsController {
       task: task ? { id: task.id, ref: task.ref, title: task.title, status: task.status, url: task.url } : null,
       repos: repos.map((r) => ({ label: r.label, path: r.path })),
       worktrees,
-      where: place?.remote?.label ?? 'Ce poste',
+      where: place?.at.label ?? 'Ce poste',
       // What the session is telling now, else what its last turn left on its row.
       login: sessions.loginOf(row.id) ?? row.login,
       slot: locks.map((l) => ({ repo: l.repo, session: l.session, alive: l.alive, mine: pid !== null && l.pid === pid })),
