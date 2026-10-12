@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-temps",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "title": "Lunar Industries - Temps",
   "engine": "^0.3.0",
   "conflicts": ["temps"],

@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-containers",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "title": "Lunar Industries - Conteneurs",
   "engine": "^0.3.0",
   "dependencies": {
