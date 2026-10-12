@@ -87,8 +87,10 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
     last.current = NO_LOGS
     setLines([])
   }, [engine, id])
-  // Followed again when the container starts or stops: an engine's follow ends with the container.
+  // Followed again when the container starts, stops or restarts (a new start time): an engine's follow ends with the
+  // container.
   const running = c ? c.state === 'running' : null
+  const startedAt = c?.startedAt ?? null
   useEffect(() => {
     if (tab !== 'logs' || running === null) return
     let live = true
@@ -111,7 +113,7 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
       following.current = null
       if (mine) void api.unfollow({ params: { follow: mine } }).catch(() => undefined)
     }
-  }, [tab, engine, id, running])
+  }, [tab, engine, id, running, startedAt])
   const q = fold(query.trim())
   const shownLines = q ? lines.filter((l) => fold(l.text).includes(q)) : lines
   // The end of the logs stays in view while « Suivre la fin » is ticked.

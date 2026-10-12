@@ -25,6 +25,8 @@ export function useUsage(on: boolean): Usage | null {
     let mine: string | null = null
     api.usage.follow({}).then(
       ({ follow, usage: last }) => {
+        // No engine: nothing followed.
+        if (!follow) return
         if (!live) return void api.unfollow({ params: { follow } }).catch(() => undefined)
         mine = follow
         following.current = follow

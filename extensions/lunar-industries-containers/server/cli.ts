@@ -397,7 +397,9 @@ export class ContainerCli {
       child.on('close', () => {
         if (stopped) return
         wait = nextRetry(wait, Date.now() - startedAt)
+        // The wait alone does not keep the API running.
         retry = setTimeout(start, wait)
+        retry.unref()
       })
     }
     start()

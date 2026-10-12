@@ -132,10 +132,11 @@ export class ContainerService {
    * What the running containers use of the machine, followed by every engine present (`stats`), told at each of their
    * measures (`lunar-industries-containers.usage`, by the follow's id): the machine is the biggest of the engines'
    * (Docker and Podman may share it), the containers are each engine's own. One follow for every view; gives its id
-   * and the last measure (null before the first).
+   * and the last measure (null before the first). Without any engine there is nothing to follow: no id, no place taken.
    */
-  async followUsage(): Promise<{ follow: string; usage: Usage | null }> {
+  async followUsage(): Promise<{ follow: string | null; usage: Usage | null }> {
     const engines = await this.#present()
+    if (!engines.length) return { follow: null, usage: null }
     const hosts = await Promise.all(engines.map((e) => e.host()))
     const machine = { cpus: Math.max(0, ...hosts.map((h) => h.cpus)), memory: Math.max(0, ...hosts.map((h) => h.memory)) }
     const follow = this.#follows.join('usage', (followId) => {

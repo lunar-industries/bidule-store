@@ -26,7 +26,13 @@ export class Follows {
     }
     const follow: Follow = { id: randomUUID(), key, count: 1, stop: () => {} }
     this.#byKey.set(key, follow)
-    follow.stop = start(follow.id)
+    try {
+      follow.stop = start(follow.id)
+    } catch (err) {
+      // Not started: it takes no place.
+      this.#byKey.delete(key)
+      throw err
+    }
     for (const old of [...this.#byKey.values()].slice(0, -MAX_FOLLOWS)) this.#end(old)
     return follow.id
   }

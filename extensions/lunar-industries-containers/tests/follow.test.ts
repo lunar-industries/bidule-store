@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LogsEvent, UsageEvent } from '../contract.ts'
 import { ContainerCli } from '../server/cli.ts'
-import { MAX_FOLLOWS } from '../server/follow.ts'
+import { Follows, MAX_FOLLOWS } from '../server/follow.ts'
 import { ContainerService } from '../server/service.ts'
 import { fakeEnv, fakeStart } from './fakes.ts'
 
@@ -110,5 +110,33 @@ describe('Lunar Industries - Conteneurs · the resources, followed', () => {
     expect(started).toHaveLength(1)
     started[0].child.emit('close')
     expect(told.at(-1)).toEqual({ follow: first.follow, usage: null, ended: true })
+  })
+})
+
+describe('Lunar Industries - Conteneurs · the follows', () => {
+  it('a follow that cannot start takes no place: the next request starts it again', () => {
+    const follows = new Follows()
+    expect(() =>
+      follows.join('logs a', () => {
+        throw new Error('spawn failed')
+      })
+    ).toThrow('spawn failed')
+    let started = 0
+    follows.join('logs a', () => (started++, () => {}))
+    expect(started).toBe(1)
+  })
+
+  it('without any engine, the resources have nothing to follow, and take no place', async () => {
+    const { started, start } = fakeStart()
+    const { env } = fakeEnv(async () => {
+      throw new Error('no engine')
+    })
+    const service = new ContainerService(
+      [new ContainerCli('docker', 'Docker', env, start)],
+      { changed: () => {}, logs: () => {}, usage: () => {} },
+      async () => '/tmp'
+    )
+    expect(await service.followUsage()).toEqual({ follow: null, usage: null })
+    expect(started).toEqual([])
   })
 })
