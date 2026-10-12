@@ -12,11 +12,23 @@ function setup() {
   const told: LogsEvent[] = []
   const service = new ContainerService(
     [new ContainerCli('docker', 'Docker', env, start)],
-    { changed: () => {}, logs: (event) => void told.push(event) },
+    { changed: () => {}, logs: (event) => void told.push(event), usage: () => {} },
     async () => '/tmp'
   )
   return { service, started, told }
 }
+
+describe('Lunar Industries - Conteneurs · stopping with the API', () => {
+  it('ends the logs and the resources followed, whoever still follows them', async () => {
+    const { service, started } = setup()
+    await service.followLogs('docker', 'web')
+    await service.followLogs('docker', 'db')
+    await service.followUsage()
+    expect(started).toHaveLength(3)
+    service.stop()
+    expect(started.every((s) => s.child.killed)).toBe(true)
+  })
+})
 
 describe('Lunar Industries - Conteneurs · a container’s logs, followed', () => {
   beforeEach(() => {

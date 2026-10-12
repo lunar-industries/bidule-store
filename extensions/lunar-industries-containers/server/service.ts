@@ -43,8 +43,8 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 
 /**
  * Taken from quack-board (ContainerService, Simon's latest): the containers of every engine present (Docker,
- * Podman, or both). Once the page has asked for them, each engine's events are watched: every start, stop or removal
- * is told (`lunar-industries-containers.changed`). A container's files are asked of the engines only when the page
+ * Podman, or both). While a page listens to `lunar-industries-containers.changed`, each engine's events are watched:
+ * every start, stop or removal is told. A container's files are asked of the engines only when the page
  * asks; what the containers use and a container's logs are followed by the engines while the page shows them (see
  * Follows), told as they come. A shell inside or the logs in the terminal are built here from a known engine and a
  * known container: the window never sends a command.
@@ -52,6 +52,8 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 export class ContainerService {
   #watching = new Map<string, () => void>()
   #follows = new Follows()
+  // Whether a page listens to `changed` (follow): only then are the engines' events watched.
+  #listened = false
   // The lines each logs' follow has read so far (the last LOG_TAIL), by follow: a page that joins it gets them.
   #lines = new Map<string, string[]>()
   // The last measure of the resources' follow, by follow.
@@ -86,7 +88,8 @@ export class ContainerService {
     const out: ContainerList = { engines: engines.map((e) => ({ id: e.id, name: e.name })), containers: [], errors: [] }
     await Promise.all(
       engines.map(async (e) => {
-        this.#watch(e)
+        // An engine installed while the page is open is watched from the next list.
+        if (this.#listened) this.#watch(e)
         try {
           for (const c of await e.list()) out.containers.push({ ...c, engine: e.id })
         } catch (err) {
@@ -233,8 +236,27 @@ export class ContainerService {
     )
   }
 
-  stop(): void {
+  // A page listens to `changed` (ctx.events.listened), or the last one has gone: the engines present are watched, or no
+  // longer.
+  async follow(listened: boolean): Promise<void> {
+    if (!listened) return this.#unwatch()
+    this.#listened = true
+    const engines = await this.#present()
+    // The page may have gone meanwhile, or the API stopped.
+    if (this.#listened) for (const engine of engines) this.#watch(engine)
+  }
+
+  #unwatch(): void {
+    this.#listened = false
     for (const unwatch of this.#watching.values()) unwatch()
     this.#watching.clear()
+  }
+
+  // The API stops: no engine is watched, no logs or resources followed any more.
+  stop(): void {
+    this.#unwatch()
+    this.#follows.stopAll()
+    this.#lines.clear()
+    this.#usages.clear()
   }
 }

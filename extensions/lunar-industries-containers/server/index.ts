@@ -37,6 +37,16 @@ export async function activate(ctx: ServerContext) {
     },
     () => ctx.dataDir()
   )
+  // Its `events`, `logs --follow` and `stats` commands stop with the API.
+  ctx.onDispose(() => service.stop())
+  // The engines' events are watched only while a page listens to them (the Containers page): not for good once listed.
+  ctx.events.listened('lunar-industries-containers.changed', (listened) => {
+    service
+      .follow(listened)
+      .catch((error: unknown) =>
+        ctx.logger.warn(`suivi des conteneurs : ${error instanceof Error ? error.message : String(error)}`)
+      )
+  })
   // A container's shell or logs open in the terminal where the engines run: inside WSL, in the home folder there; on
   // the host when the engines are the host's (`toolbox: null`: not where the tools run); the Flatpak's host is the main
   // process's own doing.

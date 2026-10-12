@@ -131,7 +131,7 @@ export function TempsPage() {
   const loadWeek = useCallback(() => {
     void api.week(weekKey).then(setWeek, () => undefined)
   }, [weekKey])
-  const loadSummary = () => void api.summary().then(setSummary, () => undefined)
+  const loadSummary = useCallback(() => void api.summary().then(setSummary, () => undefined), [])
   useEffect(() => {
     let live = true
     setSelected(null)
@@ -153,11 +153,11 @@ export function TempsPage() {
   }, [cal])
   // Read again at each change the core announces: only the last reading asked is kept.
   const [readLatest] = useState(() => latestOf(readBoard))
-  const loadBoard = () => void readLatest().then(setBoard)
+  const loadBoard = useCallback(() => void readLatest().then(setBoard), [readLatest])
   useEffect(() => {
     loadBoard()
     loadSummary()
-  }, [])
+  }, [loadBoard, loadSummary])
   useOn('objects.changed', ({ type }) => type === 'task' && loadBoard())
 
   // In the morning, before any activity, the previous work day still to deal with comes first (once a date).

@@ -11,9 +11,10 @@ import { ContainerService } from '../server/service.ts'
 class FakeEngine extends ContainerCli {
   acts: string[] = []
   watched = 0
+  unwatched = 0
   constructor(
     cli: 'docker' | 'podman',
-    private present: boolean,
+    public present: boolean,
     private containers: Container[] | Error
   ) {
     super(cli, cli === 'docker' ? 'Docker' : 'Podman', {} as unknown as Environment)
@@ -30,7 +31,7 @@ class FakeEngine extends ContainerCli {
   }
   override watch() {
     this.watched++
-    return () => {}
+    return () => void this.unwatched++
   }
 }
 
@@ -76,10 +77,39 @@ describe('Lunar Industries - Conteneurs · the service', () => {
     expect(list.containers.map((c) => c.name)).toEqual(['api'])
   })
 
-  it('each engine’s events are watched once, from the first listing', async () => {
+  it('the engines’ events are watched only while a page listens, each engine once', async () => {
     const podman = new FakeEngine('podman', true, [])
     const s = service(podman)
     await s.list()
+    expect(podman.watched).toBe(0)
+    await s.follow(true)
+    await s.list()
+    await s.follow(true)
+    expect(podman.watched).toBe(1)
+    await s.follow(false)
+    expect(podman.unwatched).toBe(1)
+    await s.list()
+    expect(podman.watched).toBe(1)
+    await s.follow(true)
+    expect(podman.watched).toBe(2)
+  })
+
+  it('an engine that appears while a page listens is watched from the next listing', async () => {
+    const podman = new FakeEngine('podman', false, [])
+    const s = service(podman)
+    await s.follow(true)
+    expect(podman.watched).toBe(0)
+    podman.present = true
+    await s.list()
+    expect(podman.watched).toBe(1)
+  })
+
+  it('stopping watches no engine any more, whatever the page', async () => {
+    const podman = new FakeEngine('podman', true, [])
+    const s = service(podman)
+    await s.follow(true)
+    s.stop()
+    expect(podman.unwatched).toBe(1)
     await s.list()
     expect(podman.watched).toBe(1)
   })
