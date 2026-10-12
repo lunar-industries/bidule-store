@@ -158,6 +158,16 @@ describe('Day', () => {
     expect(await store.edited(TUE)).toBe(true)
   })
 
+  test('a branch the user unlinked by hand stays so when its time goes to a task', async () => {
+    const { git, store, days } = setup({ now: FRIDAY_EVENING })
+    git.branch('r', 'fix-x', { noTask: true })
+    await store.draft(TUE, [{ taskId: null, repo: 'r', branch: 'fix-x', share: 20 }])
+    const orphan = (await store.drafts(TUE)).find((l) => l.branch === 'fix-x')!
+    await days.resolve(TUE, orphan.id, { taskId: 't1' })
+    expect((await store.drafts(TUE)).map((l) => [l.taskId, l.share])).toEqual([['t1', 20]])
+    expect(git.links).toEqual([])
+  })
+
   test('a day the user changed no longer follows the signals; « Recalculer » brings it back', async () => {
     const { git, store, days } = setup({ now: FRIDAY_EVENING })
     git.branch('r', 'id-1-a', { taskId: 't1' })

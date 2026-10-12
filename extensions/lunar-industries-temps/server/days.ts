@@ -37,8 +37,8 @@ const LOG_AHEAD_DAYS = 60
 // A period read from the Time Log is read again after this long.
 const FRESH_MS = 10 * 60_000
 
-// A branch of the user's repos, with the task it is linked to.
-export type WorkBranch = { repo: string; name: string; taskId: string | null; isDefault: boolean }
+// A branch of the user's repos, with the task it is linked to; `noTask`: the user unlinked it by hand (the core's mark).
+export type WorkBranch = { repo: string; name: string; taskId: string | null; isDefault: boolean; noTask: boolean }
 
 /** The user's work as the core has it (server/work.ts reads it from the core's objects). */
 export interface Work {
@@ -443,8 +443,9 @@ export class Days {
   }
 
   /**
-   * Settles a line without a task: attached to a task (which also links its git branch, so the other days follow), or
-   * kept without a task. An attached line joins the task's line of the same label.
+   * Settles a line without a task: attached to a task (which also links its git branch, so the other days follow, unless
+   * the user unlinked that branch by hand: it stays so), or kept without a task. An attached line joins the task's line
+   * of the same label.
    */
   async resolve(day: string, id: number, change: { taskId?: string; confirmed?: boolean }): Promise<void> {
     const rows = await this.#store.drafts(day)
@@ -456,7 +457,7 @@ export class Days {
       if (line.repo && line.branch) {
         const { work } = this.deps
         const branch = (await work.branches()).find((b) => b.repo === line.repo && b.name === line.branch)
-        if (branch && !branch.isDefault && !branch.taskId) await work.link(line.repo, line.branch, taskId)
+        if (branch && !branch.isDefault && !branch.taskId && !branch.noTask) await work.link(line.repo, line.branch, taskId)
       }
       const twin = rows.find((r) => r.id !== line.id && r.taskId === taskId && r.label === line.label)
       next = twin

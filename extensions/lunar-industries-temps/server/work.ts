@@ -27,17 +27,21 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
       return (await objects.list('repository')).map((r) => ({ path: r.path, label: r.label }))
     },
 
+    // With the core's `noTask` mark of the branches the user unlinked by hand (a link from the branch to itself).
     async branches() {
       if (!has('branch') || !has('repository')) return []
-      const [repos, branches, taskOf] = await Promise.all([
+      const [repos, branches, taskOf, marks] = await Promise.all([
         objects.list('repository', { withDeleted: true }),
         objects.list('branch'),
         taskOfBranch(),
+        objects.relations({ kind: 'noTask', fromType: 'branch', toType: 'branch' }),
       ])
       const pathOf = new Map(repos.map((r) => [r.id, r.path]))
+      const unlinked = new Set(marks.map((l) => l.from.id))
       return branches.flatMap((b): WorkBranch[] => {
         const repo = pathOf.get(b.repositoryId)
-        return repo ? [{ repo, name: b.name, taskId: taskOf.get(b.id) ?? null, isDefault: b.isDefault }] : []
+        if (!repo) return []
+        return [{ repo, name: b.name, taskId: taskOf.get(b.id) ?? null, isDefault: b.isDefault, noTask: unlinked.has(b.id) }]
       })
     },
 
