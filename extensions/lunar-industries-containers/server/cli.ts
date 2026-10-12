@@ -184,7 +184,7 @@ function bytes(text: string): number {
   return found?.[1] && unit ? Math.round(Number(found[1]) * unit) : 0
 }
 
-// What `stats --no-stream --format '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'` prints, a line a running container:
+// What one measure of `stats --format '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'` prints, a line a running container:
 // `3f2a9c1b7d4e|0.50%|21.5MiB / 7.6GiB`. The ids are the short ones, the engine's `ps` gives the long ones.
 export function parseStats(text: string): Omit<UsageRow, 'engine'>[] {
   const out: Omit<UsageRow, 'engine'>[] = []
@@ -195,6 +195,27 @@ export function parseStats(text: string): Omit<UsageRow, 'engine'>[] {
     out.push({ id, cpu: Number.parseFloat(cpu) || 0, memory: bytes(memory), limit: bytes(limit) })
   }
   return out
+}
+
+const ESC = String.fromCharCode(27)
+// The sequences that start or end one measure of the streamed `stats`: cursor home (ESC[H, ESC[1;1H), clear the
+// screen (ESC[2J) or what follows the cursor (ESC[J).
+const FRAME_EDGE = new RegExp(`${ESC}\\[(?:\\d*J|\\d*(?:;\\d*)?H)`)
+const SEQUENCE = new RegExp(`${ESC}\\[[\\d;]*[A-Za-z]`, 'g')
+
+/**
+ * The measures of a streamed `stats` (without --no-stream): the engine draws each one over the last one with terminal
+ * sequences. Docker starts it with « cursor home » and ends it with « clear what follows »; Podman clears the screen and
+ * goes home before each one. Given what came, the text of each measure that is complete (the next one started, or the
+ * screen was cleared after it), without its sequences; the rest waits for what follows.
+ */
+export function statsFrames(): (chunk: string) => string[] {
+  let rest = ''
+  return (chunk) => {
+    const parts = (rest + chunk).split(FRAME_EDGE)
+    rest = parts.pop() ?? ''
+    return parts.map((part) => part.replace(SEQUENCE, '')).filter((part) => part.trim())
+  }
 }
 
 // What `ls -1Ap` prints: a name a line, a `/` after a folder's. Folders come first, each group by name.
@@ -299,12 +320,19 @@ export class ContainerCli {
     return this.#host
   }
 
-  async usage(): Promise<{ cpus: number; memory: number; containers: Omit<UsageRow, 'engine'>[] }> {
-    const [host, out] = await Promise.all([
-      this.host(),
-      exec(this.env, this.cli, ['stats', '--no-stream', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'], 30_000),
-    ])
-    return { ...host, containers: parseStats(out) }
+  /**
+   * What the running containers use, followed by the engine (`stats` streamed: the engine measures again by itself, the
+   * module asks nothing more): each measure as it comes; `end` when the command ends (the engine gone, or stopped
+   * here). Gives how to stop it.
+   */
+  followUsage(on: { rows(rows: Omit<UsageRow, 'engine'>[]): void; end(): void }): () => void {
+    const frames = statsFrames()
+    return stream(this.env, this.start, [this.cli, 'stats', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'], {
+      data: (text, from) => {
+        if (from === 'stdout') for (const frame of frames(text)) on.rows(parseStats(frame))
+      },
+      end: () => on.end(),
+    })
   }
 
   async files(id: string, path: string): Promise<ContainerFile[]> {

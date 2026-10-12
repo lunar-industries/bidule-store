@@ -33,6 +33,7 @@ export async function activate(ctx: ServerContext) {
     {
       changed: () => void ctx.events.emit('lunar-industries-containers.changed', {}),
       logs: (event) => void ctx.events.emit('lunar-industries-containers.logs', event),
+      usage: (event) => void ctx.events.emit('lunar-industries-containers.usage', event),
     },
     () => ctx.dataDir()
   )

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LogsEvent } from '../contract.ts'
+import type { LogsEvent, UsageEvent } from '../contract.ts'
 import { ContainerCli } from '../server/cli.ts'
 import { MAX_FOLLOWS } from '../server/follow.ts'
 import { ContainerService } from '../server/service.ts'
@@ -85,5 +85,30 @@ describe('Lunar Industries - Conteneurs · a container’s logs, followed', () =
     await expect(service.followLogs('podman', 'web')).rejects.toMatchObject({ status: 404 })
     await expect(service.followLogs('docker', '--privileged')).rejects.toMatchObject({ status: 404 })
     expect(started).toEqual([])
+  })
+})
+
+describe('Lunar Industries - Conteneurs · the resources, followed', () => {
+  it('each measure of the engine, with the machine’s cores and memory; one follow for every view; its end said', async () => {
+    const { started, start } = fakeStart()
+    const { env } = fakeEnv(async (argv) => (argv[1] === '--version' ? 'Docker version 29.8.2' : argv[1] === 'info' ? '8|16000000000\n' : ''))
+    const told: UsageEvent[] = []
+    const service = new ContainerService(
+      [new ContainerCli('docker', 'Docker', env, start)],
+      { changed: () => {}, logs: () => {}, usage: (event) => void told.push(event) },
+      async () => '/tmp'
+    )
+    const first = await service.followUsage()
+    expect(first.usage).toBeNull()
+    expect(started.map((s) => s.argv.slice(0, 2))).toEqual([['docker', 'stats']])
+    started[0].child.stdout.emit('data', '\u001b[Hd84e636c3e36|0.15%|3.633MiB / 15.58GiB\u001b[K\n\u001b[J')
+    const row = { engine: 'docker', id: 'd84e636c3e36', cpu: 0.15, memory: Math.round(3.633 * 1024 ** 2), limit: Math.round(15.58 * 1024 ** 3) }
+    const usage = { cpus: 8, memory: 16000000000, containers: [row] }
+    expect(told).toEqual([{ follow: first.follow, usage, ended: false }])
+    // Another view joins: the same follow, the last measure at once.
+    expect(await service.followUsage()).toEqual({ follow: first.follow, usage })
+    expect(started).toHaveLength(1)
+    started[0].child.emit('close')
+    expect(told.at(-1)).toEqual({ follow: first.follow, usage: null, ended: true })
   })
 })

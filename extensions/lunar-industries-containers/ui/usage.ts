@@ -1,38 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useOn } from '@bidule/sdk'
 import type { Usage } from '../contract.ts'
 import { api } from './api.ts'
-
-const USAGE_EVERY_MS = 3000
 
 // Kept across visits while the app runs: the meters show the last measure until the next one.
 let keptUsage: Usage | null = null
 
-// What the running containers use, asked every few seconds while `on` (the list or a container's view shows it):
-// the engines are not asked for numbers nobody looks at.
+// What the running containers use, followed by the engines while `on` (the list or a container's view shows it): each
+// of their measures comes as the module's event; the engines are not asked for numbers nobody looks at.
 export function useUsage(on: boolean): Usage | null {
   const [usage, setUsage] = useState<Usage | null>(keptUsage)
+  // The follow this hook asked for (subscribed first, then asked: a measure before its answer is left for the next).
+  const following = useRef<string | null>(null)
+  const show = (measure: Usage) => {
+    keptUsage = measure
+    setUsage(measure)
+  }
+  useOn('lunar-industries-containers.usage', (event) => {
+    if (event.follow === following.current && event.usage) show(event.usage)
+  })
   useEffect(() => {
     if (!on) return
     let live = true
-    let asking = false
-    const tick = async () => {
-      if (asking) return
-      asking = true
-      try {
-        const u: Usage = await api.usage({})
-        keptUsage = u
-        if (live) setUsage(u)
-      } catch {
-        // No numbers this time; the next tick asks again.
-      } finally {
-        asking = false
-      }
-    }
-    void tick()
-    const timer = setInterval(() => void tick(), USAGE_EVERY_MS)
+    let mine: string | null = null
+    api.usage.follow({}).then(
+      ({ follow, usage: last }) => {
+        if (!live) return void api.unfollow({ params: { follow } }).catch(() => undefined)
+        mine = follow
+        following.current = follow
+        if (last) show(last)
+      },
+      // No numbers: the meters keep the last ones.
+      () => undefined
+    )
     return () => {
       live = false
-      clearInterval(timer)
+      following.current = null
+      if (mine) void api.unfollow({ params: { follow: mine } }).catch(() => undefined)
     }
   }, [on])
   return usage

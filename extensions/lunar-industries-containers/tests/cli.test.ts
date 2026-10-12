@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ContainerCli, nextRetry } from '../server/cli.ts'
+import { ContainerCli, nextRetry, parseStats, statsFrames } from '../server/cli.ts'
 import { fakeEnv, fakeStart } from './fakes.ts'
 
 const inspected = (id: string) => ({ Id: id, Name: `/${id}`, Config: { Image: 'img' }, State: { Status: 'running' } })
@@ -71,5 +72,54 @@ describe('Lunar Industries - Conteneurs · the engine’s events', () => {
     expect(started[2].child.killed).toBe(true)
     vi.advanceTimersByTime(60 * 60_000)
     expect(started).toHaveLength(3)
+  })
+})
+
+describe('Lunar Industries - Conteneurs · the resources, streamed', () => {
+  const read = (name: string) => readFileSync(new URL(`./data/${name}`, import.meta.url), 'utf8')
+
+  it('Docker draws each measure between « cursor home » and « clear what follows »: one measure a frame', () => {
+    // Recorded: `docker stats --format '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'` (Docker 29.8.2), one container, 5 s.
+    const frames = statsFrames()(read('stats-docker.txt'))
+    expect(frames.length).toBeGreaterThan(2)
+    // 15.58GiB.
+    const limit = Math.round(15.58 * 1024 ** 3)
+    for (const frame of frames) expect(parseStats(frame)).toEqual([{ id: 'd84e636c3e36', cpu: expect.any(Number), memory: expect.any(Number), limit }])
+    expect(parseStats(frames[2])[0].cpu).toBe(0.15)
+  })
+
+  it('Podman clears the screen before each measure: a measure is complete when the next one starts', () => {
+    // Written as Podman draws (goterm: ESC[2J then ESC[1;1H before each measure), not recorded.
+    const frames = statsFrames()(read('stats-podman.txt'))
+    expect(frames.map((f) => parseStats(f).map((r) => [r.id, r.cpu]))).toEqual([
+      [
+        ['a1b2c3d4e5f6', 1.25],
+        ['f6e5d4c3b2a1', 0],
+      ],
+    ])
+  })
+
+  it('a measure cut anywhere (in a sequence too) is read once whole', () => {
+    const text = read('stats-docker.txt')
+    const whole = statsFrames()(text)
+    const next = statsFrames()
+    const pieces: string[] = []
+    for (let i = 0; i < text.length; i += 7) pieces.push(...next(text.slice(i, i + 7)))
+    expect(pieces).toEqual(whole)
+  })
+
+  it('followed by the engine itself: `stats` without --no-stream, each measure given as it comes', () => {
+    const { started, start } = fakeStart()
+    const measures: unknown[] = []
+    let ended = false
+    const stop = new ContainerCli('podman', 'Podman', fakeEnv(async () => '').env, start).followUsage({
+      rows: (rows) => void measures.push(rows),
+      end: () => void (ended = true),
+    })
+    expect(started[0].argv).toEqual(['podman', 'stats', '--format', '{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}'])
+    started[0].child.stdout.emit('data', read('stats-podman.txt'))
+    expect(measures).toHaveLength(1)
+    stop()
+    expect(ended).toBe(true)
   })
 })

@@ -20,7 +20,8 @@
     ],
     "events": [
       "lunar-industries-containers.changed",
-      "lunar-industries-containers.logs"
+      "lunar-industries-containers.logs",
+      "lunar-industries-containers.usage"
     ]
   }
 }

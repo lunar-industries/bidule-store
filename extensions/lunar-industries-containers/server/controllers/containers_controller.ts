@@ -16,8 +16,9 @@ export default class ContainersController {
     return service.list()
   }
 
-  async usage() {
-    return service.usage()
+  // What the containers use, followed while the page shows it: the follow's id and the last measure, then events.
+  async followUsage() {
+    return service.followUsage()
   }
 
   async show({ params }: HttpContext) {

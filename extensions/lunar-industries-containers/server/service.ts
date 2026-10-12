@@ -10,6 +10,8 @@ import type {
   ContainerList,
   LogsEvent,
   Usage,
+  UsageEvent,
+  UsageRow,
 } from '../contract.ts'
 import type { ContainerCli } from './cli.ts'
 import { Follows } from './follow.ts'
@@ -23,6 +25,8 @@ export interface Tell {
   changed(): void
   // Lines of a followed container's logs, or its end.
   logs(event: LogsEvent): void
+  // A measure of the resources followed, or its end.
+  usage(event: UsageEvent): void
 }
 
 export class ContainerError extends Exception {
@@ -40,16 +44,18 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 /**
  * Taken from quack-board (ContainerService, Simon's latest): the containers of every engine present (Docker,
  * Podman, or both). Once the page has asked for them, each engine's events are watched: every start, stop or removal
- * is told (`lunar-industries-containers.changed`). What they use and a container's files are asked of the engines
- * only when the page asks (while it is open); a container's logs are followed by the engine while the page shows them
- * (see Follows), their lines told as they come. A shell inside or the logs in the terminal are built here from a known
- * engine and a known container: the window never sends a command.
+ * is told (`lunar-industries-containers.changed`). A container's files are asked of the engines only when the page
+ * asks; what the containers use and a container's logs are followed by the engines while the page shows them (see
+ * Follows), told as they come. A shell inside or the logs in the terminal are built here from a known engine and a
+ * known container: the window never sends a command.
  */
 export class ContainerService {
   #watching = new Map<string, () => void>()
   #follows = new Follows()
   // The lines each logs' follow has read so far (the last LOG_TAIL), by follow: a page that joins it gets them.
   #lines = new Map<string, string[]>()
+  // The last measure of the resources' follow, by follow.
+  #usages = new Map<string, Usage>()
 
   constructor(
     protected engines: ContainerCli[],
@@ -122,23 +128,43 @@ export class ContainerService {
     return { argv, cwd: home }
   }
 
-  // What the running containers use of the machine, every engine together: the machine is the biggest of the
-  // engines' (Docker and Podman may share it), the containers are each engine's own.
-  async usage(): Promise<Usage> {
-    const out: Usage = { cpus: 0, memory: 0, containers: [] }
-    await Promise.all(
-      (await this.#present()).map(async (e) => {
-        try {
-          const u = await e.usage()
-          out.cpus = Math.max(out.cpus, u.cpus)
-          out.memory = Math.max(out.memory, u.memory)
-          for (const c of u.containers) out.containers.push({ ...c, engine: e.id })
-        } catch {
-          // An engine that does not answer has the list's error; no numbers for it.
-        }
-      })
-    )
-    return out
+  /**
+   * What the running containers use of the machine, followed by every engine present (`stats`), told at each of their
+   * measures (`lunar-industries-containers.usage`, by the follow's id): the machine is the biggest of the engines'
+   * (Docker and Podman may share it), the containers are each engine's own. One follow for every view; gives its id
+   * and the last measure (null before the first).
+   */
+  async followUsage(): Promise<{ follow: string; usage: Usage | null }> {
+    const engines = await this.#present()
+    const hosts = await Promise.all(engines.map((e) => e.host()))
+    const machine = { cpus: Math.max(0, ...hosts.map((h) => h.cpus)), memory: Math.max(0, ...hosts.map((h) => h.memory)) }
+    const follow = this.#follows.join('usage', (followId) => {
+      const rows = new Map<string, UsageRow[]>()
+      let running = engines.length
+      const stops = engines.map((e) =>
+        e.followUsage({
+          rows: (measured) => {
+            rows.set(e.id, measured.map((r) => ({ ...r, engine: e.id })))
+            const usage: Usage = { ...machine, containers: [...rows.values()].flat() }
+            this.#usages.set(followId, usage)
+            this.tell.usage({ follow: followId, usage, ended: false })
+          },
+          // An engine gone: its containers no longer count; the follow ends with the last engine.
+          end: () => {
+            rows.delete(e.id)
+            running -= 1
+            if (running > 0) return
+            this.#follows.ended(followId)
+            this.#usages.delete(followId)
+            this.tell.usage({ follow: followId, usage: null, ended: true })
+          },
+        })
+      )
+      return () => {
+        for (const stop of stops) stop()
+      }
+    })
+    return { follow, usage: this.#usages.get(follow) ?? null }
   }
 
   /**
