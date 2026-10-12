@@ -220,6 +220,12 @@ export class ReadingTimeLog {
   }
 }
 
+// The settings of the tests: the module's defaults, and integration branches as one team names them.
+export const SETTINGS: TempsSettings = {
+  ...DEFAULT_SETTINGS,
+  integrationBranches: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
+}
+
 export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: DayLog | null }) {
   const store = new MemoryStore()
   const git = new FakeGit()
@@ -228,7 +234,7 @@ export function setup(o: { now: Date; settings?: Partial<TempsSettings>; log?: D
   let changes = 0
   const days = new Days({
     store,
-    settings: async () => ({ ...DEFAULT_SETTINGS, ...o.settings }),
+    settings: async () => ({ ...SETTINGS, ...o.settings }),
     work: fakeWork(git, tasks),
     timeLog: async () => log,
     changed: () => (changes += 1),

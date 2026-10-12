@@ -16,7 +16,8 @@ export async function activate(ctx: ServerContext) {
   days = new Days({
     store,
     settings: () => readSettings(ctx),
-    work: coreWork(ctx.objects),
+    // A link by hand, and the integration branches (readSettings), are lunar-industries-common's (a dependency).
+    work: coreWork(ctx.objects, (args) => ctx.commands.execute('lunar-industries-common.link', args)),
     timeLog: coreTimeLog(ctx.objects),
     changed: () => void ctx.events.emit('lunar-industries-temps.changed', {}),
   })

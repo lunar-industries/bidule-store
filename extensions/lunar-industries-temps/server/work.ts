@@ -5,12 +5,15 @@ import type { WorkEvent } from './engine.ts'
 
 type Objects = ServerContext['objects']
 
+// lunar-industries-common's link by hand (its command).
+type LinkByHand = (args: { repo: string; name: string; taskId: string | null }) => Promise<{ linked: boolean }>
+
 /**
  * The user's work, read from the core's objects as the official Temps reads it: the repositories and branches git
  * provides, the activity of git (with its repository and branch) and of the task providers (an edit, a change of
  * status, with its task), and the tasks the branches are linked to. A type nobody provides gives nothing.
  */
-export function coreWork(objects: Objects): Work {
+export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
   const has = (type: StoredType) => objects.providers(type).length > 0
   // The task of each branch, deleted ones included (a branch deleted since still says which task it was for).
   const taskOfBranch = async () =>
@@ -93,16 +96,9 @@ export function coreWork(objects: Objects): Work {
     },
 
     // A link the user made (`manual`): the core's rule on branch names never undoes it. The branch's other tasks and
-    // its « no task » mark go.
-    async link(repoPath, name, taskId) {
-      const [repo] = await objects.list('repository', { where: { path: repoPath } })
-      const [branch] = repo ? await objects.list('branch', { where: { repositoryId: repo.id, name } }) : []
-      if (!branch) return
-      const to = { type: 'branch' as const, id: branch.id }
-      await objects.link({ type: 'task', id: taskId }, 'branch', to, 'manual')
-      for (const other of await objects.related(branch.id, { kind: 'branch', type: 'task' }))
-        if (other.id !== taskId) await objects.unlink({ type: 'task', id: other.id }, 'branch', to)
-      await objects.unlink(to, 'noTask', to)
+    // its « no task » mark go. A branch or task gone meanwhile is left as it is.
+    async link(repo, name, taskId) {
+      await linkByHand({ repo, name, taskId })
     },
 
     async titles() {

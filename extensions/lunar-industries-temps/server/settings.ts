@@ -1,6 +1,6 @@
 import type { ServerContext } from '@bidule/api/extensions'
 
-// The module's settings (bidule.json), read together.
+// The module's settings (bidule.json), read together, with the integration branches of lunar-industries-common.
 export type TempsSettings = {
   // ISO numbers, 1 = Monday.
   workDays: Set<number>
@@ -27,9 +27,9 @@ export const workDaysOf = (value: unknown) =>
       .filter((n) => Number.isInteger(n) && n >= 1 && n <= 7)
   )
 
-export const DEFAULT_SETTINGS: TempsSettings = {
+// The module's own, by default.
+export const DEFAULT_SETTINGS: Omit<TempsSettings, 'integrationBranches'> = {
   workDays: new Set([1, 2, 3, 4, 5]),
-  integrationBranches: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
   deployBranches: [],
   defaultLabel: 'Développement',
   absentLabel: 'Absent',
@@ -51,7 +51,7 @@ export async function readSettings(ctx: ServerContext): Promise<TempsSettings> {
   const work = await get('workDays')
   return {
     workDays: work === undefined ? DEFAULT_SETTINGS.workDays : workDaysOf(work),
-    integrationBranches: list((await get('integrationBranches')) ?? DEFAULT_SETTINGS.integrationBranches.join(', ')),
+    integrationBranches: (await ctx.commands.execute('lunar-industries-common.settings', undefined)).integrationBranches,
     deployBranches: list((await get('deployBranches')) ?? DEFAULT_SETTINGS.deployBranches.join(', ')),
     defaultLabel: await text('defaultLabel', DEFAULT_SETTINGS.defaultLabel),
     absentLabel: await text('absentLabel', DEFAULT_SETTINGS.absentLabel),

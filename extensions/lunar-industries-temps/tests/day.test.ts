@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'vitest'
 import { dayStart } from '../server/engine.ts'
 import { mergeListener } from '../server/store.ts'
-import { MemoryStore, setup } from './fakes.ts'
+import { MemoryStore, SETTINGS, setup } from './fakes.ts'
 
 // Monday 21 to Friday 25 September 2026.
 const [MON, TUE] = ['2026-09-21', '2026-09-22']
@@ -24,7 +24,7 @@ describe('Day', () => {
     git.event(at(TUE, 11), 'commit', 'r', 'factory', "Merge branch 'fix-x' into 'factory'")
     git.event(at(TUE, 12), 'commit', 'r', 'factory', "Merge branch 'launchpad' into factory")
     git.event(at(TUE, 14), 'commit', 'r', 'orbit', "Merge branch 'launchpad' into orbit")
-    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    const settings = SETTINGS
     const lines = await days.proposal(TUE, { ...settings, deployBranches: ['launchpad', 'orbit'] })
     expect(lines.map((l) => [l.taskId, l.branch ?? null, l.label, l.confirmed])).toEqual(
       expect.arrayContaining([
@@ -40,7 +40,7 @@ describe('Day', () => {
     const { git, days } = setup({ now: FRIDAY_EVENING })
     git.branch('r', 'main', { isDefault: true })
     git.event(at(TUE, 9), 'commit', 'r', 'main', 'hotfix')
-    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    const settings = SETTINGS
     expect(settings.deployBranches).toEqual([])
     const lines = await days.proposal(TUE, settings)
     expect(lines.map((l) => [l.taskId, l.label, l.confirmed])).toEqual([[null, 'Développement', false]])
@@ -50,7 +50,7 @@ describe('Day', () => {
     const { git, days } = setup({ now: FRIDAY_EVENING })
     git.branch('r', 'id-1-a', { taskId: 't1' })
     git.event(at(TUE, 9), 'commit', 'r', 'id-1-a', 'work')
-    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    const settings = SETTINGS
     const before = (await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])
     expect(before).toEqual([['t1', null]])
     // Git drops the branch, and with it its events' task (its join finds no branch).
@@ -74,7 +74,7 @@ describe('Day', () => {
     const { git, days } = setup({ now: FRIDAY_EVENING })
     git.branch('r', 'id-1-a', { taskId: 't1' })
     git.event(at(TUE, 9), 'commit', 'r', 'id-1-a', 'work')
-    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    const settings = SETTINGS
     await days.proposal(TUE, settings)
     git.branchRows[0].taskId = null
     git.eventRows[0].taskId = null
