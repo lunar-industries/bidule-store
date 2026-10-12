@@ -54,7 +54,8 @@ describe('Lunar Industries - Conteneurs · the service', () => {
     dir = await mkdtemp(join(tmpdir(), 'lic-containers-'))
     changes = 0
   })
-  const service = (...engines: FakeEngine[]) => new ContainerService(engines, () => void changes++, async () => dir)
+  const service = (...engines: FakeEngine[]) =>
+    new ContainerService(engines, { changed: () => void changes++, logs: () => {} }, async () => dir)
 
   it('lists the containers of every engine present, by name, and leaves an absent engine out', async () => {
     const podman = new FakeEngine('podman', true, [container('web')])

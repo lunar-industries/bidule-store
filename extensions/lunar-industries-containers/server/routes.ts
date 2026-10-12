@@ -13,6 +13,7 @@ export default function routes(router: Router) {
   router.get('engines/:engine/containers/:id', [containers, 'show']).as('show')
   router.post('engines/:engine/containers/:id/action', [containers, 'act']).as('act')
   router.post('engines/:engine/containers/:id/terminal', [containers, 'terminal']).as('terminal')
-  router.get('engines/:engine/containers/:id/logs', [containers, 'logs']).as('logs')
+  router.post('engines/:engine/containers/:id/logs/follow', [containers, 'followLogs']).as('logs.follow')
+  router.delete('follows/:follow', [containers, 'unfollow']).as('unfollow')
   router.get('engines/:engine/containers/:id/files', [containers, 'files']).as('files')
 }

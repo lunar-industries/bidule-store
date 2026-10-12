@@ -8,12 +8,22 @@ import type {
   ContainerDetail,
   ContainerFile,
   ContainerList,
+  LogsEvent,
   Usage,
 } from '../contract.ts'
 import type { ContainerCli } from './cli.ts'
+import { Follows } from './follow.ts'
 
 // What the terminal runs (see TerminalLaunch in the core).
 export type Launch = { argv: string[]; cwd: string }
+
+// What the service tells (the module's events).
+export interface Tell {
+  // A container started, stopped, appeared or went.
+  changed(): void
+  // Lines of a followed container's logs, or its end.
+  logs(event: LogsEvent): void
+}
 
 export class ContainerError extends Exception {
   async handle(error: this, ctx: HttpContext) {
@@ -30,16 +40,20 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 /**
  * Taken from quack-board (ContainerService, Simon's latest): the containers of every engine present (Docker,
  * Podman, or both). Once the page has asked for them, each engine's events are watched: every start, stop or removal
- * is told (`lunar-industries-containers.changed`). What they use, a container's logs and files are asked of the
- * engines only when the page asks (while it is open). A shell inside or the logs in the terminal are built here
- * from a known engine and a known container: the window never sends a command.
+ * is told (`lunar-industries-containers.changed`). What they use and a container's files are asked of the engines
+ * only when the page asks (while it is open); a container's logs are followed by the engine while the page shows them
+ * (see Follows), their lines told as they come. A shell inside or the logs in the terminal are built here from a known
+ * engine and a known container: the window never sends a command.
  */
 export class ContainerService {
   #watching = new Map<string, () => void>()
+  #follows = new Follows()
+  // The lines each logs' follow has read so far (the last LOG_TAIL), by follow: a page that joins it gets them.
+  #lines = new Map<string, string[]>()
 
   constructor(
     protected engines: ContainerCli[],
-    protected changed: () => void,
+    protected tell: Tell,
     // The extension's folder in the app's data: the ticked containers are kept there.
     protected dataDir: () => Promise<string>
   ) {}
@@ -95,7 +109,7 @@ export class ContainerService {
       throw new ContainerError(messageOf(err), { status: 422 })
     }
     // The events would say it too, but the page should not wait for them.
-    this.changed()
+    this.tell.changed()
   }
 
   // A shell in the container (bash where there is one, sh otherwise), or its last lines then what follows.
@@ -127,13 +141,33 @@ export class ContainerService {
     return out
   }
 
-  async logs(engineId: string, id: string, since?: string): Promise<string[]> {
+  /**
+   * A container's logs followed by its engine, its lines told as they come (`lunar-industries-containers.logs`, by the
+   * follow's id); joined when another page follows them already. Gives the follow's id and the lines it has read so
+   * far: subscribed first, then asked, the page loses none.
+   */
+  async followLogs(engineId: string, id: string): Promise<{ follow: string; lines: string[] }> {
     const engine = await this.#target(engineId, id)
-    try {
-      return await engine.logs(id, { tail: LOG_TAIL, since })
-    } catch (err) {
-      throw new ContainerError(messageOf(err), { status: 422 })
-    }
+    const follow = this.#follows.join(`logs ${engine.id} ${id}`, (followId) => {
+      this.#lines.set(followId, [])
+      return engine.followLogs(id, LOG_TAIL, {
+        lines: (lines) => {
+          this.#lines.set(followId, [...(this.#lines.get(followId) ?? []), ...lines].slice(-LOG_TAIL))
+          this.tell.logs({ follow: followId, lines, ended: false })
+        },
+        end: () => {
+          this.#follows.ended(followId)
+          this.#lines.delete(followId)
+          this.tell.logs({ follow: followId, lines: [], ended: true })
+        },
+      })
+    })
+    return { follow, lines: this.#lines.get(follow) ?? [] }
+  }
+
+  // The page no longer follows it: the last one to leave stops the engine's command.
+  unfollow(follow: string): void {
+    this.#follows.leave(follow)
   }
 
   async files(engineId: string, id: string, path: string): Promise<ContainerFile[]> {
@@ -168,7 +202,7 @@ export class ContainerService {
     if (this.#watching.has(engine.id)) return
     this.#watching.set(
       engine.id,
-      engine.watch(() => this.changed())
+      engine.watch(() => this.tell.changed())
     )
   }
 

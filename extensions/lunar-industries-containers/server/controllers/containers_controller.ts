@@ -4,13 +4,13 @@ import { prepare, service } from '@bidule/ext-lunar-industries-containers/server
 import {
   actionValidator,
   filesValidator,
-  logsValidator,
   selectionValidator,
   terminalValidator,
+  unfollowValidator,
 } from '@bidule/ext-lunar-industries-containers/server/validators'
 
 // The user's containers (Docker, Podman): the list, a container's view, what they use, acting on them, a terminal on
-// them, what is ticked.
+// them, their logs followed, what is ticked.
 export default class ContainersController {
   async index() {
     return service.list()
@@ -36,9 +36,15 @@ export default class ContainersController {
     return { session: prepare(await service.launch(params.engine, params.id, kind, homedir())) }
   }
 
-  async logs({ params, request }: HttpContext) {
-    const { since } = await request.validateUsing(logsValidator)
-    return { lines: await service.logs(params.engine, params.id, since) }
+  // A container's logs followed while the page shows them: the follow's id and the lines read so far, then events.
+  async followLogs({ params }: HttpContext) {
+    return service.followLogs(params.engine, params.id)
+  }
+
+  async unfollow({ request }: HttpContext) {
+    const { params } = await request.validateUsing(unfollowValidator)
+    service.unfollow(params.follow)
+    return { ok: true as const }
   }
 
   async files({ params, request }: HttpContext) {

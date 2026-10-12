@@ -19,7 +19,8 @@
       }
     ],
     "events": [
-      "lunar-industries-containers.changed"
+      "lunar-industries-containers.changed",
+      "lunar-industries-containers.logs"
     ]
   }
 }

@@ -48,9 +48,14 @@ export type Usage = { cpus: number; memory: number; containers: UsageRow[] }
 // An entry of a folder inside a container.
 export type ContainerFile = { name: string; directory: boolean }
 
+// Lines of a container's logs the page follows (`follow`: the id its request got), each beginning with its time; the
+// last message says `ended` (the container stopped or removed, the engine gone, or too many follows at once).
+export type LogsEvent = { follow: string; lines: string[]; ended: boolean }
+
 declare module '@bidule/sdk/contracts' {
   interface Events {
     // A container started, stopped, appeared or went (once the page has asked for the list).
     'lunar-industries-containers.changed': Record<string, never>
+    'lunar-industries-containers.logs': LogsEvent
   }
 }

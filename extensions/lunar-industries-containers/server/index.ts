@@ -30,7 +30,10 @@ export async function activate(ctx: ServerContext) {
   }
   service = new ContainerService(
     engines,
-    () => void ctx.events.emit('lunar-industries-containers.changed', {}),
+    {
+      changed: () => void ctx.events.emit('lunar-industries-containers.changed', {}),
+      logs: (event) => void ctx.events.emit('lunar-industries-containers.logs', event),
+    },
     () => ctx.dataDir()
   )
   // A container's shell or logs open in the terminal where the engines run: inside WSL, in the home folder there; on

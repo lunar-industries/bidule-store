@@ -1,7 +1,7 @@
 // Taken from quack-board (apps/api/app/connectors/containers/container_cli.ts, Simon's latest), on the base of
 // Bidule's official containers extension (its Flatpak handling).
 import type { Environment } from '@bidule/api/extensions'
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import type {
   Container,
   ContainerAction,
@@ -25,26 +25,6 @@ class CommandError extends Error {
 // The engines run where the outside tools run (ctx.env): inside WSL on Windows, in the toolbox or on the Flatpak's
 // host, or here; from the home folder there. The environment builds or runs each command, so that it never runs
 // somewhere else.
-
-// What a command prints on stdout, and on stderr too (a container's logs come out of both): ctx.env.run gives stdout
-// only, so this one is started on what ctx.env.command builds.
-function run(
-  env: Environment,
-  cli: string,
-  args: string[],
-  timeout = 15_000
-): Promise<{ stdout: string; stderr: string }> {
-  const { file, args: argv, cwd } = env.command({ argv: [cli, ...args] })
-  return new Promise((resolve, reject) => {
-    execFile(
-      file,
-      argv,
-      { timeout, maxBuffer: 64 * 1024 * 1024, cwd, windowsHide: true },
-      (err, stdout, stderr) =>
-        err ? reject(new CommandError(stderr.trim() || err.message, stdout)) : resolve({ stdout, stderr })
-    )
-  })
-}
 
 // What a failed command of the environment printed on one of its outputs (ctx.env.run gives them with the error).
 const printed = (err: unknown, output: 'stdout' | 'stderr'): string => {
@@ -70,6 +50,27 @@ const EVENTS_STEADY_MS = 60_000
 
 export const nextRetry = (previous: number | null, lasted: number) =>
   previous === null || lasted > EVENTS_STEADY_MS ? EVENTS_RETRY_MS : Math.min(previous * 2, EVENTS_RETRY_MAX_MS)
+
+// The lines of a followed container's logs are sent together when they come close: one message per line would be
+// too many (a single wait after the first one, not a loop).
+const LOG_BATCH_MS = 100
+
+// What a long command of the engine says (it writes both outputs), and its end.
+type Streamed = { data(text: string, from: 'stdout' | 'stderr'): void; end(): void }
+
+// A long command of the engine (logs --follow, stats), started on what the environment builds: its outputs as they
+// come, read whole (an output left unread would block it), and its end, which also comes when it cannot start.
+function stream(env: Environment, start: typeof spawn, argv: string[], on: Streamed): () => void {
+  const { file, args, cwd } = env.command({ argv })
+  const child = start(file, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+  child.stdout?.setEncoding('utf8')
+  child.stderr?.setEncoding('utf8')
+  child.stdout?.on('data', (text: string) => on.data(text, 'stdout'))
+  child.stderr?.on('data', (text: string) => on.data(text, 'stderr'))
+  child.on('error', () => {})
+  child.on('close', () => on.end())
+  return () => void child.kill()
+}
 
 // What `docker inspect` and `podman inspect` both give (Podman follows Docker's format), as far as the page needs.
 type Bindings = Record<string, { HostIp?: string; HostPort?: string }[] | null> | null
@@ -311,11 +312,37 @@ export class ContainerCli {
     return parseListing(await exec(this.env, this.cli, ['exec', id, 'ls', '-1Ap', '--', path]))
   }
 
-  // The last `tail` lines, or those written after `since` (a line's own time: the page follows the logs so).
-  async logs(id: string, options: { tail: number; since?: string }): Promise<string[]> {
-    const from = options.since ? ['--since', options.since] : ['--tail', String(options.tail)]
-    const { stdout, stderr } = await run(this.env, this.cli, ['logs', '--timestamps', ...from, id])
-    return mergeLogs(stdout, stderr)
+  /**
+   * A container's logs followed by the engine (`logs --follow`): its last `tail` lines, then each new one, given in
+   * batches (each in the order of its lines' times, as both outputs came); `end` when the command ends (the container
+   * stopped or removed, the engine gone, or stopped here). Gives how to stop it.
+   */
+  followLogs(id: string, tail: number, on: { lines(lines: string[]): void; end(): void }): () => void {
+    const rest = { stdout: '', stderr: '' }
+    let pending: { stdout: string[]; stderr: string[] } = { stdout: [], stderr: [] }
+    let batch: NodeJS.Timeout | undefined
+    const flush = () => {
+      batch = undefined
+      const lines = mergeLogs(pending.stdout.join('\n'), pending.stderr.join('\n'))
+      pending = { stdout: [], stderr: [] }
+      if (lines.length) on.lines(lines)
+    }
+    const stop = stream(this.env, this.start, [this.cli, 'logs', '--follow', '--timestamps', '--tail', String(tail), id], {
+      data: (text, from) => {
+        const parts = (rest[from] + text).split('\n')
+        rest[from] = parts.pop() ?? ''
+        pending[from].push(...parts.filter(Boolean))
+        batch ??= setTimeout(flush, LOG_BATCH_MS)
+      },
+      end: () => {
+        clearTimeout(batch)
+        pending.stdout.push(rest.stdout)
+        pending.stderr.push(rest.stderr)
+        flush()
+        on.end()
+      },
+    })
+    return stop
   }
 
   watch(onChange: () => void): () => void {
