@@ -211,7 +211,7 @@ export function Kanban() {
     if (!ready) return null
     const ctx: KanbanContext = {
       columns: ready.columns,
-      staleDays: Number(values?.['kanban.staleDays'] ?? 5),
+      staleDays: Number(values?.['lunar-industries-kanban.staleDays'] ?? 5),
       move: (status) => move(task, status),
       settings: values ?? {},
     }
