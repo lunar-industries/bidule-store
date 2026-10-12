@@ -66,6 +66,8 @@ export function mergeListener(store: Pick<TempsStore, 'followMerge'>, then: () =
   }
 }
 
+// Rows per insert, well under the 500 terms SQLite accepts in a compound SELECT.
+const INSERT_CHUNK = 100
 const DRAFTS = 'lunar_industries_temps_drafts'
 const BRANCH_TASKS = 'lunar_industries_temps_branch_tasks'
 const DAYS = 'lunar_industries_temps_days'
@@ -153,21 +155,21 @@ export class DbStore implements TempsStore {
   async writeDraft(day: string, rows: NewDraftRow[], edited?: boolean): Promise<void> {
     await this.db.transaction(async (trx) => {
       await trx.from(DRAFTS).where('day', day).delete()
-      if (rows.length) {
-        await trx.table(DRAFTS).multiInsert(
-          rows.map((r) => ({
-            day,
-            task_id: r.taskId,
-            label: r.label,
-            repo: r.repo ?? null,
-            branch: r.branch ?? null,
-            share: r.share,
-            tiny: r.tiny ? 1 : 0,
-            confirmed: r.confirmed ? 1 : 0,
-            reason: r.reason ?? '',
-            props: JSON.stringify(r.props ?? {}),
-          }))
-        )
+      const lines = rows.map((r) => ({
+        day,
+        task_id: r.taskId,
+        label: r.label,
+        repo: r.repo ?? null,
+        branch: r.branch ?? null,
+        share: r.share,
+        tiny: r.tiny ? 1 : 0,
+        confirmed: r.confirmed ? 1 : 0,
+        reason: r.reason ?? '',
+        props: JSON.stringify(r.props ?? {}),
+      }))
+      // One insert of many rows becomes a compound SELECT, which SQLite refuses beyond 500 terms.
+      for (let from = 0; from < lines.length; from += INSERT_CHUNK) {
+        await trx.table(DRAFTS).multiInsert(lines.slice(from, from + INSERT_CHUNK))
       }
       if (edited !== undefined) {
         await trx.table(DAYS).insert({ day, edited: edited ? 1 : 0 }).onConflict('day').merge()
