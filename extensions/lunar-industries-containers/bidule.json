@@ -1,14 +1,19 @@
 {
   "id": "lunar-industries-containers",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "title": "Lunar Industries - Conteneurs",
-  "engine": "^0.2.0",
-  "permissions": [
-    "shell"
-  ],
+  "engine": "^0.2.1",
+  "dependencies": {
+    "docker": "^0.2.0"
+  },
   "contributes": {
     "uses": [
       "terminal"
+    ],
+    "needs": [
+      {
+        "extension": "docker"
+      }
     ],
     "pages": [
       {
@@ -17,11 +22,6 @@
         "title": "Conteneurs",
         "order": 60
       }
-    ],
-    "events": [
-      "lunar-industries-containers.changed",
-      "lunar-industries-containers.logs",
-      "lunar-industries-containers.usage"
     ]
   }
 }

@@ -50,7 +50,7 @@ export function ContainersPage() {
     void api.selection({}).then(({ keys }) => setPicked(keys), () => setPicked([]))
   }, [])
   // The engines' events (a container started, stopped, removed) reload the list.
-  useOn('lunar-industries-containers.changed', () => void reload())
+  useOn('docker.changed', () => void reload())
 
   // The ticks are saved as they change (once read: never the empty list of before).
   const saved = useRef(false)

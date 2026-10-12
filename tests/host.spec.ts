@@ -164,6 +164,22 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     )
   })
 
+  test('the containers module reads the engines through docker’s actions, which the core lets it ask', async ({
+    client,
+    assert,
+  }) => {
+    const list = await client.get('/api/ext/lunar-industries-containers/containers').headers(TOKEN)
+    list.assertStatus(200)
+    assert.isArray(list.body().containers)
+    // A container that cannot exist is refused by docker's own validation, not by the core.
+    const unknown = await client
+      .post('/api/ext/lunar-industries-containers/engines/docker/containers/--all/action')
+      .headers(TOKEN)
+      .json({ action: 'stop' })
+    assert.equal(unknown.status(), 422, JSON.stringify(unknown.body()))
+    assert.notMatch(JSON.stringify(unknown.body()), /non déclaré|n'est pas déclarée|demande l'extension/)
+  })
+
   // The routes that read the module's settings (the day's, the board's branches, the list…): none may fail, which is
   // what an extension asking for a setting or a command the core refuses does (an error 500, or its message).
   const routes = [

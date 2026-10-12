@@ -1,53 +1,33 @@
-import type { Environment, ServerContext } from '@bidule/api/extensions'
-import '../contract.ts'
-import { ContainerCli } from './cli.ts'
-import { ContainerService } from './service.ts'
+import type { ServerContext } from '@bidule/api/extensions'
+import type {
+  ContainerAction as DockerAction,
+  ContainerDetail,
+  ContainerFile,
+  ContainerList,
+  LogsFollow,
+  UsageFollow,
+} from '@bidule/ext-docker/contract'
+import { Selection } from './selection.ts'
+
+// What this module asks of Docker and Podman: the `docker` extension's actions (`client.x(a, b)` runs `docker.x`).
+export type Docker = {
+  list(): Promise<ContainerList>
+  inspect(engine: string, id: string): Promise<ContainerDetail>
+  act(engine: string, id: string, action: DockerAction): Promise<void>
+  remove(engine: string, id: string): Promise<void>
+  files(engine: string, id: string, path: string): Promise<ContainerFile[]>
+  logs(engine: string, id: string, tail: number): Promise<LogsFollow>
+  usage(): Promise<UsageFollow>
+  unfollow(follow: string): Promise<void>
+  // The id of the terminal session prepared (`terminal.open` opens it).
+  terminal(engine: string, id: string, kind: 'shell' | 'logs'): Promise<string>
+}
 
 // For the controller, once started (its page's first request starts it).
-export let service: ContainerService
-export let prepare: ServerContext['terminal']['prepare']
+export let docker: Docker
+export let selection: Selection
 
-// Both engines, by their command line in this environment: a missing one simply lists nothing.
-const enginesIn = (env: Environment) => [
-  new ContainerCli('podman', 'Podman', env),
-  new ContainerCli('docker', 'Docker', env),
-]
-
-const anyEngine = async (engines: ContainerCli[]) =>
-  (await Promise.all(engines.map((e) => e.version()))).some((v) => v !== null)
-
-export async function activate(ctx: ServerContext) {
-  // The engines where the outside tools run; none there, on the system itself, when it is another place: on Fedora
-  // Atomic the tools are in a toolbox but Podman is the host's.
-  let env = ctx.env
-  let engines = enginesIn(env)
-  if (ctx.env.host !== ctx.env && !(await anyEngine(engines))) {
-    const onHost = enginesIn(ctx.env.host)
-    if (await anyEngine(onHost)) {
-      env = ctx.env.host
-      engines = onHost
-    }
-  }
-  service = new ContainerService(
-    engines,
-    {
-      changed: () => void ctx.events.emit('lunar-industries-containers.changed', {}),
-      logs: (event) => void ctx.events.emit('lunar-industries-containers.logs', event),
-      usage: (event) => void ctx.events.emit('lunar-industries-containers.usage', event),
-    },
-    () => ctx.dataDir()
-  )
-  // A container's shell or logs open in the terminal where the engines run: inside WSL, in the home folder there; on
-  // the host when the engines are the host's (`toolbox: null`: not where the tools run); the Flatpak's host is the main
-  // process's own doing.
-  const where = await env.info()
-  const onTheHost = env !== ctx.env
-  prepare = (launch) =>
-    ctx.terminal.prepare(
-      where.kind === 'wsl' && where.distro
-        ? { ...launch, cwd: env.toEnv(where.home), wsl: where.distro }
-        : onTheHost
-          ? { ...launch, toolbox: null }
-          : launch
-    )
+export function activate(ctx: ServerContext) {
+  docker = ctx.objects.client<Docker>('docker')
+  selection = new Selection(() => ctx.dataDir())
 }

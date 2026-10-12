@@ -60,7 +60,7 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, id])
   // The container started, stopped or went: read again.
-  useOn('lunar-industries-containers.changed', () => void reload())
+  useOn('docker.changed', () => void reload())
   useHint(c ? `${c.name} : ${isUp(c) ? 'il tourne' : 'il dort'}. Coin.` : null)
 
   // ---- logs: the last lines, then each new one, followed by the engine while their tab shows
@@ -79,7 +79,7 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
     last.current = next.cursor
     if (next.fresh.length) setLines((now) => [...now, ...next.fresh].slice(-KEPT_LINES))
   }
-  useOn('lunar-industries-containers.logs', (event) => {
+  useOn('docker.logs', (event) => {
     if (event.follow === following.current) add(event.lines)
     else if (!following.current) early.current = [...early.current, event].slice(-EARLY_KEPT)
   })

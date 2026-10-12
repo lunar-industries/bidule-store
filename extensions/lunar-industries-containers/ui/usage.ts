@@ -7,7 +7,7 @@ import { api } from './api.ts'
 let keptUsage: Usage | null = null
 
 // What the running containers use, followed by the engines while `on` (the list or a container's view shows it): each
-// of their measures comes as the module's event; the engines are not asked for numbers nobody looks at.
+// of their measures comes as docker's event (`docker.usage`); the engines are not asked for numbers nobody looks at.
 export function useUsage(on: boolean): Usage | null {
   const [usage, setUsage] = useState<Usage | null>(keptUsage)
   // The follow this hook asked for (subscribed first, then asked: a measure before its answer is left for the next).
@@ -16,7 +16,7 @@ export function useUsage(on: boolean): Usage | null {
     keptUsage = measure
     setUsage(measure)
   }
-  useOn('lunar-industries-containers.usage', (event) => {
+  useOn('docker.usage', (event) => {
     if (event.follow === following.current && event.usage) show(event.usage)
   })
   useEffect(() => {
