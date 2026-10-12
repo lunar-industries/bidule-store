@@ -28,7 +28,6 @@ type ImageType = (typeof IMAGE_TYPES)[number]
 const imageType = (type: string): ImageType | undefined => IMAGE_TYPES.find((t) => t === type)
 const MAX_IMAGE = 5_000_000
 const MAX_FILE = 1_000_000
-const WATCH_MS = 15_000
 
 type Attached =
   | { kind: 'image'; name: string; mediaType: ImageType; data: string }
@@ -157,19 +156,19 @@ export function Conversation({
     void refresh()
   }, [sid])
 
-  // A session of the terminal: its transcript is read again while it is shown. The API forgets a watch after 30 s,
-  // so it is asked again every 15 s.
+  // A session of the terminal: followed by the API while it is shown (asked once, stopped when it is no longer shown),
+  // its new lines coming as the module's events (subscribed above). Where the changes cannot be followed, the API says
+  // so and the page offers to read it again.
   const fromApp = session.fromApp
   const cwd = session.cwd
+  const [unfollowed, setUnfollowed] = useState<string | null>(null)
   useEffect(() => {
     if (fromApp) return
-    const watch = () => void api.watch(sid, cwd).catch(() => undefined)
-    watch()
-    const every = setInterval(watch, WATCH_MS)
-    return () => {
-      clearInterval(every)
-      void api.unwatch(sid).catch(() => undefined)
-    }
+    void api.watch(sid, cwd).then(
+      ({ live }) => setUnfollowed(live ? null : sid),
+      () => undefined
+    )
+    return () => void api.unwatch(sid).catch(() => undefined)
   }, [sid, fromApp, cwd])
 
   const decided = useMemo(() => decidedOf(events), [events])
@@ -437,6 +436,14 @@ export function Conversation({
           <button type="button" className="btn lc-btn-sm lc-to-end" onClick={toEnd}>
             Revenir en bas
           </button>
+        )}
+        {unfollowed === sid && !fromApp && (
+          <div className="row">
+            <span className="legend grow">Suivi en direct indisponible ici : relisez avec le bouton.</span>
+            <button type="button" className="btn lc-btn-sm" onClick={() => void refresh()}>
+              Relire
+            </button>
+          </div>
         )}
         {error && <p className="lc-error">{error}</p>}
         <div className="lc-box">

@@ -12,6 +12,7 @@ import type {
   SessionSummary,
   StartBody,
   Template,
+  WatchResult,
 } from '../contract.ts'
 
 // The module's routes (contract.ts lists them), each answering 403 `{ error }` while the module is off.
@@ -56,7 +57,7 @@ export const api = {
   task: (id: string, taskId: string | null, cwd?: string) => send('PUT', session(id, '/task'), { taskId, cwd }),
   interrupt: (id: string) => send('POST', session(id, '/interrupt')),
   stop: (id: string) => send('POST', session(id, '/stop')),
-  watch: (id: string, cwd: string) => send('POST', session(id, '/watch'), { cwd }),
+  watch: (id: string, cwd: string) => send<WatchResult>('POST', session(id, '/watch'), { cwd }),
   unwatch: (id: string) => send('DELETE', session(id, '/watch')),
   templates: () => get<{ templates: Template[] }>('templates'),
   models: () => get<{ models: SessionModel[] }>('models'),
