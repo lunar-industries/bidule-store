@@ -16,9 +16,7 @@ export interface BranchAccess {
   taskOf(repo: string, name: string): Promise<string | null>
   /**
    * Links a branch to a task by hand, in the core: the task's link (origin `manual`: the name's reference no longer
-   * moves it), then its other tasks and its `noTask` mark go. The link comes first: each change sets the core's rule
-   * going again (`discoverBranches`), which would otherwise link the branch back to the task its name refers to. False
-   * when the core does not know the branch.
+   * moves it); its other tasks and its `noTask` mark go. False when the core does not know the branch.
    */
   link(repo: string, name: string, taskId: string): Promise<boolean>
 }

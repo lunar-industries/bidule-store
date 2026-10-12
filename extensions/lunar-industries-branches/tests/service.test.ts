@@ -138,7 +138,9 @@ describe('the task and the target', () => {
       relations
         .filter((l) => l.to.id === paiement || l.from.id === paiement)
         .map((l) => [l.kind, l.from.id, l.origin])
-    // Any change runs the core's rule, which links the branch to the task its name refers to.
+    // Put by git, the branch was linked by the core's rule to the task its name refers to.
+    relations.push({ from: { type: 'task', id: 't7' }, kind: 'branch', to: { type: 'branch', id: paiement }, origin: 'ref' })
+    // Another branch linked by hand leaves this one as it is.
     await s.link(app, '42-ecran-de-connexion', 't1')
     expect(linksOf()).toEqual([['branch', 't7', 'ref']])
     // To another task by hand: the task its name refers to does not come back.

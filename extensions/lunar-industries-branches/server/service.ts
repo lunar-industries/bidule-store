@@ -171,9 +171,7 @@ export class BranchesService {
 
   /**
    * A branch linked to a task by hand (null: unlinked), in the core: the task's link (origin `manual`: the name's
-   * reference no longer moves it), or the `noTask` mark; then its other tasks and the opposite mark go. The user's word
-   * comes first: each change sets the core's rule going again (`discoverBranches`), which must already see the branch
-   * as linked by hand, or it would link it back to the task its name refers to.
+   * reference no longer moves it), or the `noTask` mark; its other tasks and the opposite mark go.
    */
   async link(repo: string, name: string, taskId: string | null): Promise<void> {
     const { objects } = this.deps

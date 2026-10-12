@@ -120,9 +120,8 @@ export class KanbanService {
     return this.branches()
   }
 
-  // A link by hand: its task, or `noTask`, first (the core's rule that links a branch by its task's reference then
-  // leaves it alone; it runs again at each change, and would link the branch back meanwhile), then the branch's other
-  // tasks and the opposite mark go.
+  // A link by hand: its task, or `noTask` (the core's rule on branch names then takes the links by name away); the
+  // branch's other tasks and the opposite mark go.
   async #link(id: string, taskId: string | null) {
     const branch = { type: 'branch' as const, id }
     if (taskId) await this.objects.link({ type: 'task', id: taskId }, 'branch', branch, 'manual')

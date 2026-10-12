@@ -111,23 +111,25 @@ function fakeBranches() {
   const refs: Record<string, string> = { t7: 'id-7', t8: 'id-8' }
   const links: Link[] = []
   const same = (a: Ref, b: Ref) => a.type === b.type && a.id === b.id
-  // The core's rule on branch names (`discoverBranches`), as simple as these names need.
-  const discover = () => {
-    const byHand = new Set([
-      ...links.filter((l) => l.kind === 'branch' && l.origin === 'manual').map((l) => l.to.id),
-      ...links.filter((l) => l.kind === 'noTask').map((l) => l.from.id),
-    ])
-    for (const b of stored.branch) {
+  // The core's rule on branch names, as simple as these names need, on these branches: one linked or unlinked by hand
+  // keeps no link by name.
+  const discover = (ids: string[]) => {
+    for (const b of stored.branch.filter((x) => ids.includes(String(x.id)))) {
       const id = String(b.id)
-      if (byHand.has(id)) continue
-      const hit = Object.entries(refs).find(([, ref]) => String(b.name).startsWith(ref))?.[0] ?? null
+      const byHand = links.some(
+        (l) => (l.kind === 'branch' && l.to.id === id && l.origin === 'manual') || (l.kind === 'noTask' && l.from.id === id)
+      )
+      const hit = byHand ? null : (Object.entries(refs).find(([, ref]) => String(b.name).startsWith(ref))?.[0] ?? null)
       for (let i = links.length - 1; i >= 0; i--)
         if (links[i].kind === 'branch' && links[i].to.id === id && links[i].origin === 'ref' && links[i].from.id !== hit) links.splice(i, 1)
       if (hit && !links.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
         links.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
     }
   }
-  discover()
+  // After a link or an unlink, the branch whose task it says, alone.
+  const said = (from: Ref, kind: string, to: Ref) =>
+    kind === 'branch' && to.type === 'branch' ? [to.id] : kind === 'noTask' ? [from.id] : []
+  discover(stored.branch.map((b) => String(b.id)))
   const objects = {
     list: async (type: string, filter: { ids?: string[]; where?: Record<string, unknown> } = {}) =>
       (stored[type] ?? []).filter(
@@ -145,19 +147,19 @@ function fakeBranches() {
         )
         .filter((r) => (!filter.kind || r.kind === filter.kind) && (!filter.type || r.type === filter.type)),
     relations: async (filter: { kind: string }) => links.filter((l) => l.kind === filter.kind),
-    // As the core: a rule never overrides the user's link; each change runs the rule again.
+    // As the core: a rule never overrides the user's link; a link saying a branch's task runs the rule on that branch.
     link: async (from: Ref, kind: string, to: Ref, origin: string) => {
       const current = links.find((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
       if (current?.origin === 'manual' && origin !== 'manual') return
       if (current) current.origin = origin
       else links.push({ from, kind, to, origin })
-      discover()
+      if (origin !== 'ref') discover(said(from, kind, to))
     },
     unlink: async (from: Ref, kind: string, to: Ref) => {
       const at = links.findIndex((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
       if (at < 0) return
       links.splice(at, 1)
-      discover()
+      discover(said(from, kind, to))
     },
   }
   const linksOf = (branch: string) =>

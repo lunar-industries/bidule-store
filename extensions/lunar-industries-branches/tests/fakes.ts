@@ -102,25 +102,24 @@ export function fakeWorld(branches: Spec[], forge: ForgeClient | null) {
 type World = ReturnType<typeof fakeWorld>['world']
 
 /**
- * The core's rule on branch names (`discoverBranches`), run after each change as the core does: a branch not linked
- * nor unlinked by hand, whose name holds a task's reference, is linked to that task (origin `ref`), and only to it.
+ * The core's rule on branch names, run as the core does after a link or an unlink that says a branch's task, on that
+ * branch alone: linked or unlinked by hand, it keeps no link by name; otherwise, when its name holds a task's
+ * reference, it is linked to that task (origin `ref`), and only to it.
  */
-function discover(relations: Relation[], branches: Spec[], tasks: Task[]) {
-  const byHand = new Set([
-    ...relations.filter((l) => l.kind === 'branch' && l.origin === 'manual').map((l) => l.to.id),
-    ...relations.filter((l) => l.kind === 'noTask').map((l) => l.from.id),
-  ])
-  for (const b of branches) {
-    const id = branchId(b)
-    if (b.isDefault || byHand.has(id)) continue
-    const hit = tasks.find((t) => t.ref && b.name.toLowerCase().includes(t.ref.toLowerCase()))?.id ?? null
-    for (let i = relations.length - 1; i >= 0; i--) {
-      const l = relations[i]
-      if (l.kind === 'branch' && l.to.id === id && l.origin === 'ref' && l.from.id !== hit) relations.splice(i, 1)
-    }
-    if (hit && !relations.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
-      relations.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
+function discover(relations: Relation[], branches: Spec[], tasks: Task[], from: Ref, kind: string, to: Ref) {
+  const id = kind === 'branch' && to.type === 'branch' ? to.id : kind === 'noTask' ? from.id : null
+  const b = branches.find((x) => branchId(x) === id)
+  if (!id || !b || b.isDefault) return
+  const byHand = relations.some(
+    (l) => (l.kind === 'branch' && l.to.id === id && l.origin === 'manual') || (l.kind === 'noTask' && l.from.id === id)
+  )
+  const hit = byHand ? null : (tasks.find((t) => t.ref && b.name.toLowerCase().includes(t.ref.toLowerCase()))?.id ?? null)
+  for (let i = relations.length - 1; i >= 0; i--) {
+    const l = relations[i]
+    if (l.kind === 'branch' && l.to.id === id && l.origin === 'ref' && l.from.id !== hit) relations.splice(i, 1)
   }
+  if (hit && !relations.some((l) => l.kind === 'branch' && l.to.id === id && l.from.id === hit))
+    relations.push({ from: { type: 'task', id: hit }, kind: 'branch', to: { type: 'branch', id }, origin: 'ref' })
 }
 
 // The core's objects for these branches: their repos, the branches, their reviews and pipelines, their tasks' links.
@@ -190,19 +189,19 @@ function objectsOf({ branches, forge, refreshed, relations }: World, tasks: Task
             : { kind: l.kind, type: l.from.type, id: l.from.id, origin: l.origin, outgoing: false }
         )
         .filter((r) => (!filter.kind || r.kind === filter.kind) && (!filter.type || r.type === filter.type)),
-    // As the core: a rule never overrides the user's link; each change runs the rule on branch names again.
+    // As the core: a rule never overrides the user's link; a link saying a branch's task runs the rule on that branch.
     link: async (from: Ref, kind: string, to: Ref, origin: string) => {
       const current = relations.find((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
       if (current?.origin === 'manual' && origin !== 'manual') return
       if (current) current.origin = origin
       else relations.push({ from, kind, to, origin })
-      discover(relations, branches, tasks)
+      if (origin !== 'ref') discover(relations, branches, tasks, from, kind, to)
     },
     unlink: async (from: Ref, kind: string, to: Ref) => {
       const at = relations.findIndex((l) => l.kind === kind && same(l.from, from) && same(l.to, to))
       if (at < 0) return
       relations.splice(at, 1)
-      discover(relations, branches, tasks)
+      discover(relations, branches, tasks, from, kind, to)
     },
     first: async (action: string, args: unknown) => (action === 'review.refresh' ? (refreshed.push(args), true) : forge),
   }
