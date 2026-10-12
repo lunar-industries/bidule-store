@@ -48,7 +48,7 @@ Une extension est un dossier dont le nom est son **id** (`[a-z][a-z0-9-]*`). Cho
   server/routes.js       export default function routes(router) { … }    (facultatif)
   server/controllers/…   chargés à la première requête
   database/migrations/…  migrations Lucid (AdonisJS), tables préfixées `<id>_` avec des tirets bas (facultatif)
-  ui/index.js            l'interface : export default { pages, settings, commands, background, kanban… } (facultatif)
+  ui/index.js            l'interface : export default { pages, settings, commands, background, points… } (facultatif)
   ui/style.css           ses styles (facultatif)
   node_modules/          ses propres dépendances npm, installées pour le paquet
 ```
@@ -102,8 +102,12 @@ react, react/jsx-runtime, react/jsx-dev-runtime, react/compiler-runtime, react-d
 Avec Vite : `build: { lib: { entry: 'ui/index.tsx', formats: ['es'], fileName: 'index', cssFileName: 'style' },
 rollupOptions: { external: [ …la liste ci-dessus… ] } }`. Le reste (vos bibliothèques) est embarqué. L'export par
 défaut décrit ce que l'extension ajoute : ses pages (`pages: { <id de page>: Composant }`), le panneau de ses réglages,
-les commandes qui s'exécutent dans l'interface, un composant `background` toujours monté, ce qu'elle ajoute aux cartes
-du Kanban.
+les commandes qui s'exécutent dans l'interface, un composant `background` toujours monté, et ses parts pour les points
+d'extension des autres modules (`points: { kanban: { advice, badges } }` pour les cartes du Kanban), que son manifeste
+annonce par `contributes.to.<point>` avec `"ui": true`. Un module qui ouvre un point aux autres le déclare dans
+`contributes.points` et lit ce qu'on lui donne par `useContributions` (voir « Points d'extension » dans
+`docs/extensions.md` de Bidule). Avant le cœur 0.2.1, la part du Kanban s'exportait sous `kanban`, annoncée par
+`contributes.kanban` ; le cœur lit encore cette forme jusqu'à 0.3.0.
 
 ### Le paquet
 

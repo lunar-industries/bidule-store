@@ -1,9 +1,15 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "title": "Lunar Industries - Kanban",
-  "engine": "^0.2.0",
+  "engine": "^0.2.1",
   "contributes": {
+    "points": [
+      {
+        "id": "kanban",
+        "title": "Cartes du Kanban"
+      }
+    ],
     "needs": [
       {
         "object": "task",

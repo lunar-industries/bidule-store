@@ -3,6 +3,7 @@ import { busy, Modal, navigate, openDialog, react, useHint, useOn, type Board, t
 import type { DayLine, DayState, DaySummary, DayView, LineInput, Props, Summary } from '../contract.ts'
 import { api, board as readBoard, errorMessage, moveTask } from './api.ts'
 import { Calendar, type MonthCursor } from './Calendar.tsx'
+import { latestOf } from './latest.ts'
 import {
   addDays,
   bshort,
@@ -150,7 +151,9 @@ export function TempsPage() {
   useEffect(() => {
     if (cal) void api.month(cal.y, cal.m).then(setMonth, fail)
   }, [cal])
-  const loadBoard = () => void readBoard().then(setBoard)
+  // Read again at each change the core announces: only the last reading asked is kept.
+  const [readLatest] = useState(() => latestOf(readBoard))
+  const loadBoard = () => void readLatest().then(setBoard)
   useEffect(() => {
     loadBoard()
     loadSummary()
@@ -505,7 +508,8 @@ export function TempsPage() {
   // Nothing is written to the source until the user asks.
   const startTask = (taskId: string, status: string) =>
     void run(async () => {
-      setBoard(await moveTask(taskId, status))
+      await moveTask(taskId, status)
+      loadBoard()
       react('quack', `${tasks.find((t) => t.id === taskId)?.title ?? 'La tâche'} passe en ${status}, coin !`)
     })
   const startButton = (taskId: string, column: string) => (
