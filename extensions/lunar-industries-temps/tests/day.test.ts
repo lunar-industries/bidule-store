@@ -24,7 +24,8 @@ describe('Day', () => {
     git.event(at(TUE, 11), 'commit', 'r', 'factory', "Merge branch 'fix-x' into 'factory'")
     git.event(at(TUE, 12), 'commit', 'r', 'factory', "Merge branch 'launchpad' into factory")
     git.event(at(TUE, 14), 'commit', 'r', 'orbit', "Merge branch 'launchpad' into orbit")
-    const lines = await days.proposal(TUE, (await import('../server/settings.ts')).DEFAULT_SETTINGS)
+    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    const lines = await days.proposal(TUE, { ...settings, deployBranches: ['launchpad', 'orbit'] })
     expect(lines.map((l) => [l.taskId, l.branch ?? null, l.label, l.confirmed])).toEqual(
       expect.arrayContaining([
         ['t1', null, 'Développement', false],
@@ -33,6 +34,16 @@ describe('Day', () => {
       ])
     )
     expect(lines).toHaveLength(3)
+  })
+
+  test('without a production branch set, a commit on main stays a line of work', async () => {
+    const { git, days } = setup({ now: FRIDAY_EVENING })
+    git.branch('r', 'main', { isDefault: true })
+    git.event(at(TUE, 9), 'commit', 'r', 'main', 'hotfix')
+    const settings = (await import('../server/settings.ts')).DEFAULT_SETTINGS
+    expect(settings.deployBranches).toEqual([])
+    const lines = await days.proposal(TUE, settings)
+    expect(lines.map((l) => [l.taskId, l.label, l.confirmed])).toEqual([[null, 'Développement', false]])
   })
 
   test('the commits of a branch git forgot (merged, then deleted) keep the task the branch had', async () => {

@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-temps",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "title": "Lunar Industries - Temps",
   "engine": "^0.2.0",
   "activation": [
@@ -65,8 +65,8 @@
           "key": "lunar-industries-temps.deployBranches",
           "type": "text",
           "title": "Branches de production",
-          "help": "Un commit dessus va sur une ligne de déploiement, sans tâche.",
-          "default": "launchpad, orbit"
+          "help": "Séparées par des virgules. Un commit sur l’une d’elles va sur une ligne de déploiement, sans tâche. Vide : aucune.",
+          "default": ""
         },
         {
           "key": "lunar-industries-temps.defaultLabel",

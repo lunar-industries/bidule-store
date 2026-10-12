@@ -30,10 +30,19 @@ export const workDaysOf = (value: unknown) =>
 export const DEFAULT_SETTINGS: TempsSettings = {
   workDays: new Set([1, 2, 3, 4, 5]),
   integrationBranches: ['main', 'master', 'develop', 'launchpad', 'factory', 'orbit'],
-  deployBranches: ['launchpad', 'orbit'],
+  deployBranches: [],
   defaultLabel: 'Développement',
   absentLabel: 'Absent',
   deployLabel: 'Déploiement',
+}
+
+// The production branches were `launchpad, orbit` by default, names of one team. An install that already used the
+// module without setting them keeps that value (database/migrations/…_keep_deploy_branches.ts); a new one has none.
+// The value to save, as the settings table keeps it (JSON), or null.
+export const OLD_DEPLOY_BRANCHES = 'launchpad, orbit'
+
+export function deployBranchesToKeep(stored: string | undefined, used: boolean): string | null {
+  return stored === undefined && used ? JSON.stringify(OLD_DEPLOY_BRANCHES) : null
 }
 
 export async function readSettings(ctx: ServerContext): Promise<TempsSettings> {
