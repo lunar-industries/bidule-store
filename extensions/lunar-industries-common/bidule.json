@@ -1,0 +1,107 @@
+{
+  "id": "lunar-industries-common",
+  "version": "0.1.0",
+  "title": "Lunar Industries - Commun",
+  "engine": "^0.2.0",
+  "contributes": {
+    "needs": [
+      {
+        "object": "repository",
+        "optional": true
+      },
+      {
+        "object": "branch",
+        "optional": true
+      },
+      {
+        "object": "task",
+        "optional": true
+      },
+      {
+        "object": "review",
+        "optional": true
+      },
+      {
+        "object": "pipeline",
+        "optional": true
+      }
+    ],
+    "commands": [
+      {
+        "id": "lunar-industries-common.branches",
+        "title": "Branches lues dans le cœur",
+        "hidden": true
+      },
+      {
+        "id": "lunar-industries-common.link",
+        "title": "Lier une branche à une tâche",
+        "hidden": true
+      },
+      {
+        "id": "lunar-industries-common.settings",
+        "title": "Réglages communs des modules Lunar Industries",
+        "hidden": true
+      },
+      {
+        "id": "lunar-industries-common.setTarget",
+        "title": "Branche cible des MR d’un dépôt",
+        "hidden": true
+      }
+    ],
+    "settings": {
+      "title": "Lunar Industries - Commun",
+      "fields": [
+        {
+          "key": "lunar-industries-common.integrationBranches",
+          "type": "text",
+          "title": "Branches d’intégration",
+          "help": "Séparées par des virgules. Elles n’appartiennent à aucune tâche : absentes de la page Branches, du bac du Kanban et de la fenêtre « Lier des branches », proposées comme cibles des MR ; dans Temps, un merge vers l’une d’elles compte pour la tâche fusionnée. La branche par défaut de chaque dépôt l’est toujours.",
+          "default": "main, master, develop"
+        },
+        {
+          "key": "lunar-industries-common.reviewTarget",
+          "type": "text",
+          "title": "Branche cible des MR",
+          "help": "Pour un dépôt qui n’a pas de cible à lui (réglable dans la page Branches et dans les réglages de Claude, par dépôt). Les nouvelles branches partent aussi de celle-ci.",
+          "default": ""
+        },
+        {
+          "key": "lunar-industries-common.naming",
+          "type": "choice",
+          "title": "Nommage des branches",
+          "help": "Le nom d’une nouvelle branche de tâche, et la manière de retrouver l’issue d’une branche (« Closes #… » dans la MR). Une référence de tâche dans le nom lie toujours la branche, quel que soit ce choix.",
+          "options": [
+            {
+              "value": "issue",
+              "label": "Numéro d’issue, puis titre (488-ajout-role)"
+            },
+            {
+              "value": "ref",
+              "label": "Référence de la tâche, puis titre (id-101-ajout-role)"
+            },
+            {
+              "value": "template",
+              "label": "Modèle libre"
+            }
+          ],
+          "default": "issue"
+        },
+        {
+          "key": "lunar-industries-common.template",
+          "type": "text",
+          "title": "Modèle",
+          "placeholder": "{ref}-{slug}",
+          "help": "Variables : {issue} (numéro d’issue), {ref} (référence de la tâche), {slug} (titre de la tâche). Utilisé avec « Modèle libre ».",
+          "default": "{ref}-{slug}"
+        },
+        {
+          "key": "lunar-industries-common.targets",
+          "type": "text",
+          "title": "Branche cible par dépôt",
+          "default": "{}",
+          "hidden": true
+        }
+      ]
+    }
+  }
+}
