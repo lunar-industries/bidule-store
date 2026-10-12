@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
+import db from '@adonisjs/lucid/services/db'
 import { ExtensionHost } from '#extensions/host'
 
 // Our modules in the core's real host (bidule's `node ace test`), not in their unit tests' fake context: what the core
@@ -59,6 +60,39 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
       await host.activate(id)
       assert.isTrue(host.isStarted(id), `${id} did not start`)
     }
+  })
+
+  test('two objects merged in the core: the ids each one keeps go to the one left', async ({ assert }) => {
+    const host = await app.container.make(ExtensionHost)
+    const at = '2026-10-01T08:00:00Z'
+    await db.table('lunar_industries_temps_drafts').insert({ day: '2026-10-01', task_id: 'old', label: 'Dév', share: 20 })
+    await db.table('lunar_industries_temps_branch_tasks').insert({ repo: '/r', branch: 'feat/x', task_id: 'old' })
+    await db.table('lunar_industries_temps_log').multiInsert([
+      { id: 'e-old', day: '2026-10-01', task_id: 'old', share: 20 },
+      { id: 'e-gone', day: '2026-10-02', task_id: 'old', share: 20 },
+      { id: 'e-kept', day: '2026-10-02', task_id: 'kept', share: 20 },
+    ])
+    await db
+      .table('lunar_industries_claude_sessions')
+      .insert({ id: 's1', task_id: 'old', cwd: '/r', mode: 'default', status: 'saved', title: 'x', created_at: at, updated_at: at })
+
+    // As the core says them after a put: the modules start on the event if they are not running.
+    await host.emit('objects.merged', { type: 'task', from: 'old', into: 'kept' })
+    await host.emit('objects.merged', { type: 'timeEntry', from: 'e-old', into: 'e-new' })
+    await host.emit('objects.merged', { type: 'timeEntry', from: 'e-gone', into: 'e-kept' })
+
+    const tasks = async (table: string) => (await db.from(table).select('task_id')).map((r: { task_id: string }) => r.task_id)
+    assert.deepEqual(await tasks('lunar_industries_temps_drafts'), ['kept'])
+    assert.deepEqual(await tasks('lunar_industries_temps_branch_tasks'), ['kept'])
+    assert.deepEqual(await tasks('lunar_industries_claude_sessions'), ['kept'])
+    const log: { id: string; task_id: string }[] = await db.from('lunar_industries_temps_log').orderBy('id')
+    assert.deepEqual(
+      log.map((l) => [l.id, l.task_id]),
+      [
+        ['e-kept', 'kept'],
+        ['e-new', 'kept'],
+      ]
+    )
   })
 
   // The routes that read the module's settings (the day's, the board's branches, the list…): none may fail, which is

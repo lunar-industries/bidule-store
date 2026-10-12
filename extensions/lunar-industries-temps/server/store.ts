@@ -1,4 +1,5 @@
 import type { ServerContext } from '@bidule/api/extensions'
+import type { StoredType } from '@bidule/sdk/objects'
 import type { Props } from '../contract.ts'
 
 // A line of a day's draft (shares in twentieths).
@@ -52,6 +53,8 @@ export interface TempsStore {
   // commits of a merged branch would turn into « a branch without a task » (and a day not edited would change).
   rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]): Promise<void>
   rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]>
+  // An object of the core merged into another (objects.merged): what is kept under its id goes to the one left.
+  followMerge(type: StoredType, from: string, into: string): Promise<void>
 }
 
 const DRAFTS = 'lunar_industries_temps_drafts'
@@ -246,5 +249,19 @@ export class DbStore implements TempsStore {
   async rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]> {
     const rows: BranchTaskColumns[] = await this.db.from(BRANCH_TASKS)
     return rows.map((r) => ({ repo: r.repo, branch: r.branch, taskId: r.task_id }))
+  }
+
+  // A task: the drafts, the branches remembered and the mirror. An entry: the mirror, by its id (when it has both, the
+  // one left stays).
+  async followMerge(type: StoredType, from: string, into: string): Promise<void> {
+    if (type === 'task') {
+      await this.db.transaction(async (trx) => {
+        for (const table of [DRAFTS, BRANCH_TASKS, LOG]) await trx.from(table).where('task_id', from).update({ task_id: into })
+      })
+    } else if (type === 'timeEntry') {
+      const kept: LogColumns | null = await this.db.from(LOG).where('id', into).first()
+      if (kept) await this.db.from(LOG).where('id', from).delete()
+      else await this.db.from(LOG).where('id', from).update({ id: into })
+    }
   }
 }

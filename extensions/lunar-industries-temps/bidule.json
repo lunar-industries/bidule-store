@@ -4,7 +4,8 @@
   "title": "Lunar Industries - Temps",
   "engine": "^0.2.0",
   "activation": [
-    "onEvent:objects.changed"
+    "onEvent:objects.changed",
+    "onEvent:objects.merged"
   ],
   "contributes": {
     "needs": [

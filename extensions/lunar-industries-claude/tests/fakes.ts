@@ -251,6 +251,9 @@ export class MemoryStore extends SessionStore {
     row.updatedAt = new Date().toISOString()
     this.rows.set(row.id, structuredClone(row))
   }
+  override async followTask(from: string, into: string) {
+    for (const r of this.rows.values()) if (r.taskId === from) r.taskId = into
+  }
   override async recover() {
     for (const r of this.rows.values()) r.status = 'saved'
   }

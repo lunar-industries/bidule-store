@@ -166,6 +166,11 @@ export class SessionStore {
     }
   }
 
+  // A task merged into another (objects.merged): its sessions are the one left's.
+  async followTask(from: string, into: string): Promise<void> {
+    await this.db.from(SESSIONS).where('task_id', from).update({ task_id: into })
+  }
+
   // At the API's start: no process survived the previous one, the sessions it ran are saved.
   async recover(): Promise<void> {
     await this.db.from(SESSIONS).whereNot('status', 'saved').update({ status: 'saved' })

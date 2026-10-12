@@ -69,4 +69,7 @@ export async function activate(context: ServerContext) {
   })
   // No process survived the previous API: the sessions it ran are saved.
   await sessions.recover()
+  ctx.events.on('objects.merged', async ({ type, from, into }) => {
+    if (type === 'task') await store.followTask(from, into)
+  })
 }

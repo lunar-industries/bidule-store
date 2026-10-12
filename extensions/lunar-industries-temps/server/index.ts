@@ -12,8 +12,9 @@ export let days: Days
 const FOLLOWED = new Set(['activity', 'branch', 'repository', 'task'])
 
 export async function activate(ctx: ServerContext) {
+  const store = new DbStore(ctx.db)
   days = new Days({
-    store: new DbStore(ctx.db),
+    store,
     settings: () => readSettings(ctx),
     work: coreWork(ctx.objects),
     timeLog: coreTimeLog(ctx.objects),
@@ -42,5 +43,10 @@ export async function activate(ctx: ServerContext) {
   }
   ctx.events.on('objects.changed', ({ type }) => {
     if (FOLLOWED.has(type)) follow()
+  })
+  // Two objects found to be one: the ids kept here go to the one left, then today's proposal follows.
+  ctx.events.on('objects.merged', async ({ type, from, into }) => {
+    await store.followMerge(type, from, into)
+    follow()
   })
 }

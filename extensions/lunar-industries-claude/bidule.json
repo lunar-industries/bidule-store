@@ -3,6 +3,9 @@
   "version": "0.4.0",
   "title": "Lunar Industries - Claude",
   "engine": "^0.2.0",
+  "activation": [
+    "onEvent:objects.merged"
+  ],
   "permissions": [
     "shell"
   ],

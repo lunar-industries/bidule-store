@@ -1,3 +1,4 @@
+import type { StoredType } from '@bidule/sdk/objects'
 import type { LogEntry, LogLine, TaskGroup, TimeLog } from '@bidule/sdk/tasks'
 import { Days, type DayLog, type Work, type WorkBranch } from '../server/days.ts'
 import type { WorkEvent } from '../server/engine.ts'
@@ -81,6 +82,16 @@ export class MemoryStore implements TempsStore {
     }
     const ids = new Set(entries.map((e) => e.id))
     for (const r of this.log) if (r.day >= from && r.day <= to && !ids.has(r.id)) r.deleted = true
+  }
+  async followMerge(type: StoredType, from: string, into: string) {
+    if (type === 'task') {
+      for (const r of this.draftRows) if (r.taskId === from) r.taskId = into
+      for (const r of this.remembered.values()) if (r.taskId === from) r.taskId = into
+      for (const r of this.log) if (r.taskId === from) r.taskId = into
+    } else if (type === 'timeEntry') {
+      if (this.log.some((r) => r.id === into)) this.log = this.log.filter((r) => r.id !== from)
+      else for (const r of this.log) if (r.id === from) r.id = into
+    }
   }
   // A line of a draft, as the tests write them.
   draft(day: string, lines: Partial<NewDraftRow>[]) {
