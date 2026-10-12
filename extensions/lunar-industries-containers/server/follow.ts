@@ -49,6 +49,11 @@ export class Follows {
     if (follow) this.#byKey.delete(follow.key)
   }
 
+  // The API stops: every command goes, whoever still follows it.
+  stopAll(): void {
+    for (const follow of this.#byKey.values()) this.#end(follow)
+  }
+
   #find(id: string): Follow | undefined {
     return [...this.#byKey.values()].find((f) => f.id === id)
   }
