@@ -2,7 +2,7 @@
   "id": "lunar-industries-plane",
   "version": "0.1.0",
   "title": "Plane",
-  "engine": "^0.1.6",
+  "engine": "^0.3.0",
   "activation": [
     "onStartup"
   ],
