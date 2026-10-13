@@ -5,7 +5,7 @@ import type { KanbanBranch } from '../contract.ts'
 
 export type Tone = 'ok' | 'bad' | 'warn' | 'info' | 'neutral' | 'accent'
 
-// The source's three groups; consecutive columns of a group share its heading.
+// The source's three groups: the name of a group of columns (read aloud, not shown) and the settings' legends.
 export const GROUP_LABELS: Record<TaskGroup, string> = { todo: 'À faire', doing: 'En cours', done: 'Terminé' }
 
 // A branch shown with a few marks less: its type (`feat/`) and its task's ID (`TSK-42-`), which the card already says.
@@ -44,9 +44,74 @@ export function columnColor(column: TaskColumn): string {
   return NAMED.find(([name]) => name.test(column.name))?.[1] ?? statusColor(column)
 }
 
+/**
+ * Statuses shown in another column (setting `lunar-industries-kanban.statusMerge`, a JSON object `{ from: into }`):
+ * two tools naming the same stage differently (« En cours/dev » and « En cours »), or states a team treats as one.
+ * The status `from` has no column of its own; its tasks sit in `into` and keep their status in their tool.
+ */
+export type Merges = ReadonlyMap<string, string>
+
+export function parseMerges(value: unknown): Map<string, string> {
+  try {
+    const raw: unknown = JSON.parse(String(value ?? '{}'))
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return new Map()
+    return new Map(
+      Object.entries(raw).flatMap(([from, into]) => (typeof into === 'string' && into && into !== from ? [[from, into]] : [])),
+    )
+  } catch {
+    return new Map()
+  }
+}
+
+/**
+ * The merges that apply to these columns: both statuses must be listed (a renamed status does not hide its tasks), and
+ * what is merged into a status itself merged goes to the end of the chain. A chain that comes back on itself would hide
+ * every column of the loop and their tasks with them: none of its merges applies.
+ */
+export function applicableMerges(merges: Merges, columns: readonly string[]): Map<string, string> {
+  const known = new Set(columns)
+  const into = new Map([...merges].filter(([from, to]) => known.has(from) && known.has(to)))
+  const end = (name: string): string | null => {
+    const seen = new Set([name])
+    let at = name
+    for (let next = into.get(at); next !== undefined; next = into.get(at)) {
+      if (seen.has(next)) return null
+      seen.add(next)
+      at = next
+    }
+    return at
+  }
+  return new Map(
+    [...into.keys()].flatMap((from) => {
+      const target = end(from)
+      return target === null ? [] : [[from, target]]
+    }),
+  )
+}
+
+// The column a task sits in: compare this, never its status, with a column's name.
+export const columnOf = (task: Pick<Task, 'status'>, merges: Merges) => merges.get(task.status) ?? task.status
+
+// The statuses a column shows besides its own.
+export const mergedInto = (column: string, merges: Merges) =>
+  [...merges].filter(([, into]) => into === column).map(([from]) => from)
+
+/**
+ * The statuses to try, in order, when a task is dropped in a column: the board does not say which tool lists which
+ * status, so those the task's tool already uses on the board come first, then the column's own, then the others merged
+ * into it. A tool refusing one (Notion: « n'existe pas ») gets the next.
+ */
+export function moveCandidates(task: Pick<Task, 'provider'>, column: string, merges: Merges, tasks: readonly Task[]): string[] {
+  const all = [column, ...mergedInto(column, merges)]
+  const used = new Set(tasks.filter((t) => t.provider === task.provider).map((t) => t.status))
+  return [...all.filter((s) => used.has(s)), ...all.filter((s) => !used.has(s))]
+}
+
 export interface Column extends TaskColumn {
   // A status the tasks have but the source no longer lists.
   unknown: boolean
+  // The other statuses it shows (merged into it).
+  merged: string[]
   // Finished columns start folded; a column the user folded or unfolded against that keeps their choice.
   folded: boolean
   foldable: boolean
@@ -61,20 +126,27 @@ export interface Group {
   grow: number
 }
 
-/** The columns shown (the source's, then the statuses it no longer has), grouped, in the source's order. */
-export function groupsOf(board: Board, hidden: string[], toggled: ReadonlySet<string>): Group[] {
+/**
+ * The columns shown (the source's, less those merged into another, then the statuses it no longer has), grouped, in
+ * the source's order. `merges`: those that apply (`applicableMerges`).
+ */
+export function groupsOf(board: Board, hidden: string[], toggled: ReadonlySet<string>, merges: Merges = new Map()): Group[] {
   const listed = new Set(board.columns.map((c) => c.name))
-  const strays = [...new Set(board.tasks.map((t) => t.status).filter((s) => !listed.has(s)))]
+  const strays = [...new Set(board.tasks.map((t) => columnOf(t, merges)).filter((s) => !listed.has(s)))]
   const stray = (name: string): TaskColumn & { unknown: boolean } => ({ name, color: 'neutral', group: 'todo', unknown: true })
-  const columns: Column[] = [...board.columns.map((c) => ({ ...c, unknown: false })), ...strays.map(stray)]
+  const columns: Column[] = [
+    ...board.columns.filter((c) => !merges.has(c.name)).map((c) => ({ ...c, unknown: false })),
+    ...strays.map(stray),
+  ]
     .filter((c) => !hidden.includes(c.name))
     .map((c) => {
       const foldable = c.group === 'done'
       return {
         ...c,
+        merged: mergedInto(c.name, merges),
         foldable,
         folded: foldable !== toggled.has(c.name),
-        tasks: board.tasks.filter((t) => t.status === c.name),
+        tasks: board.tasks.filter((t) => columnOf(t, merges) === c.name),
       }
     })
   const out: Group[] = []

@@ -13,6 +13,7 @@ export function CardMenu({
   y,
   source,
   actions,
+  current,
   link,
   columns,
   move,
@@ -23,6 +24,8 @@ export function CardMenu({
   y: number
   source: string
   actions: KanbanAction[]
+  // The column the task sits in (its status, or the column it was merged into).
+  current: string
   // null without a provider of branches.
   link: (() => void) | null
   columns: MenuColumn[]
@@ -60,7 +63,7 @@ export function CardMenu({
     return command ? command.run(args) : runOnApi(id, args)
   }
   const url = task.url
-  const targets = columns.filter((c) => c.name !== task.status)
+  const targets = columns.filter((c) => c.name !== current)
   const rows = 1 + actions.length + (link ? 1 : 0) + targets.length
   // Kept inside the window.
   const left = Math.min(x, innerWidth - 280)

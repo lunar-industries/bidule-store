@@ -19,6 +19,18 @@ const BASE = '/api/ext/lunar-industries-kanban'
 export const board = readTasks
 // Its provider writes the task's new status in its tool.
 export const moveTask = (id: string, status: string) => act('task', 'task.move', id, { status })
+// The first of these statuses the task's tool takes (`moveCandidates`); when it takes none, the first refusal.
+export async function writeMove(task: { id: string }, statuses: string[], move = moveTask) {
+  let refusal: unknown = null
+  for (const status of statuses) {
+    try {
+      return await move(task.id, status)
+    } catch (err) {
+      refusal ??= err
+    }
+  }
+  throw refusal
+}
 // Every provider of tasks that can reads its tool again.
 export async function syncTasks() {
   const providers = (await objectProviders('task')).filter((p) => p.actions.includes('task.sync'))

@@ -47,7 +47,7 @@
   background: var(--chip-hover);
 }
 
-/* One column per status of the source, consecutive ones of a group under its heading; the board scrolls sideways. */
+/* One column per status of the source, consecutive ones of a group side by side; the board scrolls sideways. */
 .lik-board {
   display: flex;
   align-items: flex-start;
@@ -55,29 +55,24 @@
   overflow-x: auto;
   padding-bottom: var(--space-2);
 }
+/* A group is as wide as its columns: growing on its own, it would widen the columns of a group with few of them. */
 .lik-group {
-  flex: 1 0 auto;
-  min-width: min-content;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
-.lik-group-head {
-  padding: 0 var(--space-2);
-  color: var(--text-2);
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .lik-group-columns {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
+  /* Each column has its own padding: the wider gap stays between groups. */
+  gap: var(--space-2);
 }
+/* 248 px at least, wider when there is room to spare. The width, not only the basis: a flex item is never narrower
+   than its content without one, and a long branch name (cut by an ellipsis, but counted in full) would widen it. */
 .lik-column {
-  flex: 1 1 0;
-  min-width: 240px;
+  width: 248px;
+  flex: 1 0 248px;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -87,7 +82,7 @@
 }
 .lik-column.folded {
   flex: 0 0 auto;
-  min-width: 0;
+  width: auto;
 }
 .lik-column.drop-over {
   border-color: var(--ring);
@@ -162,6 +157,10 @@
   min-width: 0;
   color: var(--mono);
   font-size: var(--fs-xs);
+}
+/* The column no longer widens for its cards: a long word (a pasted URL) breaks rather than overflows. */
+.lik-card .card-title {
+  overflow-wrap: anywhere;
 }
 .lik-done-dot {
   width: 8px;

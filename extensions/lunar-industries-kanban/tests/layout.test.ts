@@ -1,7 +1,22 @@
 import type { Board, Task } from '@bidule/sdk'
 import { describe, expect, test } from 'vitest'
 import type { KanbanBranch } from '../contract.ts'
-import { badgeOf, branchKey, branchLabel, columnColor, groupsOf, linkRows, marksOf, orphansOf, shortBranch, trayIsOpen } from '../ui/layout.ts'
+import {
+  applicableMerges,
+  badgeOf,
+  branchKey,
+  branchLabel,
+  columnColor,
+  columnOf,
+  groupsOf,
+  linkRows,
+  marksOf,
+  moveCandidates,
+  orphansOf,
+  parseMerges,
+  shortBranch,
+  trayIsOpen,
+} from '../ui/layout.ts'
 
 const task = (id: string, status: string, patch: Partial<Task> = {}): Task => ({
   id,
@@ -69,6 +84,43 @@ describe('columns', () => {
 
   test('hidden columns are left out', () => {
     expect(groupsOf(board, ['Backlog'], new Set())[0].columns.map((c) => c.name)).toEqual(['À faire'])
+  })
+})
+
+describe('statuses merged into another column', () => {
+  const names = board.columns.map((c) => c.name)
+
+  test('the setting is read as { from: into }; anything else, or a status merged into itself, is ignored', () => {
+    expect([...parseMerges('{"Backlog":"À faire","En cours":"En cours","x":3}')]).toEqual([['Backlog', 'À faire']])
+    expect(parseMerges('["Backlog"]').size).toBe(0)
+    expect(parseMerges('pas du JSON').size).toBe(0)
+    expect(parseMerges(undefined).size).toBe(0)
+  })
+
+  test('a merge naming a status the source does not list is left out; a chain ends where it ends; a loop is dropped', () => {
+    expect([...applicableMerges(new Map([['Backlog', 'Renommé']]), names)]).toEqual([])
+    expect([...applicableMerges(new Map([['Backlog', 'À faire'], ['À faire', 'En cours']]), names)]).toEqual([
+      ['Backlog', 'En cours'],
+      ['À faire', 'En cours'],
+    ])
+    expect([...applicableMerges(new Map([['Backlog', 'À faire'], ['À faire', 'Backlog']]), names)]).toEqual([])
+  })
+
+  test("a merged status has no column; its tasks sit in the column that took it, which says what it also shows", () => {
+    const merges = applicableMerges(new Map([['Backlog', 'À faire']]), names)
+    const merged: Board = { ...board, tasks: [task('1', 'À faire'), task('5', 'Backlog')] }
+    const [todo] = groupsOf(merged, [], new Set(), merges)
+    expect(todo.columns.map((c) => [c.name, c.merged, c.tasks.map((t) => t.id)])).toEqual([['À faire', ['Backlog'], ['1', '5']]])
+    expect(todo.grow).toBe(1)
+    expect(columnOf(merged.tasks[1], merges)).toBe('À faire')
+  })
+
+  test("a drop tries the statuses the task's tool already uses first, then the column's own, then the merged ones", () => {
+    const merges = new Map([['En cours/dev', 'En cours'], ['Dev', 'En cours']])
+    const tasks = [task('1', 'En cours/dev', { provider: 'notion' }), task('2', 'En cours', { provider: 'plane' })]
+    expect(moveCandidates({ provider: 'notion' }, 'En cours', merges, tasks)).toEqual(['En cours/dev', 'En cours', 'Dev'])
+    expect(moveCandidates({ provider: 'plane' }, 'En cours', merges, tasks)).toEqual(['En cours', 'En cours/dev', 'Dev'])
+    expect(moveCandidates({ provider: 'plane' }, 'À faire', merges, tasks)).toEqual(['À faire'])
   })
 })
 

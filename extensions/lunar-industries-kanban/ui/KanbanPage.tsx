@@ -19,23 +19,27 @@ import {
   board as readBoard,
   branches as readBranches,
   errorMessage,
-  moveTask,
   reviewUrl,
   setBranches,
   syncTasks,
+  writeMove,
   type Loaded,
 } from './api.ts'
 import { CardMenu } from './CardMenu.tsx'
 import {
+  applicableMerges,
   badgeOf,
   branchKey,
   branchLabel,
   columnColor,
+  columnOf,
   dayKey,
   groupsOf,
   marksOf,
+  moveCandidates,
   orphansOf,
   parseList,
+  parseMerges,
   shortBranch,
   trayIsOpen,
   type Column,
@@ -75,6 +79,7 @@ const carries = (e: DragEvent, type: string) => e.dataTransfer.types.includes(ty
 
 const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
 const columnLabel = (name: string) => name || 'Sans statut'
+const mergedTip = (column: Column) => (column.merged.length ? `Réunit aussi : ${column.merged.join(', ')}` : undefined)
 
 // The board, reloaded whenever the core says the tasks changed (a sync, a move from elsewhere); only the last reading
 // asked is shown.
@@ -116,8 +121,8 @@ function useBranches(): [Branches, (b: Branches) => void] {
 }
 
 /**
- * Taken from quack-board (Simon's Kanban): one column per status of the source, consecutive ones of a group under its
- * heading (À faire, En cours, Terminé ; the finished ones folded), the recent branches without a task to drop on a
+ * Taken from quack-board (Simon's Kanban): one column per status of the source (less those merged into another),
+ * consecutive ones of a group side by side (the finished ones folded), the recent branches without a task to drop on a
  * card, each card's branch, due date and review or CI marks. The other extensions' parts (right-click actions,
  * badges, advice) come through the point `kanban`, like on any Kanban.
  */
@@ -139,10 +144,15 @@ export function Kanban() {
 
   const hidden = parseList(values?.['lunar-industries-kanban.hidden'])
   const ready = board && board.source !== null ? board : null
+  const mergeRaw = values?.['lunar-industries-kanban.statusMerge']
+  const merges = useMemo(
+    () => applicableMerges(parseMerges(mergeRaw), ready?.columns.map((c) => c.name) ?? []),
+    [mergeRaw, ready],
+  )
   const groups = useMemo(
-    () => (ready ? groupsOf(ready, hidden, toggled) : []),
+    () => (ready ? groupsOf(ready, hidden, toggled, merges) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ready, hidden.join('\n'), toggled],
+    [ready, hidden.join('\n'), toggled, merges],
   )
   const columns = groups.flatMap((g) => g.columns)
   const byTask = useMemo(() => {
@@ -152,7 +162,7 @@ export function Kanban() {
   }, [git])
   const orphans = orphansOf(git.branches, Date.now(), ready ? new Set(ready.tasks.map((t) => t.id)) : undefined)
   const today = dayKey(new Date())
-  const doneStatus = new Set(ready?.columns.filter((c) => c.group === 'done').map((c) => c.name) ?? [])
+  const groupOf = (task: Task) => ready?.columns.find((c) => c.name === columnOf(task, merges))?.group ?? null
 
   const toggleFold = (name: string) => {
     const next = new Set(toggled)
@@ -164,11 +174,12 @@ export function Kanban() {
   // Optimistic: the card jumps to its new column at once; a failure snaps it back. Once moved, the board is read
   // again, as its provider wrote it.
   const move = async (task: Task, status: string) => {
-    if (!ready || task.status === status) return
+    // Dropped back in its own column: nothing to write (the column's name would replace a status merged into it).
+    if (!ready || columnOf(task, merges) === status) return
     const previous = ready
     setBoard({ ...ready, tasks: ready.tasks.map((t) => (t.id === task.id ? { ...t, status } : t)) })
     try {
-      await busy(moveTask(task.id, status))
+      await busy(writeMove(task, moveCandidates(task, status, merges, ready.tasks)))
     } catch (err) {
       setBoard(previous)
       react('panic', errorMessage(err), errorMessage(err))
@@ -232,8 +243,8 @@ export function Kanban() {
     return all.sort((a, b) => a.priority - b.priority)[0] ?? null
   }
 
-  const doing = ready?.tasks.filter((t) => ready.columns.find((c) => c.name === t.status)?.group === 'doing') ?? []
-  const due = ready?.tasks.find((t) => !doneStatus.has(t.status) && t.due?.slice(0, 10) === today)
+  const doing = ready?.tasks.filter((t) => groupOf(t) === 'doing') ?? []
+  const due = ready?.tasks.find((t) => groupOf(t) !== 'done' && t.due?.slice(0, 10) === today)
   useHint(
     !board
       ? null
@@ -358,7 +369,6 @@ export function Kanban() {
       <div className="lik-board">
         {groups.map((g) => (
           <div key={g.key} className="lik-group" role="group" aria-label={g.label || columnLabel(g.columns[0].name)} style={{ flexGrow: g.grow }}>
-            {g.label && <div className="lik-group-head">{g.label}</div>}
             <div className="lik-group-columns">
               {g.columns.map((col) => (
                 <section
@@ -370,13 +380,13 @@ export function Kanban() {
                   {col.foldable ? (
                     <button type="button" className="lik-column-head lik-column-toggle" aria-expanded={!col.folded} onClick={() => toggleFold(col.name)}>
                       <span className="dot" style={{ background: columnColor(col) }} />
-                      <h2 className="ellipsis">{columnLabel(col.name)}</h2>
+                      <h2 className="ellipsis" title={mergedTip(col)}>{columnLabel(col.name)}</h2>
                       <span className="pill-count">{col.tasks.length}</span>
                     </button>
                   ) : (
                     <div className="lik-column-head">
                       <span className="dot" style={{ background: columnColor(col) }} />
-                      <h2 className="ellipsis">{columnLabel(col.name)}</h2>
+                      <h2 className="ellipsis" title={mergedTip(col)}>{columnLabel(col.name)}</h2>
                       {col.unknown && <span className="tag lik-tone-warn">absent de {board.source}</span>}
                     </div>
                   )}
@@ -386,7 +396,7 @@ export function Kanban() {
                         <Card
                           key={t.id}
                           task={t}
-                          done={doneStatus.has(t.status)}
+                          done={groupOf(t) === 'done'}
                           today={today}
                           branches={byTask.get(t.id) ?? []}
                           showBranches={git.available}
@@ -414,7 +424,8 @@ export function Kanban() {
         <CardMenu
           {...menu}
           source={board.source}
-          actions={actionsFor(board.columns.find((c) => c.name === menu.task.status)?.group ?? null)}
+          actions={actionsFor(groupOf(menu.task))}
+          current={columnOf(menu.task, merges)}
           link={git.available ? () => chooseBranches(menu.task) : null}
           columns={columns.map((c) => ({ name: c.name, label: columnLabel(c.name) }))}
           move={(status) => void move(menu.task, status)}
