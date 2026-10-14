@@ -1,4 +1,4 @@
-// Lunar Industries - Temps: Simon's Temps module (quack-board), an unofficial one competing with Bidule's own (`temps`).
+// Temps (Lunar Industries): Simon's Temps module (quack-board), an unofficial one competing with Bidule's own (`temps`).
 // A day is worth 1, shared out in twentieths between lines (a task, or none: a meeting, an absence, a deployment),
 // each with the label of the Time Log; proposed from the core's activity (git's, the tasks'), then sent to the Time
 // Log (the provider of `timeEntry` objects). Types only: the interface reads this file.

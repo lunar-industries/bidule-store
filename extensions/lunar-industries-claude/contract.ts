@@ -1,4 +1,4 @@
-// Lunar Industries - Claude: Simon's Claude module (quack-board), an unofficial one competing with Bidule's own
+// Claude (Lunar Industries): Simon's Claude module (quack-board), an unofficial one competing with Bidule's own
 // (`claude`, which runs the official `claude` in the terminal). Claude Code sessions run in the app by the Agent SDK,
 // with the workspace's tools (MCP server `workspace`) and the team's skills. Types only: the interface reads this file.
 //

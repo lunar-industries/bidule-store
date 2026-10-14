@@ -41,7 +41,7 @@ export const refreshBranch = (repo: string, branch: string) => refreshForge(ctx,
 // The sessions run only once the user has turned them on (Réglages): the Agent SDK with their Claude account.
 export async function enabled(): Promise<void> {
   if (!(await settings()).enabled) {
-    throw new SessionError('Les sessions Claude dans l’app sont désactivées (Réglages › Lunar Industries - Claude)', 403)
+    throw new SessionError('Les sessions Claude dans l’app sont désactivées (Réglages › Claude)', 403)
   }
 }
 

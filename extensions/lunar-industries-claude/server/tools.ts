@@ -25,7 +25,7 @@ import { addWorktree, baseOf, listWorktrees, removeWorktree, shellVia, worktreeP
 export const SERVER = 'workspace'
 
 // Added to the system prompt of each session that has the tools; the page never shows it.
-export const TOOLS_PROMPT = `Tu travailles dans l'application Bidule (module Lunar Industries - Claude). Elle te donne ses propres outils (serveur MCP « ${SERVER} », outils mcp__${SERVER}__*) et ses skills (plugin « ${SERVER} »). Utilise-les en priorité :
+export const TOOLS_PROMPT = `Tu travailles dans l'application Bidule (module Claude de Lunar Industries). Elle te donne ses propres outils (serveur MCP « ${SERVER} », outils mcp__${SERVER}__*) et ses skills (plugin « ${SERVER} »). Utilise-les en priorité :
 - pour les tâches (lire une tâche, changer son statut, la commenter), les forges GitLab et GitHub (issue, branche, MR ou PR, pipeline, job, merge d'une MR), les worktrees, le créneau exécutable, les merges entre branches et les pushs : l'outil mcp__${SERVER}__ qui correspond, plutôt qu'un programme en ligne de commande, une requête directe à l'API d'une forge ou une commande git qui écrit (push, merge, checkout) ;
 - pour un travail qu'un skill ${SERVER} décrit (de la tâche au staging, issue et MR, déploiement, commentaire au PO, changelog, worktrees) : ce skill.
 Ne passe par un autre moyen que si aucun outil ni skill ne couvre le besoin, et dis-le à l'utilisateur.`

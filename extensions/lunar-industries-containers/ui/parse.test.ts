@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { followLogs, NO_LOGS, parseLine } from './format.ts'
 
 // What the page makes of a container's logs (what the engines print, read, is the `docker` extension's and tested there).
-describe('Lunar Industries - Conteneurs · logs', () => {
+describe('Conteneurs (Lunar Industries) · logs', () => {
   it('reads a log line: its time, its text, its level', () => {
     const l = parseLine('2026-10-01T07:12:03.114000000Z ERROR boom')
     expect(l).toMatchObject({ stamp: '2026-10-01T07:12:03.114000000Z', text: 'ERROR boom', level: 'error' })

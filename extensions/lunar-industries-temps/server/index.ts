@@ -33,7 +33,7 @@ export async function activate(ctx: ServerContext) {
     running = (async () => {
       do {
         again = false
-        await days.follow().catch((error: Error) => ctx.logger.warn(`Lunar Industries - Temps : ${error.message}`))
+        await days.follow().catch((error: Error) => ctx.logger.warn(`Temps : ${error.message}`))
       } while (again)
     })().finally(() => {
       running = null

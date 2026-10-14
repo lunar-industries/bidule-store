@@ -32,7 +32,7 @@ const GROUPS: { label: string; statuses: SessionStatus[] }[] = [
 const kept = { left: true, right: true, focus: false, archived: false }
 
 /**
- * Lunar Industries - Claude (Simon's pages/claude): Claude Code sessions run in the app. The list on the left
+ * Claude (Lunar Industries, Simon's pages/claude): Claude Code sessions run in the app. The list on the left
  * (grouped by state), the conversation, the session's context on the right. Each side column folds into a strip;
  * « Focus » (Ctrl + .) folds both. Off until the experimental switch of its settings is on.
  */

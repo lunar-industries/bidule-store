@@ -1,4 +1,4 @@
-// Lunar Industries - Branches: Simon's Branches page (quack-board), an unofficial module competing with Bidule's own
+// Branches (Lunar Industries): Simon's Branches page (quack-board), an unofficial module competing with Bidule's own
 // (`branches`). Each branch of the user's repos with the step it is at (task, review, CI, merge) and what to do next;
 // the repos, branches, task links, reviews and pipelines are the core's objects, read and linked through
 // lunar-industries-common (as its settings: integration branches, review targets, naming), the forge's client is
@@ -53,7 +53,7 @@ export type ListedRepo = {
 export type Listing = {
   branches: ListedBranch[]
   repos: ListedRepo[]
-  // Réglages › Lunar Industries - Commun: where a repo's reviews go when it has not chosen (and has that branch).
+  // Réglages › Commun: where a repo's reviews go when it has not chosen (and has that branch).
   defaultTarget: string | null
 }
 

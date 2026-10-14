@@ -47,7 +47,7 @@ const start = (dir: string) => {
 const request = (params: Record<string, string>, body: unknown = {}) =>
   ({ params, request: { validateUsing: (validator: { validate(data: unknown): unknown }) => validator.validate(body) } }) as unknown as HttpContext
 
-describe('Lunar Industries - Conteneurs · through docker', () => {
+describe('Conteneurs (Lunar Industries) · through docker', () => {
   let dir: string
   beforeEach(async () => {
     calls = []

@@ -1,7 +1,7 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.6.0",
-  "title": "Lunar Industries - Kanban",
+  "version": "0.6.1",
+  "title": "Kanban",
   "engine": "^0.3.0",
   "dependencies": {
     "lunar-industries-common": "^0.1.0"
@@ -44,7 +44,7 @@
       }
     ],
     "settings": {
-      "title": "Lunar Industries - Kanban",
+      "title": "Kanban",
       "panel": true,
       "fields": [
         {

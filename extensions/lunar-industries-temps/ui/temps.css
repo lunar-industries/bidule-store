@@ -1,4 +1,4 @@
-/* Lunar Industries - Temps (Simon's pages/temps), every class under `lit-`. Colours are the theme's. */
+/* Temps (Lunar Industries, Simon's pages/temps), every class under `lit-`. Colours are the theme's. */
 
 :where([class*='theme-']) {
   --lit-warn-bg: color-mix(in srgb, var(--butter) 24%, var(--card));

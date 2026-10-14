@@ -26,7 +26,7 @@ function store<T>(initial: T) {
   }
 }
 
-// The module's switch (Réglages › Lunar Industries - Claude); null until the settings are read.
+// The module's switch (Réglages › Claude); null until the settings are read.
 export function useEnabled(): boolean | null {
   const values = useSettingValues()
   if (!values) return null

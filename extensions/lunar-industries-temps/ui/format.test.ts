@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { fmtShare, hm, shift, weekNumber, workText } from './format.ts'
 
-describe('Lunar Industries - Temps: formats', () => {
+describe('Temps (Lunar Industries): formats', () => {
   test('a share reads in days', () => {
     expect([0, 1, 7, 20].map(fmtShare)).toEqual(['0', '0,05', '0,35', '1'])
     expect(hm(545)).toBe('09:05')

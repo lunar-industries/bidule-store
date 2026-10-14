@@ -7,7 +7,7 @@ const HIDDEN = 'lunar-industries-kanban.hidden'
 const MERGE = 'lunar-industries-kanban.statusMerge'
 const GROUPS: TaskGroup[] = ['todo', 'doing', 'done']
 
-// Réglages › Lunar Industries - Kanban: the statuses left off the board, chosen among the source's own (the board's
+// Réglages › Kanban: the statuses left off the board, chosen among the source's own (the board's
 // columns, group by group, as the source gives them), as Workspace's « Statuts masqués sur le Kanban »; then the
 // statuses shown in another column.
 export function KanbanSettings() {

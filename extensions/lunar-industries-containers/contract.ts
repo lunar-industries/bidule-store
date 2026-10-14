@@ -1,4 +1,4 @@
-// Lunar Industries - Conteneurs: Simon's containers module (quack-board), an unofficial one competing with Bidule's
+// Conteneurs (Lunar Industries): Simon's containers module (quack-board), an unofficial one competing with Bidule's
 // own (turn that one off to use this one). Its own id, page and data; the engines are the `docker` extension's, which
 // it asks through that extension's actions (and whose events, `docker.changed`, `docker.logs` and `docker.usage`, its
 // page listens to): the types of containers, resources and logs are docker's, and come from its contract.

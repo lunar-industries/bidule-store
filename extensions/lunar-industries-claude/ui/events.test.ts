@@ -15,7 +15,7 @@ const tool = (seq: number, id: string, file?: string): SessionEvent => ({
 const result = (seq: number, id: string, ok = true): SessionEvent => ({ seq, kind: 'tool_result', id, ok, text: '' })
 
 // Taken from quack-board (Simon's conversation): the lines of a session, in order, grouped as the page draws them.
-describe('Lunar Industries - Claude', () => {
+describe('Claude (Lunar Industries)', () => {
   it('adds the lines in the order of their number, skips those already there, stops at a gap', () => {
     const start = [text(1), text(2)]
     expect(merge(start, [text(2), text(3)]).list.map((e) => e.seq)).toEqual([1, 2, 3])

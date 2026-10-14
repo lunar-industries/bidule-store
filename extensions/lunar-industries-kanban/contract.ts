@@ -1,4 +1,4 @@
-// Lunar Industries - Kanban: Simon's Kanban (quack-board), an unofficial one competing with Bidule's own (`kanban`).
+// Kanban (Lunar Industries): Simon's Kanban (quack-board), an unofficial one competing with Bidule's own (`kanban`).
 // The board itself comes from the core, as for any Kanban: the user's tasks (GET /api/tasks, readTasks), moved by the
 // object action `task.move`, and the other modules' parts of the cards through the point `kanban`, which it declares
 // like the official one. The branches of the cards are the core's objects (branches, their repository, review and

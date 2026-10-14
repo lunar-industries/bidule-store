@@ -1,4 +1,4 @@
-/* Lunar Industries - Claude (Simon's pages/claude), every class under `lc-`. Colours are the theme's. */
+/* Claude (Lunar Industries, Simon's pages/claude), every class under `lc-`. Colours are the theme's. */
 
 :where([class*='theme-']) {
   --lc-warn-bg: color-mix(in srgb, var(--butter) 28%, var(--card));

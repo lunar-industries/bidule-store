@@ -22,14 +22,14 @@ const NOTIFICATIONS = [
 ]
 
 // A repo's own settings as the panel asks them: the module's (empty: the module's, above), and its review target,
-// which lunar-industries-common keeps for every module (empty: the one of Réglages › Lunar Industries - Commun).
+// which lunar-industries-common keeps for every module (empty: the one of Réglages › Commun).
 type RepoFields = RepoOverrides & { reviewTarget?: string }
 const FIELDS: { key: keyof RepoFields; title: string; placeholder?: string; hint?: string }[] = [
   {
     key: 'reviewTarget',
     title: 'Branche cible des MR',
     placeholder: 'develop',
-    hint: 'La même que dans la page Branches. Vide : celle de Réglages › Lunar Industries - Commun.',
+    hint: 'La même que dans la page Branches. Vide : celle de Réglages › Commun.',
   },
   { key: 'stagingBranch', title: 'Branche de staging' },
   { key: 'productionBranch', title: 'Branche de production' },

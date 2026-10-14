@@ -1,7 +1,7 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.5.2",
-  "title": "Lunar Industries - Claude",
+  "version": "0.5.3",
+  "title": "Claude",
   "engine": "^0.3.0",
   "dependencies": {
     "lunar-industries-common": "^0.1.0"
@@ -48,12 +48,12 @@
       {
         "id": "lunar-industries-claude.newSession",
         "title": "Session Claude…",
-        "group": "Lunar Industries - Claude"
+        "group": "Claude"
       },
       {
         "id": "lunar-industries-claude.startTask",
         "title": "Démarrer…",
-        "group": "Lunar Industries - Claude"
+        "group": "Claude"
       }
     ],
     "to": {
@@ -81,7 +81,7 @@
     ],
     "background": true,
     "settings": {
-      "title": "Lunar Industries - Claude",
+      "title": "Claude",
       "panel": true,
       "fields": [
         {

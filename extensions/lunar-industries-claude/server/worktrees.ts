@@ -103,7 +103,7 @@ export async function excludeWorktrees(git: GitSource, repo: string): Promise<vo
   if (current.split(/\r?\n/).includes(EXCLUDED)) return
   await mkdir(dirname(file), { recursive: true })
   const prefix = current && !current.endsWith('\n') ? '\n' : ''
-  await appendFile(file, `${prefix}# Claude sessions' worktrees (Lunar Industries - Claude)\n${EXCLUDED}\n`)
+  await appendFile(file, `${prefix}# Claude sessions' worktrees (Claude, Lunar Industries)\n${EXCLUDED}\n`)
 }
 
 // Copies the untracked files the repo needs to build: `git worktree add` copies only what git tracks.

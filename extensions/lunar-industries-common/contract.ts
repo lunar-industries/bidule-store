@@ -1,4 +1,4 @@
-// Lunar Industries - Commun: what the Lunar Industries modules share, written once. An extension cannot import
+// Commun (Lunar Industries): what the Lunar Industries modules share, written once. An extension cannot import
 // another's code at run time, nor read its settings: the modules ask this one by its commands
 // (`ctx.commands.execute`), after declaring it in their `dependencies` (the store installs it with them). It has no page
 // and competes with no official module. Types only.
@@ -34,7 +34,7 @@ export type SharedBranch = {
 // Which branches: those a task links (`taskId`), else a repo's (`repo`, one of them with `name`), else all.
 export type BranchFilter = { taskId?: string; repo?: string; name?: string }
 
-// The settings the modules share (Réglages › Lunar Industries - Commun).
+// The settings the modules share (Réglages › Commun).
 export type SharedSettings = {
   // As written, without the empty ones: compared whatever their case.
   integrationBranches: string[]
