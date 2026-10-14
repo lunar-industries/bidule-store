@@ -1,8 +1,11 @@
 {
   "id": "lunar-industries-branches",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "title": "Branches",
   "engine": "^0.3.0",
+  "activation": [
+    "onStartup"
+  ],
   "dependencies": {
     "lunar-industries-common": "^0.1.0"
   },

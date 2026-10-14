@@ -1,20 +1,40 @@
 import type { ServerContext } from '@bidule/api/extensions'
 import '../contract.ts'
+import { IssueLinks } from './issue_links.ts'
 import { BranchesService } from './service.ts'
 
-// For the controller, once started (its page's first request starts it).
+// For the controller.
 export let service: BranchesService
 
 export async function activate(ctx: ServerContext) {
   // The branches, their task and the settings the modules share are lunar-industries-common's (a dependency).
   const { commands } = ctx
+  const settings = () => commands.execute('lunar-industries-common.settings', undefined)
   service = new BranchesService({
     objects: ctx.objects,
     shared: {
       branches: (filter) => commands.execute('lunar-industries-common.branches', filter),
       link: (args) => commands.execute('lunar-industries-common.link', args),
-      settings: () => commands.execute('lunar-industries-common.settings', undefined),
+      settings,
       setTarget: (args) => commands.execute('lunar-industries-common.setTarget', args),
     },
+  })
+  // Started with the app (activation), so that a branch named after its issue is linked without the page open.
+  const { objects } = ctx
+  const issues = new IssueLinks({
+    objects: {
+      branches: (ids) => objects.list('branch', { ids }),
+      tasks: () => objects.list('task'),
+      forgeOf: (repositoryId) => objects.first('review.forge', { repositoryId }),
+      relations: (filter) => objects.relations(filter),
+      link: (from, kind, to, origin) => objects.link(from, kind, to, origin),
+      unlink: (from, kind, to, origin) => objects.unlink(from, kind, to, origin),
+    },
+    settings,
+    origin: 'lunar-industries-branches',
+  })
+  ctx.events.on('objects.changed', async ({ type, ids }) => {
+    if (type === 'branch') await issues.branchesChanged(ids)
+    else if (type === 'task') await issues.tasksChanged()
   })
 }
