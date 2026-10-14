@@ -2,7 +2,7 @@
   "schema": 1,
   "extensions": {
     "lunar-industries-claude": {
-      "title": "Lunar Industries - Claude",
+      "title": "Claude",
       "description": "Claude Code dans l’app, version Lunar Industries : sessions par l’Agent SDK avec le Claude Code de l’environnement des outils (décisions, plan, questions, modèle, effort, coût), outils de l’espace de travail (tâche, worktrees, MR, pipelines, déploiement) et skills de l’équipe",
       "versions": {
         "0.5.2": {
@@ -36,11 +36,43 @@
               "signature": "U+WOcjFncD7J1v76TTEg8rgpnZEgI8o8COyXVbhj6lVMl5yBH7nJt7iWtFWfmrjRjezlUWDt+jke4LTp1yfDBQ=="
             }
           }
+        },
+        "0.5.3": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [
+            "shell"
+          ],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "win32-x64": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-claude-0.5.3/lunar-industries-claude-0.5.3-win32-x64.tgz",
+              "size": 118860265,
+              "sha256": "44dde3a01cf64a7eff7b592af5ef7bdcfa0c145aa0d8c59a22bd0a73d35f96b1",
+              "signature": "3QWwcdHoqPLBdcGZkDu8T9E5X8jAZ3Sjt+l78Y186Yl0P04EL+y/H/K8EniNwOx8paAt1JXgfCD4/o4CwIjzAQ=="
+            },
+            "linux-x64": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-claude-0.5.3/lunar-industries-claude-0.5.3-linux-x64.tgz",
+              "size": 115994967,
+              "sha256": "306fe67340aebd32d56b46f45258dbc11df4947baf2ef8c27670482c497d6690",
+              "signature": "Ii13HvhFW87N82iQEjXbnxFa2aWAi5Wpt+BKwp2OTenAPBH/Nn/V9DYhU5znqP/BDwfthwtoNroYYVBHC1A2CQ=="
+            },
+            "darwin-arm64": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-claude-0.5.3/lunar-industries-claude-0.5.3-darwin-arm64.tgz",
+              "size": 106165888,
+              "sha256": "3ccda4569592b5f20c88ee0e6a2b30ebb4c2218dd362b26795875e61e756e10c",
+              "signature": "jFYaRCmRsPZ+LeXVncITq5398BGvCjV4e6MhgnZmbcuGrqysy5NxeEayZe3uBp6QVlP2vKD7wKVUNmd/2fgNBw=="
+            }
+          }
         }
       }
     },
     "lunar-industries-branches": {
-      "title": "Lunar Industries - Branches",
+      "title": "Branches",
       "description": "Les branches, version Lunar Industries : une liste par dépôt avec l'étape de chaque branche (tâche, revue, CI, fusion), et le détail pour lier une tâche, ouvrir la MR, relancer un pipeline ou lancer un job manuel",
       "versions": {
         "0.4.2": {
@@ -60,11 +92,29 @@
               "signature": "H5uPM9bV0r6L133pyZYN9nBLULkFPpXRbGDwnaRmI8vl22hfjgy1zS6v1bM4QlP3ozu+x1+eu31gcaY+3+3dBw=="
             }
           }
+        },
+        "0.4.3": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-branches-0.4.3/lunar-industries-branches-0.4.3.tgz",
+              "size": 14705,
+              "sha256": "40bd0b84bf0f3b6aa367e0e904465cec6ef8ced7b8d564432dd5ec1d5ac3d8de",
+              "signature": "d9cZwQT30BJSEJgsqPKYOvkA2xfwr1OrQIL5sAV+xiyyJWC0ocJ5K79X0EdSeCesvUOzP/EJRlFlLQpHc01iDg=="
+            }
+          }
         }
       }
     },
     "lunar-industries-common": {
-      "title": "Lunar Industries - Commun",
+      "title": "Commun",
       "description": "Ce que les modules Lunar Industries partagent : les branches telles que le cœur les a (tâche, revue, CI), le lien d'une branche à une tâche fait à la main, et les réglages communs (branches d'intégration, cibles des MR, nommage des branches)",
       "versions": {
         "0.1.1": {
@@ -98,11 +148,27 @@
               "signature": "6DZgu5yNSgLvOlKDuNpUYFw+kjLEA65Ah73VmwEfv8Cd8TqNxJu06/YLFfktwxbFxRt2ZA2ZrbofMG+xLG49AA=="
             }
           }
+        },
+        "0.1.3": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-common-0.1.3/lunar-industries-common-0.1.3.tgz",
+              "size": 5487,
+              "sha256": "253c9dbb0afb08901c7bc10b4a20776a88239bff3e1adc84d1775c5882e90b8b",
+              "signature": "aUWGJ//YE5+AXlmvmzlBJLBWS70ImEId2VqdeIRlEcNsvHHA5iBqxvpEWCbJfb7xjvJOE3PIzf6WhtuUDzXLAw=="
+            }
+          }
         }
       }
     },
     "lunar-industries-containers": {
-      "title": "Lunar Industries - Conteneurs",
+      "title": "Conteneurs",
       "description": "Les conteneurs Docker et Podman, version Lunar Industries : projets Compose encadrés, sélection et actions groupées, ressources, et la fiche d'un conteneur (journaux suivis, statistiques, fichiers)",
       "versions": {
         "0.3.1": {
@@ -122,11 +188,29 @@
               "signature": "pZxCFvCgok6jCOie29w1zBfcYBAND7SFLFgrYltxc6HWBaYbu8vpbFs+qkIFvVap6xAwbiqWSVKNolRx83SGDw=="
             }
           }
+        },
+        "0.3.2": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "docker": "^0.2.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-containers-0.3.2/lunar-industries-containers-0.3.2.tgz",
+              "size": 23769,
+              "sha256": "cfb4567ca4f37718a3c06a02e13f44a8e26ac500a36f8f4f163e14067100ea07",
+              "signature": "fHAk4X5g2qkMtI2knABkRyKcc16xx1rtTXGXZtyITIMIFlQ9B2uXL2nBbHqeMcY52b8IyLQm59dKJscE4W1wCA=="
+            }
+          }
         }
       }
     },
     "lunar-industries-kanban": {
-      "title": "Lunar Industries - Kanban",
+      "title": "Kanban",
       "description": "Le Kanban, version Lunar Industries : colonnes groupées par étape, branches récentes sans tâche à glisser sur une carte, pastilles de revue et de CI, branches d'une tâche à cocher",
       "versions": {
         "0.5.3": {
@@ -182,11 +266,29 @@
               "signature": "Wh7nuhB4aO3gD/m+A070wKP0/9nlSUJEFspOFSmmqSz8f5AUCQqwptmSPlpHTSQqKvAzsvvZ6pw2V0R5MF7MAQ=="
             }
           }
+        },
+        "0.6.1": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-kanban-0.6.1/lunar-industries-kanban-0.6.1.tgz",
+              "size": 16340,
+              "sha256": "fff16adf921af13bc07739ea8ba12a4cae0326791fbb69afb6353773b78e427c",
+              "signature": "KhP+/l3YdZomggo0VcYIpZP/eR3/C8jZ+978Fgc6LCRrx4pAhxXhwryt59mi2/1d7rMeHkrtVrZGRBqBZx0bBw=="
+            }
+          }
         }
       }
     },
     "lunar-industries-temps": {
-      "title": "Lunar Industries - Temps",
+      "title": "Temps",
       "description": "Le temps de la journée, version Lunar Industries : une journée qui vaut 1 répartie en lignes tâche-étiquette par vingtièmes, proposée depuis git et les tâches, semaine et calendrier, absences et déploiements, envoyée au Time Log",
       "versions": {
         "0.4.3": {
@@ -224,6 +326,24 @@
               "signature": "3JEjiX8PS+kvzVizK35EQ6cilKyAJDnc2KJflbe4ZWxz3Gvr8ZzXDHL5Qz/Gtp+mvnUJN+YSL5GqA11yLNk5Dg=="
             }
           }
+        },
+        "0.4.5": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-temps-0.4.5/lunar-industries-temps-0.4.5.tgz",
+              "size": 31384,
+              "sha256": "0c94df2d922e7e250787399483717507be5021c1fda6170192c5b02068df4fb6",
+              "signature": "4fqRKQsmAdgFIafI0JPor7xmGB7/U5xQWfFw7B11dUuwswhGmgWg2rHQEiAZwUfyuqGMK/3NYZG0Xo9I+Ji1Cg=="
+            }
+          }
         }
       }
     },
@@ -244,6 +364,30 @@
               "size": 9989,
               "sha256": "cca9d784bb495c2b1bc766fcfe4ccde4508b3da6fba53086691e9fa64cd349e7",
               "signature": "puUfgHd5OKg3aRsowQrb/MkhGw34kUSaPX9UoPI9BgyxCZ5/kzwcoeywIudXLzS4liBnRgWqpeIgtPynDbVHBQ=="
+            }
+          }
+        }
+      }
+    },
+    "lunar-industries-terminal": {
+      "title": "Terminal",
+      "description": "Le terminal, version Lunar Industries : le shell de l'utilisateur en onglets, dessiné par ghostty-web (l'émulateur de Ghostty compilé en WebAssembly), et ce que les autres extensions y lancent",
+      "versions": {
+        "0.1.0": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [
+            "shell"
+          ],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-terminal-0.1.0/lunar-industries-terminal-0.1.0.tgz",
+              "size": 870301,
+              "sha256": "0a51dcda0c3ac0b07c1f226ce4c71ea4ec22517e4174739f32712b6ccfb9ce18",
+              "signature": "7AAGil7v/jlsufVIHOVYOWgTpNaan5waQxPpDTR8JFQ9648pY/wFaNTFPIayHPWhShGb1SX8AqaRM517+EHnAQ=="
             }
           }
         }
