@@ -320,6 +320,24 @@
               "signature": "+hKYuAXno77CvuR7yK/vmYcSvYmBVXZCqwT6WHS1CRwTnnUVsCrYT646WMDHl2OlV2DmldCp47Ra0d9poI9rCA=="
             }
           }
+        },
+        "0.7.0": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-kanban-0.7.0/lunar-industries-kanban-0.7.0.tgz",
+              "size": 17325,
+              "sha256": "4ccddf29c69060338bacbb05d3894f0cff98a759f4fd62ee3a6e5104ff158cba",
+              "signature": "gB+5j7T1TI6xukuqV/K73iPXGtIQ5A9aiZktQ8aXIRjfO+pZ2ZN9Nojfqk/HzHDBm+HZUEW3wJfSGci4mQNPBA=="
+            }
+          }
         }
       }
     },
