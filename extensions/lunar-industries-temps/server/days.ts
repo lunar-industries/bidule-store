@@ -19,7 +19,7 @@ import {
   type DayInput,
   type WorkEvent,
 } from './engine.ts'
-import type { TempsSettings } from './settings.ts'
+import { fillTaskText, type TempsSettings } from './settings.ts'
 import type { DraftRow, LogRow, NewDraftRow, TempsStore } from './store.ts'
 
 /**
@@ -50,9 +50,11 @@ export interface Work {
   events(since: string, until: string): Promise<WorkEvent[]>
   // Links a branch to a task by hand.
   link(repo: string, branch: string, taskId: string): Promise<void>
-  // The tasks' titles, by id.
-  titles(): Promise<Map<string, string>>
+  // The tasks, by id: their title, and their reference and address in the tool that owns them.
+  tasks(): Promise<Map<string, WorkTask>>
 }
+
+export type WorkTask = { title: string; ref: string | null; url: string | null }
 
 // The Time Log as the days use it: the user's entries of a period and, when its provider offers them, its fields and
 // a whole day written at once.
@@ -493,7 +495,17 @@ export class Days {
     if (drafts.some((d) => !d.taskId && d.branch && !d.confirmed)) {
       throw new DraftError('Une branche sans tâche reste à rattacher ou à garder sans tâche')
     }
-    const titles = await this.deps.work.titles().catch(() => new Map<string, string>())
+    const [tasks, { taskText }] = await Promise.all([
+      this.deps.work.tasks().catch(() => new Map<string, WorkTask>()),
+      this.deps.settings(),
+    ])
+    // A task as the line gives it: its title, and the text the Time Log writes when it cannot relate the entry to it.
+    const taskOf = (id: string, label: string) => {
+      const task = tasks.get(id)
+      const title = task?.title ?? label
+      const text = task ? fillTaskText(taskText, task) : ''
+      return text ? { id, title, text } : { id, title }
+    }
     const merged = new Map<string, LogLine>()
     for (const d of drafts) {
       if (!d.share) continue
@@ -502,7 +514,7 @@ export class Days {
       if (line) line.share += d.share / DAY_SHARES
       else {
         merged.set(key, {
-          task: d.taskId ? { id: d.taskId, title: titles.get(d.taskId) ?? d.label } : null,
+          task: d.taskId ? taskOf(d.taskId, d.label) : null,
           label: d.label || null,
           share: d.share / DAY_SHARES,
           props: d.props,

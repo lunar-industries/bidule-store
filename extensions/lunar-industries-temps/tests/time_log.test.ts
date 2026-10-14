@@ -28,6 +28,40 @@ describe('Time log', () => {
     expect(sent.changes()).toBeGreaterThan(0)
   })
 
+  test('each task goes with its text from the model, for a Time Log that cannot relate the entry to it', async () => {
+    const log = new FakeTimeLog()
+    const plane = 'https://plane.example/lunar/issues/LUN-12'
+    const sent = setup({ now: NEXT_DAY, log, settings: { taskText: 'Tâche Plane : {ref} — {titre} {url}' } })
+    await sent.store.draft(DAY, [
+      { taskId: 't1', share: 10 },
+      { taskId: null, label: 'Réunion', share: 10, confirmed: true },
+    ])
+    sent.tasks.list = [{ id: 't1', title: 'Ordre des colonnes', ref: 'LUN-12', url: plane }]
+    await sent.days.send(DAY)
+    expect(log.lines.map((l) => l.task)).toEqual([
+      { id: 't1', title: 'Ordre des colonnes', text: `Tâche Plane : LUN-12 — Ordre des colonnes ${plane}` },
+      null,
+    ])
+  })
+
+  test('by default the text is the task’s address, and nothing for a task that has none', async () => {
+    const log = new FakeTimeLog()
+    const sent = setup({ now: NEXT_DAY, log })
+    await sent.store.draft(DAY, [
+      { taskId: 't1', share: 10 },
+      { taskId: 't2', share: 10 },
+    ])
+    sent.tasks.list = [
+      { id: 't1', title: 'Plane', url: 'https://plane.example/x/LUN-1' },
+      { id: 't2', title: 'Sans adresse' },
+    ]
+    await sent.days.send(DAY)
+    expect(log.lines.map((l) => l.task)).toEqual([
+      { id: 't1', title: 'Plane', text: 'https://plane.example/x/LUN-1' },
+      { id: 't2', title: 'Sans adresse' },
+    ])
+  })
+
   test('sending again rewrites the same entries and removes the lines taken out', async () => {
     const log = new FakeTimeLog()
     const { store, days } = setup({ now: NEXT_DAY, log })

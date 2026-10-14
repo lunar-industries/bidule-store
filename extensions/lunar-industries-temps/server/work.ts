@@ -105,9 +105,9 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
       await linkByHand({ repo, name, taskId })
     },
 
-    async titles() {
+    async tasks() {
       if (!has('task')) return new Map()
-      return new Map((await objects.list('task')).map((t) => [t.id, t.title]))
+      return new Map((await objects.list('task')).map((t) => [t.id, { title: t.title, ref: t.ref, url: t.url }]))
     },
   }
 }

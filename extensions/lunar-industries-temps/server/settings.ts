@@ -9,9 +9,20 @@ export type TempsSettings = {
   defaultLabel: string
   absentLabel: string
   deployLabel: string
+  // How the Time Log says a task it cannot relate an entry to (a task of Plane in Notion): a model, see fillTaskText.
+  taskText: string
 }
 
 const K = 'lunar-industries-temps'
+
+/**
+ * The text of a task, from the model of `taskText`: `{url}`, `{ref}` and `{titre}` become the task's address,
+ * reference and title in the tool that owns it (empty when it has none); the rest is written as it is.
+ */
+export function fillTaskText(model: string, task: { title: string; ref: string | null; url: string | null }) {
+  const values: Record<string, string> = { url: task.url ?? '', ref: task.ref ?? '', titre: task.title }
+  return model.replace(/\{(url|ref|titre)\}/g, (_, name: string) => values[name]).trim()
+}
 
 export const list = (value: unknown) =>
   String(value ?? '')
@@ -34,6 +45,7 @@ export const DEFAULT_SETTINGS: Omit<TempsSettings, 'integrationBranches'> = {
   defaultLabel: 'Développement',
   absentLabel: 'Absent',
   deployLabel: 'Déploiement',
+  taskText: '{url}',
 }
 
 // The production branches were `launchpad, orbit` by default, names of one team. An install that already used the
@@ -56,5 +68,6 @@ export async function readSettings(ctx: ServerContext): Promise<TempsSettings> {
     defaultLabel: await text('defaultLabel', DEFAULT_SETTINGS.defaultLabel),
     absentLabel: await text('absentLabel', DEFAULT_SETTINGS.absentLabel),
     deployLabel: await text('deployLabel', DEFAULT_SETTINGS.deployLabel),
+    taskText: await text('taskText', DEFAULT_SETTINGS.taskText),
   }
 }

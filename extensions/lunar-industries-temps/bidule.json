@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-temps",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "title": "Temps",
   "engine": "^0.3.0",
   "conflicts": ["temps"],
@@ -83,6 +83,13 @@
           "type": "text",
           "title": "Étiquette de déploiement",
           "default": "Déploiement"
+        },
+        {
+          "key": "lunar-industries-temps.taskText",
+          "type": "text",
+          "title": "Texte d’une tâche que le Time Log n’a pas",
+          "help": "Écrit dans l’entrée quand le Time Log ne peut pas la relier à sa tâche (une tâche de Plane dans Notion). {url}, {ref} et {titre} : l’adresse, la référence et le titre de la tâche. Par exemple « Tâche Plane : {ref} — {titre} {url} ». Garde {url} : c’est par elle que l’entrée est retrouvée.",
+          "default": "{url}"
         }
       ]
     }

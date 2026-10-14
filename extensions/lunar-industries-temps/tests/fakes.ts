@@ -122,7 +122,7 @@ export class FakeGit {
 export class FakeTasks {
   edits: { at: string; taskId: string }[] = []
   changes: { at: string; taskId: string; to: string; toGroup: TaskGroup | null }[] = []
-  list: { id: string; title: string }[] = []
+  list: { id: string; title: string; ref?: string | null; url?: string | null }[] = []
 }
 
 // The user's work as the core would give it: git's activity and the tasks', the branches, their links.
@@ -145,7 +145,7 @@ export function fakeWork(git: FakeGit, tasks: FakeTasks): Work {
       const b = git.branchRows.find((x) => x.repo === repo && x.name === name)
       if (b) b.taskId = taskId
     },
-    titles: async () => new Map(tasks.list.map((t) => [t.id, t.title])),
+    tasks: async () => new Map(tasks.list.map((t) => [t.id, { title: t.title, ref: t.ref ?? null, url: t.url ?? null }])),
   }
 }
 
@@ -175,8 +175,11 @@ export class FakeTimeLog implements TimeLog {
       .filter((e) => !e.archived && e.day >= from && e.day <= to)
       .map((e) => ({ id: e.id, day: e.day, taskId: e.taskId, label: e.label, share: e.share, url: e.url, props: e.props, lastEdited: e.lastEdited }))
   }
+  // The lines of the last day sent, as the Time Log received them.
+  lines: LogLine[] = []
   async sendDay(day: string, lines: LogLine[]): Promise<LogEntry[]> {
     this.calls.push(`send ${day}`)
+    this.lines = lines
     const pair = (taskId: string | null, label: string | null) => `${taskId ?? ''}|${label ?? ''}`
     const unused = new Map(this.entries.filter((e) => !e.archived && e.day === day).map((e) => [pair(e.taskId, e.label), e]))
     const written: LogEntry[] = []
