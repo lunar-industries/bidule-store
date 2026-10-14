@@ -4,18 +4,24 @@ import type { KanbanBranch } from '../contract.ts'
 import {
   applicableMerges,
   badgeOf,
+  boardColumns,
   branchKey,
   branchLabel,
+  choiceOf,
   columnColor,
   columnOf,
   groupsOf,
   linkRows,
   marksOf,
   moveCandidates,
+  moveName,
+  openings,
+  orderColumns,
   orphansOf,
   parseMerges,
   shortBranch,
   trayIsOpen,
+  withChoice,
 } from '../ui/layout.ts'
 
 const task = (id: string, status: string, patch: Partial<Task> = {}): Task => ({
@@ -104,6 +110,97 @@ describe('columns', () => {
 
   test('hidden columns are left out', () => {
     expect(groupsOf(board, ['Backlog'], new Set())[0].columns.map((c) => c.name)).toEqual(['À faire'])
+  })
+})
+
+describe('the columns in the order the user chose', () => {
+  const names = ['À faire', 'Backlog', 'En cours', 'Terminé']
+
+  test('the saved order, a status it does not have yet after the one before it in the source, a gone one left out', () => {
+    expect(orderColumns(names, [])).toEqual(names)
+    expect(orderColumns(names, ['En cours', 'À faire', 'Backlog', 'Terminé'])).toEqual(['En cours', 'À faire', 'Backlog', 'Terminé'])
+    // « Backlog » is new: after « À faire », which comes before it in the source.
+    expect(orderColumns(names, ['Terminé', 'À faire', 'En cours'])).toEqual(['Terminé', 'À faire', 'Backlog', 'En cours'])
+    // « À faire » is new and first in the source: first.
+    expect(orderColumns(names, ['En cours', 'Backlog', 'Terminé', 'Supprimé'])).toEqual(['À faire', 'En cours', 'Backlog', 'Terminé'])
+  })
+
+  test('a status moved to a gap of the list', () => {
+    expect(moveName(names, 'Terminé', 0)).toEqual(['Terminé', 'À faire', 'Backlog', 'En cours'])
+    expect(moveName(names, 'À faire', 4)).toEqual(['Backlog', 'En cours', 'Terminé', 'À faire'])
+    expect(moveName(names, 'À faire', 2)).toEqual(['Backlog', 'À faire', 'En cours', 'Terminé'])
+    expect(moveName(names, 'À faire', 1)).toEqual(names)
+    expect(moveName(names, 'Inconnu', 0)).toEqual(names)
+  })
+
+  test('the board follows it; the neighbouring columns of a stage make a group, a stage apart makes another', () => {
+    expect(boardColumns(board.columns, ['En cours', 'À faire', 'Backlog', 'Terminé']).map((c) => c.name)).toEqual([
+      'En cours',
+      'À faire',
+      'Backlog',
+      'Terminé',
+    ])
+    const groups = groupsOf(board, [], new Set(), new Map(), ['À faire', 'En cours', 'Backlog', 'Terminé'])
+    expect(groups.map((g) => [g.key, g.columns.map((c) => c.name)])).toEqual([
+      ['todo', ['À faire']],
+      ['doing', ['En cours']],
+      ['todo', ['Backlog']],
+      ['done', ['Terminé']],
+      ['col:Archivé', ['Archivé']],
+    ])
+  })
+
+  test('each status is shown, hidden or merged into another; it is in one setting at most', () => {
+    const merges = new Map([['Backlog', 'À faire']])
+    expect(choiceOf('Backlog', [], merges)).toEqual({ kind: 'merged', into: 'À faire' })
+    expect(choiceOf('Backlog', ['Backlog'], merges)).toEqual({ kind: 'hidden' })
+    expect(choiceOf('En cours', [], merges)).toEqual({ kind: 'shown' })
+    const hidden = withChoice('Backlog', { kind: 'hidden' }, [], merges)
+    expect([hidden.hidden, [...hidden.merges]]).toEqual([['Backlog'], []])
+    const merged = withChoice('En cours', { kind: 'merged', into: 'À faire' }, ['En cours'], merges)
+    expect([merged.hidden, [...merged.merges]]).toEqual([[], [['Backlog', 'À faire'], ['En cours', 'À faire']]])
+    const shown = withChoice('Backlog', { kind: 'shown' }, ['Backlog'], merges)
+    expect([shown.hidden, [...shown.merges]]).toEqual([[], []])
+  })
+})
+
+describe('what a card opens', () => {
+  const providers = [
+    { id: 'notion', title: 'Notion' },
+    { id: 'plane', title: 'Plane' },
+  ]
+
+  test('one line per tool the task is in, the owner first, named as the app names its provider', () => {
+    const migrated = {
+      ...task('1', 'En cours', { provider: 'notion', url: 'https://notion/1' }),
+      sources: [
+        { provider: 'notion', ref: 'TSK-1', url: 'https://notion/1' },
+        { provider: 'plane', ref: 'PLA-1', url: 'https://plane/1' },
+      ],
+    }
+    expect(openings(migrated, providers)).toEqual([
+      { provider: 'notion', title: 'Notion', url: 'https://notion/1' },
+      { provider: 'plane', title: 'Plane', url: 'https://plane/1' },
+    ])
+  })
+
+  test('only the active providers, and only where the tool gives an address', () => {
+    const t = {
+      ...task('1', 'En cours'),
+      sources: [
+        { provider: 'notion', ref: null, url: null },
+        { provider: 'plane', ref: 'PLA-1', url: 'https://plane/1' },
+        { provider: 'jira', ref: 'J-1', url: 'https://jira/1' },
+      ],
+    }
+    expect(openings(t, providers).map((o) => o.title)).toEqual(['Plane'])
+  })
+
+  test("an older core gives the owner's source alone", () => {
+    expect(openings(task('1', 'En cours', { provider: 'plane', url: 'https://plane/1' }), providers)).toEqual([
+      { provider: 'plane', title: 'Plane', url: 'https://plane/1' },
+    ])
+    expect(openings(task('1', 'En cours', { provider: 'plane', url: null }), providers)).toEqual([])
   })
 })
 

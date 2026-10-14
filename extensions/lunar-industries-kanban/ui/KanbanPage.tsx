@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   busy,
-  MascotHead,
+  objectProviders,
   openDialog,
   react,
   saveSettingValues,
   useHint,
   useOn,
   useSettingValues,
-  useVoice,
+  type ObjectProvider,
   type SettingValues,
   type Task,
 } from '@bidule/sdk'
-// The point `kanban`'s contract, the official Kanban's, as types only (no dependency: this board replaces it).
-import type { Advice, KanbanContext } from '@bidule/ext-kanban/contract'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
 import {
   board as readBoard,
@@ -37,6 +35,8 @@ import {
   groupsOf,
   marksOf,
   moveCandidates,
+  openings,
+  ORDER,
   orphansOf,
   parseList,
   parseMerges,
@@ -71,6 +71,11 @@ function useWrittenSetting(key: string, values: SettingValues | null): [unknown,
   }
   return [written && written.from === stored ? written.raw : stored, write]
 }
+
+// The badges this board leaves out, by extension: the official Git extension's (`branches`) counts the task's
+// branches (« 2 branches », « Aucune branche »), which the card's head already says better (its first branch by name,
+// « +N » for the others, « sans branche »).
+const SAID_BY_THE_CARD = new Set(['branches'])
 
 // What a drag carries: a card (to another column) or a branch of the tray (onto a card).
 const TASK_TYPE = 'application/x-lik-task'
@@ -121,10 +126,11 @@ function useBranches(): [Branches, (b: Branches) => void] {
 }
 
 /**
- * Taken from quack-board (Simon's Kanban): one column per status of the source (less those merged into another),
- * consecutive ones of a group side by side (the finished ones folded), the recent branches without a task to drop on a
- * card, each card's branch, due date and review or CI marks. The other extensions' parts (right-click actions,
- * badges, advice) come through the point `kanban`, like on any Kanban.
+ * Taken from quack-board (Simon's Kanban): one column per status of the source (less those hidden or merged into
+ * another), in the order chosen in Réglages › Kanban, neighbouring ones of a stage side by side (the finished ones
+ * folded), the recent branches without a task to drop on a card, each card's branch, due date and review or CI marks.
+ * The other extensions' right-click actions and badges come through the point `kanban`, like on any Kanban; their
+ * advice does not: this board shows none.
  */
 export function Kanban() {
   const [board, setBoard, error, reload] = useBoard()
@@ -141,8 +147,16 @@ export function Kanban() {
   const [over, setOver] = useState<string | null>(null)
   const [branchOver, setBranchOver] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ task: Task; x: number; y: number } | null>(null)
+  // The active providers of tasks, by id and title: the tools a card's menu opens it in (layout.ts, openings). Read
+  // once: an extension turned on or off restarts the app.
+  const [providers, setProviders] = useState<ObjectProvider[]>([])
+  useEffect(() => {
+    void objectProviders('task').then(setProviders, () => setProviders([]))
+  }, [])
 
   const hidden = parseList(values?.['lunar-industries-kanban.hidden'])
+  // The columns' order, chosen in Réglages › Kanban (layout.ts: orderColumns).
+  const order = parseList(values?.[ORDER])
   const ready = board && board.source !== null ? board : null
   const mergeRaw = values?.['lunar-industries-kanban.statusMerge']
   const merges = useMemo(
@@ -150,9 +164,9 @@ export function Kanban() {
     [mergeRaw, ready],
   )
   const groups = useMemo(
-    () => (ready ? groupsOf(ready, hidden, toggled, merges) : []),
+    () => (ready ? groupsOf(ready, hidden, toggled, merges, order) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ready, hidden.join('\n'), toggled, merges],
+    [ready, hidden.join('\n'), toggled, merges, order.join('\n')],
   )
   const columns = groups.flatMap((g) => g.columns)
   const byTask = useMemo(() => {
@@ -226,21 +240,6 @@ export function Kanban() {
     } catch (err) {
       react('panic', errorMessage(err), errorMessage(err))
     }
-  }
-
-  const adviceOf = (task: Task): Advice | null => {
-    if (!ready) return null
-    const ctx: KanbanContext = {
-      columns: ready.columns,
-      staleDays: Number(values?.['lunar-industries-kanban.staleDays'] ?? 5),
-      move: (status) => move(task, status),
-      settings: values ?? {},
-    }
-    const all = contributions.parts.flatMap(({ kanban }) => {
-      const advice = kanban.advice?.(task, ctx)
-      return advice ? [advice] : []
-    })
-    return all.sort((a, b) => a.priority - b.priority)[0] ?? null
   }
 
   const doing = ready?.tasks.filter((t) => groupOf(t) === 'doing') ?? []
@@ -400,10 +399,11 @@ export function Kanban() {
                           today={today}
                           branches={byTask.get(t.id) ?? []}
                           showBranches={git.available}
-                          badges={contributions.parts.map(({ id, kanban }) => (
-                            <span key={id}>{kanban.badges?.(t)}</span>
-                          ))}
-                          advice={col.group === 'doing' ? adviceOf(t) : null}
+                          badges={contributions.parts
+                            .filter(({ id }) => !SAID_BY_THE_CARD.has(id))
+                            .map(({ id, kanban }) => (
+                              <span key={id}>{kanban.badges?.(t)}</span>
+                            ))}
                           branchOver={branchOver === t.id}
                           openMark={openMark}
                           openMenu={openMenu}
@@ -423,7 +423,7 @@ export function Kanban() {
       {menu && (
         <CardMenu
           {...menu}
-          source={board.source}
+          opens={openings(menu.task, providers)}
           actions={actionsFor(groupOf(menu.task))}
           current={columnOf(menu.task, merges)}
           link={git.available ? () => chooseBranches(menu.task) : null}
@@ -452,7 +452,6 @@ function Card({
   branches,
   showBranches,
   badges,
-  advice,
   branchOver,
   openMark,
   openMenu,
@@ -464,22 +463,18 @@ function Card({
   branches: KanbanBranch[]
   showBranches: boolean
   badges: React.ReactNode[]
-  advice: Advice | null
   branchOver: boolean
   openMark: (e: MouseEvent, mark: Mark) => void
   openMenu: (task: Task, x: number, y: number) => void
   drop: Pick<React.HTMLAttributes<HTMLElement>, 'onDragOver' | 'onDragLeave' | 'onDrop'>
 }) {
-  const voice = useVoice()
   const badge = badgeOf(task, done, today)
   const marks = marksOf(branches)
-  const action = advice?.action ?? null
   const label = showBranches ? branchLabel(branches) : task.ref
-  const open = () => task.url && window.open(task.url, '_blank', 'noopener')
+  // A click opens nothing: the card's menu says where it opens (one line per tool). Enter, the menu key or Shift+F10
+  // open that menu, at the card.
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
-    if (e.key === 'Enter') return void open()
-    // The menu key, or Shift+F10: the card's menu, at the card.
-    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+    if (e.key === 'Enter' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
       e.preventDefault()
       const r = e.currentTarget.getBoundingClientRect()
       openMenu(task, r.left + 16, r.top + 24)
@@ -489,14 +484,13 @@ function Card({
     <article
       className={`lik-card${done ? ' done' : ''}${badge?.tone === 'accent' ? ' urgent' : ''}${branchOver ? ' branch-over' : ''}`}
       tabIndex={0}
-      role="link"
+      aria-haspopup="menu"
       aria-label={label ? `${task.title}, ${label}` : task.title}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData(TASK_TYPE, task.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
-      onClick={(e) => !(e.target instanceof Element && e.target.closest('button')) && open()}
       onKeyDown={onKey}
       onContextMenu={(e) => {
         e.preventDefault()
@@ -522,17 +516,6 @@ function Card({
         </div>
       )}
       {badges.length > 0 && <div className="row lik-badges">{badges}</div>}
-      {advice && (
-        <div className="advice">
-          <MascotHead />
-          <p>{voice(advice.text)}</p>
-          {action && (
-            <button type="button" className="advice-btn" onClick={() => void action.run()}>
-              {action.label}
-            </button>
-          )}
-        </div>
-      )}
     </article>
   )
 }

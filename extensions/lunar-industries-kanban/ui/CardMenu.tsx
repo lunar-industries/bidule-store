@@ -1,17 +1,20 @@
 import { useEffect, useRef } from 'react'
 import { react, runOnApi, useCommands, type Task } from '@bidule/sdk'
 import { errorMessage } from './api.ts'
+import type { Opening } from './layout.ts'
 import type { KanbanAction } from './points.ts'
 
 export type MenuColumn = { name: string; label: string }
 
-// A card's menu (right click, or the menu key on a focused card): opening the task in its source, the extensions'
-// actions (start it, a Claude session, a branch, its conversation…), linking branches, then moving it.
+// A card's menu (right click, or Enter or the menu key on a focused card): opening the task in each tool it is in
+// (« Ouvrir dans Notion », « Ouvrir dans Plane »: layout.ts, openings), the extensions' actions (start it, a Claude
+// session, a branch, its conversation…), linking branches, then moving it. A click on a card opens nothing: this menu
+// does.
 export function CardMenu({
   task,
   x,
   y,
-  source,
+  opens,
   actions,
   current,
   link,
@@ -22,7 +25,8 @@ export function CardMenu({
   task: Task
   x: number
   y: number
-  source: string
+  // Where it opens: one line each.
+  opens: Opening[]
   actions: KanbanAction[]
   // The column the task sits in (its status, or the column it was merged into).
   current: string
@@ -62,19 +66,25 @@ export function CardMenu({
     const command = commands.find((c) => c.id === id)
     return command ? command.run(args) : runOnApi(id, args)
   }
-  const url = task.url
   const targets = columns.filter((c) => c.name !== current)
-  const rows = 1 + actions.length + (link ? 1 : 0) + targets.length
+  const rows = opens.length + actions.length + (link ? 1 : 0) + targets.length
   // Kept inside the window.
   const left = Math.min(x, innerWidth - 280)
   const top = Math.max(8, Math.min(y, innerHeight - rows * 40 - 24))
   return (
     <div ref={menu} className="menu floating lik-menu" role="menu" style={{ left, top }}>
-      {url && (
-        <button type="button" role="menuitem" className="menu-item" onClick={() => run(() => window.open(url, '_blank', 'noopener'))}>
-          Ouvrir dans {source}
+      {opens.map((o) => (
+        <button
+          key={o.provider}
+          type="button"
+          role="menuitem"
+          className="menu-item"
+          title={o.url}
+          onClick={() => run(() => window.open(o.url, '_blank', 'noopener'))}
+        >
+          Ouvrir dans {o.title}
         </button>
-      )}
+      ))}
       {actions.map((a) => (
         <button
           key={a.command}

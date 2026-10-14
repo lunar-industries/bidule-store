@@ -3,8 +3,8 @@ import { useContributions, useSettingValues, type PointData, type SettingValues,
 import type { KanbanAction } from '@bidule/ext-kanban/contract'
 
 // The point `kanban` (contributes.points in bidule.json), the same as the official Kanban's: what the other extensions
-// give the cards (advice, badges, right-click actions), read here as by any Kanban. Its checks and the filter of the
-// actions are this module's own copy: an extension never imports another one's code.
+// give the cards (badges, right-click actions; their advice, this board leaves out), read here as by any Kanban. Its
+// checks and the filter of the actions are this module's own copy: an extension never imports another one's code.
 export type { KanbanAction }
 
 const GROUPS: TaskGroup[] = ['todo', 'doing', 'done']
@@ -59,8 +59,8 @@ export function cardActions(actions: KanbanAction[], group: TaskGroup | null, va
   )
 }
 
-// What the other extensions give the cards: the interfaces' parts (advice, badges) and the right-click actions, with
-// the actions of a card by its task's group.
+// What the other extensions give the cards: the interfaces' parts (their badges; the board shows no advice) and the
+// right-click actions, with the actions of a card by its task's group.
 export function useKanbanContributions() {
   const contributions = useContributions('kanban', parseKanban)
   const values = useSettingValues()

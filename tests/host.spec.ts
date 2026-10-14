@@ -115,9 +115,9 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     client,
     assert,
   }) => {
-    const key = 'lunar-industries-kanban.staleDays'
+    const key = 'lunar-industries-kanban.trayOpen'
     await db.from('settings').where('key', key).delete()
-    await db.table('settings').insert({ key, value: '7', created_at: Date.now(), updated_at: Date.now() })
+    await db.table('settings').insert({ key, value: '"false"', created_at: Date.now(), updated_at: Date.now() })
     const file = app.makePath('../../extensions/lunar-industries-common/database/migrations/1791797500000_repair_settings_dates.ts')
     const { default: Repair } = await import(file)
     await new Repair(db.connection(), file).execUp()

@@ -108,6 +108,91 @@ export function moveCandidates(task: Pick<Task, 'provider'>, column: string, mer
   return [...all.filter((s) => used.has(s)), ...all.filter((s) => !used.has(s))]
 }
 
+// The hidden setting that keeps the columns' order (a JSON list of statuses' names), set in Réglages › Kanban.
+export const ORDER = 'lunar-industries-kanban.order'
+
+/**
+ * The columns in the order the user chose (setting `lunar-industries-kanban.order`, the statuses' names), from the
+ * source's order (`names`). A status the saved order does not have yet (a new one in the tool) comes right after the
+ * one before it in the source's order, else first; a saved name the source no longer lists is left out.
+ */
+export function orderColumns(names: readonly string[], saved: readonly string[]): string[] {
+  const known = new Set(names)
+  const out = [...new Set(saved)].filter((name) => known.has(name))
+  names.forEach((name, i) => {
+    if (out.includes(name)) return
+    const before = names.slice(0, i).findLast((other) => out.includes(other))
+    out.splice(before === undefined ? 0 : out.indexOf(before) + 1, 0, name)
+  })
+  return out
+}
+
+// The list with `name` moved to `to` (a gap of the list as it is: 0 first, its length last).
+export function moveName(names: readonly string[], name: string, to: number): string[] {
+  const from = names.indexOf(name)
+  if (from < 0) return [...names]
+  const rest = names.filter((n) => n !== name)
+  rest.splice(Math.max(0, Math.min(rest.length, from < to ? to - 1 : to)), 0, name)
+  return rest
+}
+
+/**
+ * What a status is on the board, as Réglages › Kanban sets it: a column of its own, no column (`hidden`, setting
+ * `lunar-industries-kanban.hidden`), or its tasks in another column (`merged`, setting `statusMerge`). A status both
+ * hidden and merged (an older setting) reads as hidden, as the board shows it.
+ */
+export type StatusChoice = { kind: 'shown' } | { kind: 'hidden' } | { kind: 'merged'; into: string }
+
+export function choiceOf(name: string, hidden: readonly string[], merges: Merges): StatusChoice {
+  if (hidden.includes(name)) return { kind: 'hidden' }
+  const into = merges.get(name)
+  return into ? { kind: 'merged', into } : { kind: 'shown' }
+}
+
+// Both settings once `name` has this choice: it is in at most one of them.
+export function withChoice(
+  name: string,
+  choice: StatusChoice,
+  hidden: readonly string[],
+  merges: Merges,
+): { hidden: string[]; merges: Map<string, string> } {
+  const nextHidden = hidden.filter((h) => h !== name)
+  const nextMerges = new Map(merges)
+  nextMerges.delete(name)
+  if (choice.kind === 'hidden') nextHidden.push(name)
+  if (choice.kind === 'merged' && choice.into !== name) nextMerges.set(name, choice.into)
+  return { hidden: nextHidden, merges: nextMerges }
+}
+
+/**
+ * What a card's menu offers to open: one line per tool the task is in with an address there, for the active
+ * providers only (`providers`, as the app names them), in the order the core gives them (the owner's first). The
+ * core gives every source of a task (`sources`: a Notion task migrated into Plane is in both); an older one gives the
+ * owner's alone (`provider`, `url`). Read without the SDK's type, which only the newer cores have.
+ */
+export type Opening = { provider: string; title: string; url: string }
+
+export function openings(task: Pick<Task, 'provider' | 'url'>, providers: readonly { id: string; title: string }[]): Opening[] {
+  const given: unknown = Reflect.get(task, 'sources')
+  const sources = Array.isArray(given)
+    ? given.flatMap((s: unknown) => {
+        const provider: unknown = typeof s === 'object' && s !== null ? Reflect.get(s, 'provider') : null
+        const url: unknown = typeof s === 'object' && s !== null ? Reflect.get(s, 'url') : null
+        return typeof provider === 'string' && typeof url === 'string' && url ? [{ provider, url }] : []
+      })
+    : task.url
+      ? [{ provider: task.provider, url: task.url }]
+      : []
+  const titles = new Map(providers.map((p) => [p.id, p.title]))
+  const seen = new Set<string>()
+  return sources.flatMap(({ provider, url }) => {
+    const title = titles.get(provider)
+    if (!title || seen.has(provider)) return []
+    seen.add(provider)
+    return [{ provider, title, url }]
+  })
+}
+
 export interface Column extends TaskColumn {
   // A status the tasks have but the source no longer lists.
   unknown: boolean
@@ -128,18 +213,37 @@ export interface Group {
 }
 
 /**
- * The columns shown (the source's, less those merged into another, then the statuses it no longer has), grouped, in
- * the source's order. `merges`: those that apply (`applicableMerges`).
+ * The source's statuses in the board's order: the one the user chose (`order`, see `orderColumns`), else by stage. The
+ * core lists each tool's statuses after the previous tool's (by id): with two, a status only the second has would come
+ * after the first's finished ones. By stage, then, in the order they come otherwise.
  */
-export function groupsOf(board: Board, hidden: string[], toggled: ReadonlySet<string>, merges: Merges = new Map()): Group[] {
+export function boardColumns(columns: readonly TaskColumn[], order: readonly string[] = []): TaskColumn[] {
+  const byStage = GROUPS.flatMap((group) => columns.filter((c) => c.group === group))
+  const byName = new Map(byStage.map((c) => [c.name, c]))
+  return orderColumns(
+    byStage.map((c) => c.name),
+    order,
+  ).map((name) => byName.get(name)!)
+}
+
+/**
+ * The columns shown (the source's, less those merged into another, then the statuses it no longer has), grouped: the
+ * neighbouring columns of a stage make one group. `merges`: those that apply (`applicableMerges`); `order`: the user's.
+ */
+export function groupsOf(
+  board: Board,
+  hidden: string[],
+  toggled: ReadonlySet<string>,
+  merges: Merges = new Map(),
+  order: readonly string[] = [],
+): Group[] {
   const listed = new Set(board.columns.map((c) => c.name))
   const strays = [...new Set(board.tasks.map((t) => columnOf(t, merges)).filter((s) => !listed.has(s)))]
   const stray = (name: string): TaskColumn & { unknown: boolean } => ({ name, color: 'neutral', group: 'todo', unknown: true })
-  // The core lists each tool's statuses after the previous tool's (by id): with two, a status only the second has would
-  // come after the first's finished ones. By stage, in the order they come otherwise.
-  const listedByGroup = GROUPS.flatMap((group) => board.columns.filter((c) => c.group === group))
   const columns: Column[] = [
-    ...listedByGroup.filter((c) => !merges.has(c.name)).map((c) => ({ ...c, unknown: false })),
+    ...boardColumns(board.columns, order)
+      .filter((c) => !merges.has(c.name))
+      .map((c) => ({ ...c, unknown: false })),
     ...strays.map(stray),
   ]
     .filter((c) => !hidden.includes(c.name))

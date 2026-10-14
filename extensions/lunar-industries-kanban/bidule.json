@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "title": "Kanban",
   "engine": "^0.3.0",
   "dependencies": {
@@ -48,33 +48,11 @@
       "panel": true,
       "fields": [
         {
-          "key": "lunar-industries-kanban.staleDays",
-          "type": "choice",
-          "title": "Tâche à relancer après",
-          "help": "Les conseils des autres extensions (une tâche en cours sans activité depuis ce délai) le lisent.",
-          "options": [
-            {
-              "value": "3",
-              "label": "3 jours sans activité"
-            },
-            {
-              "value": "5",
-              "label": "5 jours sans activité"
-            },
-            {
-              "value": "7",
-              "label": "7 jours sans activité"
-            },
-            {
-              "value": "10",
-              "label": "10 jours sans activité"
-            },
-            {
-              "value": "14",
-              "label": "14 jours sans activité"
-            }
-          ],
-          "default": "5"
+          "key": "lunar-industries-kanban.order",
+          "type": "text",
+          "title": "Ordre des colonnes",
+          "default": "[]",
+          "hidden": true
         },
         {
           "key": "lunar-industries-kanban.hidden",
