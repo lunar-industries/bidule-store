@@ -1,0 +1,221 @@
+{
+  "id": "lunar-industries-terminal",
+  "version": "0.1.0",
+  "title": "Terminal",
+  "engine": "^0.3.0",
+  "permissions": [
+    "shell"
+  ],
+  "contributes": {
+    "provides": [
+      "terminal"
+    ],
+    "needs": [
+      {
+        "object": "task",
+        "optional": true
+      },
+      {
+        "extension": "git",
+        "optional": true
+      },
+      {
+        "object": "repository",
+        "optional": true
+      },
+      {
+        "object": "branch",
+        "optional": true
+      },
+      {
+        "object": "review",
+        "optional": true
+      }
+    ],
+    "pages": [
+      {
+        "id": "terminal",
+        "path": "/lunar-industries/terminal",
+        "title": "Terminal",
+        "order": 30
+      }
+    ],
+    "commands": [
+      {
+        "id": "terminal.new",
+        "title": "Nouveau terminal",
+        "group": "Terminal"
+      },
+      {
+        "id": "terminal.open",
+        "title": "Ouvrir une commande préparée",
+        "group": "Terminal",
+        "hidden": true
+      },
+      {
+        "id": "terminal.folders",
+        "title": "Dossiers des onglets ouverts",
+        "group": "Terminal",
+        "hidden": true
+      },
+      {
+        "id": "terminal.mark",
+        "title": "Marquer les onglets d’un dossier",
+        "group": "Terminal",
+        "hidden": true
+      },
+      {
+        "id": "terminal.task",
+        "title": "Ouvrir un terminal sur la tâche",
+        "group": "Terminal",
+        "hidden": true
+      },
+      {
+        "id": "terminal.branch",
+        "title": "Ouvrir un terminal sur la branche",
+        "group": "Terminal",
+        "hidden": true
+      }
+    ],
+    "to": {
+      "kanban": {
+        "actions": [
+          {
+            "command": "terminal.task",
+            "title": "Ouvrir un terminal"
+          }
+        ]
+      }
+    },
+    "shortcuts": [
+      {
+        "keys": "Ctrl+Maj+T",
+        "title": "Nouveau terminal",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+W",
+        "title": "Fermer le volet, ou le terminal",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+PageSuiv",
+        "title": "Onglet suivant",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+PagePréc",
+        "title": "Onglet précédent",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+C",
+        "title": "Copier la sélection",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+C",
+        "title": "Copier, tant que du texte est sélectionné (sinon : interrompre)",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Inser",
+        "title": "Copier la sélection",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+V",
+        "title": "Coller",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Maj+Inser",
+        "title": "Coller",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+F",
+        "title": "Rechercher dans l’historique",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Entrée",
+        "title": "Résultat suivant",
+        "where": "dans la recherche du terminal"
+      },
+      {
+        "keys": "Maj+Entrée",
+        "title": "Résultat précédent",
+        "where": "dans la recherche du terminal"
+      },
+      {
+        "keys": "Échap",
+        "title": "Fermer la recherche",
+        "where": "dans la recherche du terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+E",
+        "title": "Diviser : volets côte à côte",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+O",
+        "title": "Diviser : volets l’un sous l’autre",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Ctrl+Maj+←↑→↓",
+        "title": "Aller à l’autre volet",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "←↑→↓",
+        "title": "Déplacer la séparation des volets (Début, Fin : jusqu’au bout)",
+        "where": "sur la séparation"
+      },
+      {
+        "keys": "Mod+K",
+        "title": "Scripts du dépôt de l’onglet, dans la palette",
+        "where": "sur la page Terminal"
+      },
+      {
+        "keys": "Mod+Entrée",
+        "title": "Lancer le script",
+        "where": "dans la fenêtre d’un script"
+      },
+      {
+        "keys": "Entrée",
+        "title": "Lancer le script (dans un champ de texte)",
+        "where": "dans la fenêtre d’un script"
+      }
+    ],
+    "settings": {
+      "title": "Terminal",
+      "fields": [
+        {
+          "key": "lunar-industries-terminal.onVisit",
+          "type": "choice",
+          "title": "En arrivant sur la page sans onglet",
+          "options": [
+            {
+              "value": "open",
+              "label": "Ouvrir un terminal"
+            },
+            {
+              "value": "nothing",
+              "label": "Ne rien ouvrir (le bouton « Nouveau terminal » reste là)"
+            }
+          ],
+          "default": "open"
+        },
+        {
+          "key": "lunar-industries-terminal.scriptValues",
+          "type": "text",
+          "title": "Dernières valeurs des scripts",
+          "default": "{}",
+          "hidden": true
+        }
+      ]
+    }
+  }
+}

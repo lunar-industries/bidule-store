@@ -2,7 +2,7 @@
 
 Ce dépôt public est le store de Lunar Industries pour [Bidule](https://github.com/verhaegheteddy/bidule). Il propose
 les modules `lunar-industries-*`, qui concurrencent des modules officiels de Bidule (Kanban, Branches, Temps, Claude,
-Conteneurs) avec leur propre id. Ce n'est pas le store de Bidule : ses paquets sont signés par la clé de ce store, et
+Conteneurs, Terminal) avec leur propre id ; leur nom est celui du module qu'ils remplacent. Ce n'est pas le store de Bidule : ses paquets sont signés par la clé de ce store, et
 Bidule les marque « Communautaire · Lunar Industries ». Plane (`lunar-industries-plane`) n'en remplace aucun : il
 fournit les tâches Plane à côté de celles de Notion.
 
@@ -29,6 +29,11 @@ L'empreinte de cette clé est `SHA256:wrC7OJl9hufN6AXZApt2ejhePZiFis/CIfT7J1YzOf
 
 Un module de ce store remplace un module officiel : désactivez l'officiel dans Réglages › Extensions avant
 d'installer le module Lunar Industries qui le remplace.
+
+Le Terminal (`lunar-industries-terminal`, dessiné par ghostty-web) est l'exception : il fournit le rôle `terminal`
+comme l'officiel, et Bidule refuse de désactiver le seul terminal tant que des extensions en ont besoin (Claude,
+Docker). Installez-le d'abord, puis choisissez-le dans Réglages › Rôles et redémarrez Bidule. Tant qu'aucun des deux
+n'est choisi, aucun ne tient le rôle, et les extensions qui en ont besoin sont en erreur.
 
 ## Passer du store de Bidule à celui-ci
 

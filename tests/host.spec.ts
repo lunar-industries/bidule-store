@@ -63,6 +63,19 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     assert.isFalse(ours?.active)
   })
 
+  test('the terminal module holds the role terminal, with the official Terminal left out of this run', async ({
+    client,
+    assert,
+  }) => {
+    const res = await client.get('/api/extensions').headers(TOKEN)
+    const listed: { id: string; holds: string[] }[] = res.body()
+    assert.notExists(
+      listed.find((e) => e.id === 'terminal'),
+      'the official Terminal should be left out (scripts/check-host.sh)'
+    )
+    assert.deepEqual(listed.find((e) => e.id === 'lunar-industries-terminal')?.holds, ['terminal'])
+  })
+
   test('the Kanban reads the point kanban, and Claude contributes its two card actions to it', async ({
     client,
     assert,
