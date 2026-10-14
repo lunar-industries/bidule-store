@@ -53,6 +53,13 @@ Le module épingle une version exacte de ghostty-web (`package.json`), parce qu'
 - **Le clavier** : le gestionnaire de touches de ghostty-web rend `true` pour garder une touche, l'inverse de xterm.js.
   Ctrl+V reste au shell (^V), ⌘V et Ctrl+Maj+V collent ; Ctrl+K (⌘K sous macOS) est rendu `true` pour que le shell ne
   le reçoive pas, et remonte jusqu'à la palette, que ghostty-web n'arrête pas dans ce cas.
+- **Les touches que ghostty-web 0.4.0 envoie mal** (`ui/keys.ts`) : il lit Maj comme aucune touche de modification
+  avec Tab, Début, Fin, Suppr et F1 à F12 (Maj+Tab envoyait une tabulation, et Claude Code change de mode avec le
+  retour de tabulation, `ESC [ Z`), et il envoie Alt+caractère sans le préfixe `ESC` (Alt+b, Alt+Entrée : readline,
+  emacs, tmux et Claude Code perdent leurs raccourcis Alt). Le module envoie les séquences de xterm à sa place,
+  sauf Alt sous macOS, où Option sert à taper des caractères (coder/ghostty-web#109, #137, #203). Maj+PagePréc et
+  Maj+PageSuiv font défiler l'historique, comme dans l'officiel. Une version de ghostty-web qui les corrige rendra ce
+  module inutile pour ces touches.
 - **Les liens** : ghostty-web compte lignes et colonnes à partir de 0 ; il n'ouvre une adresse web qu'avec Ctrl+clic,
   le module l'ouvre d'un simple clic (`findUrls`), comme l'officiel.
 - **Le thème** est lu à la création de chaque terminal (`ui/theme.ts`) : ghostty-web fixe les couleurs des cellules

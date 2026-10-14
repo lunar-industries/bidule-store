@@ -5,6 +5,7 @@ import type { TerminalMark } from '../contract.ts'
 import { findMatches, pickMatch, viewFor, type Match } from './find.ts'
 import { emulator, ready, rowOffset, selectCells, type BufferLine } from './ghostty.ts'
 import { CommandTracker, commandLineOf, folderOf, LONG_COMMAND_MS, noticeOf, type Finished } from './integration.ts'
+import { keySequence, pageScroll } from './keys.ts'
 import { findFileLines, findReviews, findTaskRefs, findUrls } from './links.ts'
 import { moved, type TabColor } from './order.ts'
 import { OscReader } from './osc.ts'
@@ -806,6 +807,8 @@ export class TerminalTabs {
    * - Ctrl+Shift+C / Ctrl+Insert copy, and Ctrl+C too while text is selected (otherwise it stays the interrupt);
    * - Ctrl+Shift+V / Shift+Insert paste (⌘V on macOS too, bracketed when the shell asks for it);
    * - Ctrl+V stays the shell's (^V): ghostty-web would leave it to the browser, which pastes;
+   * - Shift+Tab (the back tab), the other shifted keys and Alt with a character are sent as xterm sends them, which
+   *   ghostty-web 0.4.0 does not (keys.ts); Shift+Page Up / Down scroll the scrollback;
    * - Ctrl+Shift+T opens a tab, Ctrl+Shift+W closes it, Ctrl+PageDown / PageUp go to the next / previous one;
    * - Ctrl+Shift+F searches the scrollback;
    * - Ctrl+Shift+E splits the tab side by side, Ctrl+Shift+O one above the other, Ctrl+Shift+an arrow goes to the
@@ -841,6 +844,12 @@ export class TerminalTabs {
       if (key === 'pageup') return run(() => this.cycle(-1))
     }
     if (e.shiftKey && !e.ctrlKey && key === 'insert') return run(() => this.paste())
+    // What ghostty-web 0.4.0 sends wrong (keys.ts): Shift+Tab and the other shifted keys, Alt with a character; and
+    // Shift+Page Up / Down scroll the scrollback, as in the official terminal.
+    const scroll = pageScroll(e)
+    if (scroll !== null) return run(() => term.scrollPages(scroll))
+    const sequence = keySequence(e, platform() === 'darwin')
+    if (sequence !== null) return run(() => term.input(sequence, true))
     // Ctrl+K (⌘K on macOS) is the palette's: kept from the shell, and left to go up to the window (ghostty-web stops
     // the keys it sends).
     if (isPaletteKey(e)) return true

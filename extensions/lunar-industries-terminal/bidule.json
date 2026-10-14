@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-terminal",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "title": "Terminal",
   "engine": "^0.3.0",
   "permissions": [
@@ -106,6 +106,16 @@
       {
         "keys": "Ctrl+PagePréc",
         "title": "Onglet précédent",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Maj+PagePréc",
+        "title": "Remonter d’une page dans l’historique",
+        "where": "dans un terminal"
+      },
+      {
+        "keys": "Maj+PageSuiv",
+        "title": "Descendre d’une page dans l’historique",
         "where": "dans un terminal"
       },
       {
