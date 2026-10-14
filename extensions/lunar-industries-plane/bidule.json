@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-plane",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "title": "Plane",
   "engine": "^0.3.0",
   "activation": [
@@ -9,6 +9,7 @@
   "contributes": {
     "objects": {
       "task": {
+        "ref": "[A-Z][A-Z0-9]*-[0-9]+",
         "actions": [
           "move",
           "comment",
