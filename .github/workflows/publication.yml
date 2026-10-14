@@ -108,6 +108,8 @@ jobs:
       # The interfaces' typed clients (ui/registry) are generated from the API's routes, which need core/api/.env and
       # the holder of the role `terminal` chosen (scripts/ci-choices.sh).
       - run: node scripts/ci-env.mjs && sh bidule-store/scripts/ci-choices.sh && npm run codegen -w @bidule/api
+        env:
+          DATA_DIR: ${{ github.workspace }}/core/api/tmp/data
 
       - name: Which modules
         id: which
@@ -153,7 +155,10 @@ jobs:
               echo "::notice::$id n'a pas de tests (tests/vitest.config.ts)"
             fi
           done
+      # Its codegen again, with the same choice (scripts/ci-choices.sh).
       - run: npm run typecheck
+        env:
+          DATA_DIR: ${{ github.workspace }}/core/api/tmp/data
       - name: The modules in the core's host
         run: sh bidule-store/scripts/check-host.sh
 
@@ -241,6 +246,8 @@ jobs:
           done
           npm install --no-audit --no-fund
       - run: node scripts/ci-env.mjs && sh bidule-store/scripts/ci-choices.sh && npm run codegen -w @bidule/api
+        env:
+          DATA_DIR: ${{ github.workspace }}/core/api/tmp/data
 
       - name: Build and sign
         id: build
