@@ -398,6 +398,24 @@
               "signature": "4fqRKQsmAdgFIafI0JPor7xmGB7/U5xQWfFw7B11dUuwswhGmgWg2rHQEiAZwUfyuqGMK/3NYZG0Xo9I+Ji1Cg=="
             }
           }
+        },
+        "0.4.6": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-temps-0.4.6/lunar-industries-temps-0.4.6.tgz",
+              "size": 31775,
+              "sha256": "7c27da8427d2ac24d47fa8dfbaaf2000f6ed81d7bf41f599bcb372faa3823982",
+              "signature": "f+FBT7iyEShp9ytJq5OUOC/+4fd+0SrQePWAd9WOGtxaH7MXOMX1UdEOHk/Q3hZ5KUikCmw1wVUI5MBfE5dGCw=="
+            }
+          }
         }
       }
     },
@@ -476,6 +494,24 @@
               "size": 1037730,
               "sha256": "f3978939ddfe0a60c4cb233e19d5d121717bdef35cf4eb76caf93ab576f9a882",
               "signature": "5UV0N4akqe+Y95UtsIPYEf6ayGv0m6Yrz9Pc3etbHDYWeQ8Uo+pn/rQywoNqyBLCD3wIQomJEn/laB/B5vM6Bw=="
+            }
+          }
+        },
+        "0.1.2": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [
+            "shell"
+          ],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-14",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-terminal-0.1.2/lunar-industries-terminal-0.1.2.tgz",
+              "size": 1038211,
+              "sha256": "9a9ca01e9fa021751e76320b775fec3116fa8118f5fef17a2c33ba9786791c92",
+              "signature": "o1Tixf9TBJJwwEBvPFLfFqU0ibfgkzDro7AlFP4tUctfq/80/sr2SL/TpU168TL7twsSOIbEj39wEDXzNgtrAg=="
             }
           }
         }
