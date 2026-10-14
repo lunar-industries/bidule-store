@@ -1,4 +1,6 @@
 import { Ghostty, type Terminal } from 'ghostty-web'
+import wasmUrl from 'ghostty-web/ghostty-vt.wasm?url'
+import { emulatorProblem } from './problem.ts'
 
 // What the tabs need of ghostty-web beyond its xterm.js-like API, in one place: it is pinned to one version
 // (package.json), and what reaches inside it is checked before use.
@@ -11,14 +13,53 @@ export function ready(): Promise<unknown> {
 }
 
 /**
- * The emulator of one terminal: its own WebAssembly instance, loaded from the module ghostty-web embeds. ghostty-web
- * 0.4.0 shares one instance between its terminals by default, and reuses the memory a closed terminal leaves without
- * clearing it: the next one showed what was left there (a pane closed, then a split: coder/ghostty-web#138, #141). Its
- * own instance goes with the terminal; loading one costs a compilation of the module (about 400 KB) per terminal.
+ * ghostty-web's WebAssembly module, compiled once from its bytes. ghostty-web's own `Ghostty.load()` fetches it from a
+ * `data:` address, which the app's page policy refuses (`connect-src 'self'`), then from `./ghostty-vt.wasm`, which
+ * the app does not serve. The bundler gives its address instead (`?url`): a file of the page's own origin in
+ * development and in the app (fetched: `connect-src 'self'`), or the bytes themselves in a `data:` address in a store
+ * package (built as a library, which inlines its assets: decoded here, never fetched). Compiling bytes needs
+ * `'wasm-unsafe-eval'` in the page's `script-src`, nothing else.
+ */
+async function vtBytes(): Promise<BufferSource> {
+  if (wasmUrl.startsWith('data:')) return Uint8Array.from(atob(wasmUrl.slice(wasmUrl.indexOf(',') + 1)), (c) => c.charCodeAt(0))
+  const res = await fetch(wasmUrl)
+  if (!res.ok) throw new Error(`${wasmUrl} : ${res.status}`)
+  return res.arrayBuffer()
+}
+
+let compiled: Promise<WebAssembly.Module> | null = null
+function vtModule(): Promise<WebAssembly.Module> {
+  compiled ??= vtBytes()
+    .then((bytes) => WebAssembly.compile(bytes))
+    .catch((err: unknown) => {
+      compiled = null
+      throw err
+    })
+  return compiled
+}
+
+/**
+ * The emulator of one terminal: its own WebAssembly instance of that module. ghostty-web 0.4.0 shares one instance
+ * between its terminals by default, and reuses the memory a closed terminal leaves without clearing it: the next one
+ * showed what was left there (a pane closed, then a split: coder/ghostty-web#138, #141). Its own instance (its own
+ * memory) goes with the terminal; the module is compiled once.
  */
 export async function emulator(): Promise<Ghostty> {
   await ready()
-  return Ghostty.load()
+  try {
+    // The one import the module asks for: its log, read from its memory (as ghostty-web's own loader does).
+    let memory: WebAssembly.Memory | null = null
+    const instance = await WebAssembly.instantiate(await vtModule(), {
+      env: {
+        log: (at: number, length: number) =>
+          memory && console.log('[ghostty-vt]', new TextDecoder().decode(new Uint8Array(memory.buffer, at, length))),
+      },
+    })
+    memory = instance.exports.memory as WebAssembly.Memory
+    return new Ghostty(instance)
+  } catch (err) {
+    throw new Error(emulatorProblem(err), { cause: err })
+  }
 }
 
 // A line of the buffer, as ghostty-web gives it (its type is not exported).

@@ -249,6 +249,21 @@ export class TerminalTabs {
   #version = 0
   // The search bar is open (Ctrl+Shift+F).
   searching = false
+  // Why no terminal can be made (the page refuses WebAssembly…): said by the page in place of its button.
+  problem: string | null = null
+
+  // An emulator for a new pane; what keeps it from loading is kept for the page, then thrown.
+  async #emulator(): Promise<Ghostty> {
+    try {
+      const ghostty = await emulator()
+      this.problem = null
+      return ghostty
+    } catch (err) {
+      this.problem = (err as Error).message
+      this.#changed()
+      throw err
+    }
+  }
 
   subscribe = (listener: () => void) => {
     this.#listeners.add(listener)
@@ -273,7 +288,10 @@ export class TerminalTabs {
     // one a visit is already opening (the page attached twice in a row: its emulator loads meanwhile).
     else if ((await openOnVisit()) && this.#host === host && !this.active && !this.#visiting) {
       this.#visiting = true
-      await this.add().finally(() => (this.#visiting = false))
+      // A problem is said by the page (`problem`), not thrown at nobody.
+      await this.add()
+        .catch(() => undefined)
+        .finally(() => (this.#visiting = false))
     }
   }
   #visiting = false
@@ -286,7 +304,7 @@ export class TerminalTabs {
   // (its shell already runs, and its output is kept).
   async add(target?: TerminalTarget, title?: string, folder?: string, options: { keep?: boolean } = {}): Promise<void> {
     this.#listen()
-    const ghostty = await emulator()
+    const ghostty = await this.#emulator()
     const key = ++this.#lastKey
     const tab = new TerminalTab(key, title ?? `Terminal ${key}`, target, folder, options.keep)
     const pane = this.#newPane(ghostty, tab, tab.fallbackTitle, target, folder)
@@ -416,7 +434,7 @@ export class TerminalTabs {
       this.#changed()
       return
     }
-    const ghostty = await emulator()
+    const ghostty = await this.#emulator()
     // Split meanwhile (the keys pressed twice), or closed: nothing more to make.
     if (tab.split || !this.tabs.includes(tab)) return
     tab.ratio = 0.5

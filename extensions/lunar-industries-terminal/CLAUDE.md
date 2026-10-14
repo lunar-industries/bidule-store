@@ -27,10 +27,19 @@ se comporte comme dans l'officiel, dont le `CLAUDE.md` décrit le détail.
 Le module épingle une version exacte de ghostty-web (`package.json`), parce qu'il touche à son intérieur à un endroit
 (la sélection) et contourne plusieurs de ses défauts :
 
+- **Le module WebAssembly chargé ici** (`vtModule()`). `Ghostty.load()` de ghostty-web le demande par `fetch` à une
+  adresse `data:`, que la CSP de la page de l'app refuse (`connect-src 'self'`), puis à `./ghostty-vt.wasm`, que
+  l'app ne sert pas. Le module importe donc le fichier par `?url` : dans l'app construite et en développement, c'est
+  un fichier de la même origine (demandé par `fetch`, permis) ; dans un paquet du store, construit comme une
+  bibliothèque, ce sont les octets eux-mêmes dans une adresse `data:` (décodés ici, jamais demandés). Il est compilé
+  une seule fois. Compiler du WebAssembly demande `'wasm-unsafe-eval'` dans le `script-src` de la page, que le cœur
+  ne donne pas encore (`core/api/app/controllers/shells_controller.ts`) : sans lui, la page du module dit pourquoi
+  le terminal ne se charge pas (`ui/problem.ts`) et propose le Terminal officiel en attendant. En développement, la
+  page est servie par Vite, sans CSP : ce cas ne s'y voit pas.
 - **Une instance WebAssembly par terminal** (`emulator()`). Par défaut, ghostty-web partage une instance entre tous
   ses terminaux et réutilise la mémoire d'un terminal fermé sans l'effacer : le terminal suivant montrait des restes
-  de l'ancien (coder/ghostty-web#138, #141). Chaque terminal reçoit donc la sienne (`new Terminal({ ghostty })`), qui
-  part avec lui ; cela coûte une compilation du module (environ 400 Ko) à chaque nouveau volet.
+  de l'ancien (coder/ghostty-web#138, #141). Chaque terminal reçoit donc la sienne (`new Terminal({ ghostty })`) du
+  module déjà compilé ; sa mémoire part avec lui.
 - **Ouvert dès sa création.** ghostty-web n'écrit rien dans un terminal qui n'est pas ouvert : chaque volet ouvre le
   sien dans sa boîte (`lterm-pane`) dès qu'il est créé, même hors de la page, et la boîte est ensuite déplacée.
   Redémarrer un shell écrit `ESC c` au lieu d'appeler `reset()`, qui crée un nouvel émulateur que la sélection ne suit

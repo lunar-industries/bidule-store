@@ -115,8 +115,9 @@ export function TerminalPage() {
             )}
             {!active && (
               <div className="lterm-empty">
-                <span className="muted">Aucun terminal ouvert.</span>
-                <button type="button" className="btn-cta" onClick={() => void terminals.add()}>
+                {/* What keeps a terminal from loading (WebAssembly refused), in place of the first line. */}
+                <span className="muted">{terminals.problem ?? 'Aucun terminal ouvert.'}</span>
+                <button type="button" className="btn-cta" onClick={() => void terminals.add().catch(() => undefined)}>
                   Nouveau terminal
                 </button>
               </div>

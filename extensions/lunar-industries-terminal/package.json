@@ -1,6 +1,6 @@
 {
   "name": "@bidule/ext-lunar-industries-terminal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Le terminal, version Lunar Industries : le shell de l'utilisateur en onglets, dessiné par ghostty-web (l'émulateur de Ghostty compilé en WebAssembly), et ce que les autres extensions y lancent",
   "type": "module",

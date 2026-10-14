@@ -86,6 +86,11 @@
   justify-content: center;
   gap: var(--space-3);
 }
+/* What keeps a terminal from loading can take a few lines. */
+.lterm-empty .muted {
+  max-width: 520px;
+  text-align: center;
+}
 .lterm-panel {
   position: relative;
 }
