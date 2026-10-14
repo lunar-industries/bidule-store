@@ -78,7 +78,9 @@ git push origin lunar/lunar-industries-temps@0.4.0
 
 Le code de Bidule est privé : le workflow clone le fork `lunar-industries/bidule` avec une clé de déploiement en
 lecture seule (sa branche `main`, ou celle donnée à la main), puis copie les modules de ce dépôt dans ce checkout.
-Avant de construire quoi que ce soit, il lance les tests de chaque module publié, le typecheck de Bidule avec les
+Il y choisit le Terminal de ce store pour le rôle `terminal` (`scripts/ci-choices.sh`), comme un utilisateur le ferait
+dans Réglages › Rôles : sans ce choix, les extensions qui exigent le rôle seraient en erreur, et Bidule ne générerait
+pas leur client typé. Avant de construire quoi que ce soit, il lance les tests de chaque module publié, le typecheck de Bidule avec les
 modules, et le test de contrat. Ensuite, il construit et signe chaque paquet avec `scripts/pack-extension.mjs` de
 Bidule, vérifie avec `scripts/store-index.mjs --check` qu'une version déjà publiée garde son manifeste, dépose le
 paquet dans la release `<id>-<version>` de ce dépôt, et écrit enfin l'entrée dans `index.json` sur `main`. Un module

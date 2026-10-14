@@ -105,8 +105,9 @@ jobs:
             cp -r "$dir" "extensions/$id"
           done
           npm install --no-audit --no-fund
-      # The interfaces' typed clients (ui/registry) are generated from the API's routes, which need core/api/.env.
-      - run: node scripts/ci-env.mjs && npm run codegen -w @bidule/api
+      # The interfaces' typed clients (ui/registry) are generated from the API's routes, which need core/api/.env and
+      # the holder of the role `terminal` chosen (scripts/ci-choices.sh).
+      - run: node scripts/ci-env.mjs && sh bidule-store/scripts/ci-choices.sh && npm run codegen -w @bidule/api
 
       - name: Which modules
         id: which
@@ -239,7 +240,7 @@ jobs:
             cp -r "$dir" "extensions/$id"
           done
           npm install --no-audit --no-fund
-      - run: node scripts/ci-env.mjs && npm run codegen -w @bidule/api
+      - run: node scripts/ci-env.mjs && sh bidule-store/scripts/ci-choices.sh && npm run codegen -w @bidule/api
 
       - name: Build and sign
         id: build
