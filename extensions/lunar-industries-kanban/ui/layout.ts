@@ -7,6 +7,7 @@ export type Tone = 'ok' | 'bad' | 'warn' | 'info' | 'neutral' | 'accent'
 
 // The source's three groups: the name of a group of columns (read aloud, not shown) and the settings' legends.
 export const GROUP_LABELS: Record<TaskGroup, string> = { todo: 'À faire', doing: 'En cours', done: 'Terminé' }
+const GROUPS: TaskGroup[] = ['todo', 'doing', 'done']
 
 // A branch shown with a few marks less: its type (`feat/`) and its task's ID (`TSK-42-`), which the card already says.
 export const shortBranch = (name: string) => name.replace(/^[\w.-]+\//, '').replace(/^[a-z]+-\d+-/i, '')
@@ -134,8 +135,11 @@ export function groupsOf(board: Board, hidden: string[], toggled: ReadonlySet<st
   const listed = new Set(board.columns.map((c) => c.name))
   const strays = [...new Set(board.tasks.map((t) => columnOf(t, merges)).filter((s) => !listed.has(s)))]
   const stray = (name: string): TaskColumn & { unknown: boolean } => ({ name, color: 'neutral', group: 'todo', unknown: true })
+  // The core lists each tool's statuses after the previous tool's (by id): with two, a status only the second has would
+  // come after the first's finished ones. By stage, in the order they come otherwise.
+  const listedByGroup = GROUPS.flatMap((group) => board.columns.filter((c) => c.group === group))
   const columns: Column[] = [
-    ...board.columns.filter((c) => !merges.has(c.name)).map((c) => ({ ...c, unknown: false })),
+    ...listedByGroup.filter((c) => !merges.has(c.name)).map((c) => ({ ...c, unknown: false })),
     ...strays.map(stray),
   ]
     .filter((c) => !hidden.includes(c.name))

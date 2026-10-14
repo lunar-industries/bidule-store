@@ -82,6 +82,26 @@ describe('columns', () => {
     expect(open[0].columns[1].folded).toBe(true)
   })
 
+  test('two tools listed one after the other: the columns by stage, in the order they come otherwise', () => {
+    const two: Board = {
+      ...board,
+      columns: [
+        { name: 'Backlog', color: 'neutral', group: 'todo' },
+        { name: 'En cours', color: 'blue', group: 'doing' },
+        { name: 'Closed', color: 'mint', group: 'done' },
+        { name: 'En standby', color: 'neutral', group: 'todo' },
+        { name: 'En cours/dev', color: 'blue', group: 'doing' },
+        { name: 'Deployée/Fini', color: 'mint', group: 'done' },
+      ],
+      tasks: [],
+    }
+    expect(groupsOf(two, [], new Set()).map((g) => [g.key, g.columns.map((c) => c.name)])).toEqual([
+      ['todo', ['Backlog', 'En standby']],
+      ['doing', ['En cours', 'En cours/dev']],
+      ['done', ['Closed', 'Deployée/Fini']],
+    ])
+  })
+
   test('hidden columns are left out', () => {
     expect(groupsOf(board, ['Backlog'], new Set())[0].columns.map((c) => c.name)).toEqual(['À faire'])
   })
