@@ -574,7 +574,7 @@ export function Kanban() {
         <button
           ref={panelButton}
           type="button"
-          className="chip-btn"
+          className="banner-button"
           aria-expanded={panel}
           title="Les branches récentes sans tâche"
           onClick={() => setPanel(!panel)}
@@ -582,7 +582,7 @@ export function Kanban() {
           Branches sans tâche {orphans.length > 0 && <span className="pill-count">{orphans.length}</span>}
         </button>
       )}
-      <button type="button" className="icon-btn" aria-label="Synchroniser" title="Synchroniser les tâches" onClick={sync}>
+      <button type="button" className="banner-button round" aria-label="Synchroniser" title="Synchroniser les tâches" onClick={sync}>
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
           <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
