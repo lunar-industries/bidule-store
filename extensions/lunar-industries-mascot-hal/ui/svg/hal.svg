@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -50 420 520" width="190" height="235" role="img" aria-label="HAL, l’ordinateur de bord à l’œil rouge" style="display:block;overflow:visible">
+  <g stroke="#15181D" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="100" y="-30" width="220" height="500" rx="26" fill="#3E444C"></rect>
+    <path d="M122 -8 H298 M122 6 H298 M122 20 H298 M122 34 H298 M122 48 H298 M122 62 H298 M122 76 H298 M122 90 H298 M122 104 H298 M122 118 H298 M122 132 H298 M122 146 H298 M122 160 H298 M122 174 H298 M122 188 H298 M122 202 H298 M122 216 H298 M122 230 H298 M122 244 H298 M122 258 H298 M122 272 H298 M122 286 H298 M122 300 H298 M122 314 H298 M122 328 H298 M122 342 H298 M122 356 H298 M122 370 H298 M122 384 H298 M122 398 H298 M122 412 H298 M122 426 H298 M122 440 H298" fill="none" stroke="#474E57" stroke-width="2"></path>
+    <rect x="114" y="-16" width="192" height="472" rx="18" fill="none" stroke="#59616B" stroke-width="3"></rect>
+    <rect x="140" y="-10" width="140" height="38" rx="8" fill="#C4C9CF" stroke-width="6"></rect>
+    <rect x="154" y="3" width="54" height="12" rx="3" fill="#15181D" stroke="none"></rect>
+    <rect x="214" y="3" width="52" height="12" rx="3" fill="#557AA3" stroke="none"></rect>
+    <circle cx="210" cy="180" r="94" fill="#A7AEB6"></circle>
+    <g class="m-glint" style="transform-box:fill-box;transform-origin:center;animation:halSheen 7s ease-in-out infinite"><path d="M138 132 A84 84 0 0 1 176 102" fill="none" stroke="#E6EAEE" stroke-width="7"></path></g>
+    <circle cx="210" cy="180" r="78" fill="#6B737C" stroke-width="6"></circle>
+    <circle cx="210" cy="180" r="64" fill="#07090C" stroke-width="6"></circle>
+    <rect x="150" y="300" width="120" height="140" rx="14" fill="#2E333A" stroke-width="7"></rect>
+    <path d="M170 322 H250 M170 338 H250 M170 354 H250 M170 370 H250 M170 386 H250 M170 402 H250 M170 418 H250" fill="none" stroke="#15181D" stroke-width="6"></path>
+    <g stroke="none">
+<g data-mood="calm"><g class="m-halo" style="transform-box:fill-box;transform-origin:center;animation:halBreath 5s ease-in-out infinite"><circle cx="210" cy="180" r="44" fill="#7A1410" opacity=".75"></circle></g><circle cx="210" cy="180" r="28" fill="#C21D16"></circle><circle cx="210" cy="180" r="14" fill="#FF3A2C"></circle><circle cx="210" cy="180" r="5" fill="#FFB3A8"></circle><ellipse cx="184" cy="152" rx="12" ry="6" fill="#FFFFFF" opacity=".55" transform="rotate(-35 184 152)"></ellipse></g>
+<g data-mood="happy" display="none"><circle cx="210" cy="180" r="56" fill="#8A2A10" opacity=".8"></circle><circle cx="210" cy="180" r="40" fill="#D9461E"></circle><circle cx="210" cy="180" r="24" fill="#FF7A2E"></circle><circle cx="210" cy="180" r="10" fill="#FFC27A"></circle><path d="M184 204 Q210 222 236 204" fill="none" stroke="#FFE3C8" stroke-width="6" opacity=".85"></path><ellipse cx="184" cy="152" rx="10" ry="5" fill="#FFFFFF" opacity=".6" transform="rotate(-35 184 152)"></ellipse></g>
+<g data-mood="angry" display="none"><g style="animation:glowAlarm 0.8s ease-in-out infinite"><circle cx="210" cy="180" r="54" fill="#FF2A1F" opacity=".3"></circle><circle cx="210" cy="180" r="34" fill="#FF2A1F" opacity=".35"></circle></g><circle cx="210" cy="180" r="20" fill="#E0140C"></circle><circle cx="210" cy="180" r="10" fill="#FF4A3A"></circle><circle cx="210" cy="180" r="4" fill="#FFE1DA"></circle><ellipse cx="186" cy="154" rx="7" ry="4" fill="#FFFFFF" opacity=".5" transform="rotate(-35 186 154)"></ellipse></g>
+<g data-mood="sleep" display="none"><circle cx="210" cy="184" r="22" fill="#3A0E0C"></circle><circle cx="210" cy="184" r="10" fill="#5E1712"></circle><circle cx="210" cy="184" r="4" fill="#7E2018"></circle></g>
+<g data-mood="sad" display="none"><circle cx="210" cy="198" r="30" fill="#6A1612" opacity=".85"></circle><circle cx="210" cy="198" r="18" fill="#A41E17"></circle><circle cx="210" cy="198" r="8" fill="#D2362A"></circle><ellipse cx="186" cy="154" rx="10" ry="5" fill="#FFFFFF" opacity=".3" transform="rotate(-35 186 154)"></ellipse><path d="M210 282 C219 295 217 304 210 304 C203 304 201 295 210 282 Z" fill="#9FB8D6" stroke="#15181D" stroke-width="4"></path></g>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,44 @@
+/* Gerty: the keyframes of its drawing and of its moon base, set by their `style="animation:…"`, then its moods. The
+   others are the shared ones (core/web/src/styles/mascot-common.css). */
+@keyframes gertyLed { 0%,100%{opacity:1} 50%{opacity:.35} }
+@keyframes gertyCamPan { 0%,40%,100%{transform:translateX(0)} 50%,65%{transform:translateX(-5px)} 75%,90%{transform:translateX(5px)} }
+@keyframes gertyLamp { 0%,100%{opacity:.95} 50%{opacity:.25} }
+@keyframes gertyEarthTurn { from{transform:translateX(0)} to{transform:translateX(-52px)} }
+
+/* Gerty hangs from its rail: glad, it swings from it instead of jumping. Asleep, its lights dim and its camera rests. */
+.gerty.mood-happy > svg {
+  transform-origin: 50% -40%;
+  animation: gertySwing 1.4s ease-in-out 1;
+}
+.gerty.mood-sleep :is(.m-led, .m-cam) {
+  animation-play-state: paused !important;
+}
+.gerty.mood-sleep .m-led {
+  opacity: 0.35;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gerty.mood-happy .m-led {
+    animation-duration: 0.9s !important;
+  }
+  .gerty.mood-angry .m-led {
+    animation-duration: 0.45s !important;
+  }
+  .gerty.mood-angry .m-cam {
+    animation-duration: 2.2s !important;
+  }
+}
+@keyframes gertySwing {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(3deg);
+  }
+  60% {
+    transform: rotate(-2deg);
+  }
+  85% {
+    transform: rotate(0.8deg);
+  }
+}

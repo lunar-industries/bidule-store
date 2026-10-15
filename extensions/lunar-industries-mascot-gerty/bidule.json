@@ -1,0 +1,18 @@
+{
+  "id": "lunar-industries-mascot-gerty",
+  "version": "0.1.0",
+  "title": "Gerty",
+  "engine": "^0.3.0",
+  "contributes": {
+    "mascots": [
+      {
+        "id": "gerty",
+        "name": "Gerty",
+        "desc": "Robot assistant lunaire · thème base lunaire",
+        "theme": "theme-moonbase",
+        "themeTitle": "Base lunaire (clair, bleu acier)",
+        "light": true
+      }
+    ]
+  }
+}

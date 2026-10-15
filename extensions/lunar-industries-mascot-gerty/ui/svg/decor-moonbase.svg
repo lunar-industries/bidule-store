@@ -1,0 +1,62 @@
+<svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 300" preserveAspectRatio="xMidYMax slice">
+<defs>
+  <linearGradient id="gertyWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F3F5F7"></stop><stop offset="1" stop-color="#E3E7EB"></stop></linearGradient>
+  <linearGradient id="gertySpace" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F3742"></stop><stop offset="1" stop-color="#161B22"></stop></linearGradient>
+  <linearGradient id="gertyRegolith" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A7ACB1"></stop><stop offset="1" stop-color="#7A8086"></stop></linearGradient>
+  <radialGradient id="gertyEarthGlow"><stop offset="0.6" stop-color="#9DB9DA" stop-opacity=".45"></stop><stop offset="1" stop-color="#9DB9DA" stop-opacity="0"></stop></radialGradient>
+  <clipPath id="gertyPort1"><rect x="340" y="92" width="300" height="140" rx="40"></rect></clipPath>
+  <clipPath id="gertyPort2"><rect x="1010" y="92" width="380" height="140" rx="40"></rect></clipPath>
+  <clipPath id="gertyPort3"><rect x="1760" y="92" width="300" height="140" rx="40"></rect></clipPath>
+  <clipPath id="gertyEarthClip"><circle cx="1100" cy="134" r="26"></circle></clipPath>
+</defs>
+<rect width="2400" height="300" fill="url(#gertyWall)"></rect>
+<rect x="0" y="0" width="2400" height="34" fill="#DCE1E6"></rect>
+<rect x="0" y="30" width="2400" height="12" fill="#C2CAD2" stroke="#AEB7C0" stroke-width="2"></rect>
+<g fill="#AEB7C0"><circle cx="60" cy="36" r="3"></circle><circle cx="180" cy="36" r="3"></circle><circle cx="300" cy="36" r="3"></circle><circle cx="420" cy="36" r="3"></circle><circle cx="540" cy="36" r="3"></circle><circle cx="660" cy="36" r="3"></circle><circle cx="780" cy="36" r="3"></circle><circle cx="900" cy="36" r="3"></circle><circle cx="1020" cy="36" r="3"></circle><circle cx="1140" cy="36" r="3"></circle><circle cx="1260" cy="36" r="3"></circle><circle cx="1380" cy="36" r="3"></circle><circle cx="1500" cy="36" r="3"></circle><circle cx="1620" cy="36" r="3"></circle><circle cx="1740" cy="36" r="3"></circle><circle cx="1860" cy="36" r="3"></circle><circle cx="1980" cy="36" r="3"></circle><circle cx="2100" cy="36" r="3"></circle><circle cx="2220" cy="36" r="3"></circle><circle cx="2340" cy="36" r="3"></circle></g>
+<path d="M0 42 V262 M200 42 V262 M400 42 V262 M600 42 V262 M800 42 V262 M1000 42 V262 M1200 42 V262 M1400 42 V262 M1600 42 V262 M1800 42 V262 M2000 42 V262 M2200 42 V262 M2400 42 V262" fill="none" stroke="#DCE1E6" stroke-width="3"></path>
+<path d="M0 248 H2400" fill="none" stroke="#D6DCE2" stroke-width="2"></path>
+<rect x="326" y="78" width="328" height="168" rx="52" fill="#CDD4DB" stroke="#B3BCC5" stroke-width="3"></rect>
+<g clip-path="url(#gertyPort1)">
+<rect x="340" y="92" width="300" height="140" fill="url(#gertySpace)"></rect>
+<g fill="#FFFFFF"><circle cx="340" cy="124.8" r="1.2" opacity="0.3"></circle><circle cx="598.1" cy="122.5" r="1.4" opacity="0.5"></circle><circle cx="481.7" cy="114.9" r="1.1" opacity="0.6"></circle><circle cx="382.2" cy="120.8" r="1.5" opacity="0.6"></circle><circle cx="454.8" cy="103.1" r="1.1" opacity="0.6"></circle><circle cx="517.7" cy="131.3" r="1.4" opacity="0.4"></circle><circle cx="432.4" cy="145.8" r="0.8" opacity="0.4"></circle><circle cx="512.8" cy="140.8" r="0.8" opacity="0.5"></circle><circle cx="606.1" cy="129.3" r="0.9" opacity="0.5"></circle><circle cx="627.7" cy="117.2" r="1.9" opacity="0.3"></circle></g>
+<path d="M340 198 C415 180 490 196 550 186 C595 178 625 190 640 188 L640 232 L340 232 Z" fill="url(#gertyRegolith)"></path>
+<g fill="#8A9095"><ellipse cx="546.5" cy="220.2" rx="19.4" ry="3.1"></ellipse><ellipse cx="403.3" cy="220" rx="19.4" ry="4"></ellipse><ellipse cx="620" cy="220" rx="13.2" ry="3"></ellipse><ellipse cx="520" cy="204.5" rx="19.4" ry="4.2"></ellipse></g>
+</g>
+<g fill="#B3BCC5"><circle cx="336" cy="162" r="3.5"></circle><circle cx="644" cy="162" r="3.5"></circle><circle cx="490" cy="86" r="3.5"></circle><circle cx="490" cy="238" r="3.5"></circle></g>
+<rect x="996" y="78" width="408" height="168" rx="52" fill="#CDD4DB" stroke="#B3BCC5" stroke-width="3"></rect>
+<g clip-path="url(#gertyPort2)">
+<rect x="1010" y="92" width="380" height="140" fill="url(#gertySpace)"></rect>
+<g fill="#FFFFFF"><circle cx="1143.6" cy="150.5" r="0.8" opacity="0.6"></circle><circle cx="1371.4" cy="131" r="1.6" opacity="0.5"></circle><circle cx="1334.2" cy="124" r="1.9" opacity="0.7"></circle><circle cx="1171.7" cy="146.7" r="1.4" opacity="0.4"></circle><circle cx="1028.2" cy="101.1" r="1.8" opacity="0.3"></circle><circle cx="1143.3" cy="131.1" r="1.3" opacity="0.5"></circle><circle cx="1050.3" cy="120.7" r="1" opacity="0.5"></circle><circle cx="1219.3" cy="153.5" r="0.9" opacity="0.7"></circle><circle cx="1387.7" cy="144.5" r="1.5" opacity="0.4"></circle><circle cx="1337.2" cy="136.8" r="1.4" opacity="0.4"></circle></g>
+<path d="M1010 198 C1105 180 1200 196 1276 186 C1333 178 1371 190 1390 188 L1390 232 L1010 232 Z" fill="url(#gertyRegolith)"></path>
+<g fill="#8A9095"><ellipse cx="1211.2" cy="209.1" rx="19.5" ry="3.6"></ellipse><ellipse cx="1339.5" cy="206.9" rx="9.9" ry="4.4"></ellipse><ellipse cx="1264.9" cy="209.8" rx="17.9" ry="3.2"></ellipse><ellipse cx="1328.8" cy="213.7" rx="14.1" ry="3"></ellipse></g>
+<circle cx="1100" cy="134" r="40" fill="url(#gertyEarthGlow)"></circle>
+<g clip-path="url(#gertyEarthClip)"><circle cx="1100" cy="134" r="26" fill="#557AA3"></circle><g fill="#8FB27A" style="animation:gertyEarthTurn 60s linear infinite"><ellipse cx="1086" cy="128" rx="10" ry="7"></ellipse><ellipse cx="1108" cy="144" rx="8" ry="6"></ellipse><ellipse cx="1118" cy="120" rx="6" ry="4"></ellipse><ellipse cx="1138" cy="128" rx="10" ry="7"></ellipse><ellipse cx="1160" cy="144" rx="8" ry="6"></ellipse><ellipse cx="1170" cy="120" rx="6" ry="4"></ellipse></g><path d="M1104 108 A26 26 0 0 1 1104 160 A14 26 0 0 0 1104 108 Z" fill="#0E1218" opacity=".35"></path></g>
+<g stroke="#555C64" stroke-width="2">
+<path d="M1262 186 l18 -16 h26" fill="none" stroke="#9AA1A8" stroke-width="3"></path>
+<rect x="1240" y="186" width="64" height="20" rx="4" fill="#C9CDD1"></rect><rect x="1292" y="176" width="22" height="16" rx="3" fill="#B7BCC1"></rect>
+<g fill="#4A5057"><circle cx="1250" cy="208" r="5"></circle><circle cx="1266" cy="208" r="5"></circle><circle cx="1282" cy="208" r="5"></circle><circle cx="1298" cy="208" r="5"></circle></g></g>
+<circle cx="1312" cy="180" r="2.5" fill="#E8B931" style="animation:gertyLamp 2.4s ease-in-out infinite"></circle>
+<ellipse cx="1222" cy="204" rx="24" ry="5" fill="#B9BEC3" opacity=".6"></ellipse>
+</g>
+<g fill="#B3BCC5"><circle cx="1006" cy="162" r="3.5"></circle><circle cx="1394" cy="162" r="3.5"></circle><circle cx="1200" cy="86" r="3.5"></circle><circle cx="1200" cy="238" r="3.5"></circle></g>
+<rect x="1746" y="78" width="328" height="168" rx="52" fill="#CDD4DB" stroke="#B3BCC5" stroke-width="3"></rect>
+<g clip-path="url(#gertyPort3)">
+<rect x="1760" y="92" width="300" height="140" fill="url(#gertySpace)"></rect>
+<g fill="#FFFFFF"><circle cx="1790.1" cy="145.9" r="1.8" opacity="0.4"></circle><circle cx="1987.2" cy="118.4" r="1.8" opacity="0.5"></circle><circle cx="1760.3" cy="99.2" r="0.8" opacity="0.5"></circle><circle cx="1848.7" cy="146.5" r="1.2" opacity="0.6"></circle><circle cx="2057" cy="127.6" r="1.7" opacity="0.4"></circle><circle cx="1956.1" cy="127.7" r="1.1" opacity="0.4"></circle><circle cx="1909.1" cy="135.4" r="1.4" opacity="0.4"></circle><circle cx="1907.4" cy="128.6" r="0.9" opacity="0.6"></circle><circle cx="2004.9" cy="127.8" r="1.5" opacity="0.4"></circle><circle cx="1992" cy="120.4" r="0.9" opacity="0.5"></circle></g>
+<path d="M1760 198 C1835 180 1910 196 1970 186 C2015 178 2045 190 2060 188 L2060 232 L1760 232 Z" fill="url(#gertyRegolith)"></path>
+<g fill="#8A9095"><ellipse cx="1880.4" cy="207.9" rx="14.1" ry="4.3"></ellipse><ellipse cx="1882.4" cy="207.3" rx="18.1" ry="4.2"></ellipse><ellipse cx="1968.8" cy="208.8" rx="11.4" ry="3"></ellipse><ellipse cx="1861.2" cy="222.4" rx="16.3" ry="3.6"></ellipse></g>
+<path d="M1960 186 V146 M1946 186 L1960 160 L1974 186" fill="none" stroke="#8C949B" stroke-width="3"></path>
+<path d="M1948 134 a14 9 -25 0 0 26 -10 Z" fill="#B7BDC3" stroke="#8C949B" stroke-width="2"></path>
+<circle cx="1960" cy="144" r="2.5" fill="#D9604F" style="animation:gertyLamp 3s ease-in-out infinite;animation-delay:-1s"></circle>
+</g>
+<g fill="#B3BCC5"><circle cx="1756" cy="162" r="3.5"></circle><circle cx="2064" cy="162" r="3.5"></circle><circle cx="1910" cy="86" r="3.5"></circle><circle cx="1910" cy="238" r="3.5"></circle></g>
+<rect x="810" y="150" width="76" height="44" rx="8" fill="#D6DCE2" stroke="#BCC4CC" stroke-width="2"></rect>
+<circle cx="828" cy="172" r="5" fill="#6FBF98" style="animation:gertyLamp 3s ease-in-out infinite;animation-delay:0s"></circle><circle cx="848" cy="172" r="5" fill="#E8B931" style="animation:gertyLamp 3.7s ease-in-out infinite;animation-delay:-1.3s"></circle><circle cx="868" cy="172" r="5" fill="#557AA3" style="animation:gertyLamp 4.4s ease-in-out infinite;animation-delay:-2.6s"></circle>
+<rect x="1560" y="150" width="76" height="44" rx="8" fill="#D6DCE2" stroke="#BCC4CC" stroke-width="2"></rect>
+<circle cx="1578" cy="172" r="5" fill="#6FBF98" style="animation:gertyLamp 3s ease-in-out infinite;animation-delay:-1s"></circle><circle cx="1598" cy="172" r="5" fill="#E8B931" style="animation:gertyLamp 3.7s ease-in-out infinite;animation-delay:-2.3s"></circle><circle cx="1618" cy="172" r="5" fill="#557AA3" style="animation:gertyLamp 4.4s ease-in-out infinite;animation-delay:-3.6s"></circle>
+<rect x="70" y="90" width="100" height="120" rx="12" fill="#E1E5E9" stroke="#C6CDD4" stroke-width="2"></rect><path d="M86 110 H154 M86 126 H154 M86 142 H154 M86 158 H154 M86 174 H154 M86 190 H154" fill="none" stroke="#C6CDD4" stroke-width="5" stroke-linecap="round"></path>
+<rect x="2230" y="90" width="100" height="120" rx="12" fill="#E1E5E9" stroke="#C6CDD4" stroke-width="2"></rect><path d="M2246 110 H2314 M2246 126 H2314 M2246 142 H2314 M2246 158 H2314 M2246 174 H2314 M2246 190 H2314" fill="none" stroke="#C6CDD4" stroke-width="5" stroke-linecap="round"></path>
+<rect x="0" y="262" width="2400" height="38" fill="#D5DBE1"></rect>
+<path d="M0 262 H2400" fill="none" stroke="#BCC4CC" stroke-width="3"></path>
+<path d="M50 268 V300 M150 268 V300 M250 268 V300 M350 268 V300 M450 268 V300 M550 268 V300 M650 268 V300 M750 268 V300 M850 268 V300 M950 268 V300 M1050 268 V300 M1150 268 V300 M1250 268 V300 M1350 268 V300 M1450 268 V300 M1550 268 V300 M1650 268 V300 M1750 268 V300 M1850 268 V300 M1950 268 V300 M2050 268 V300 M2150 268 V300 M2250 268 V300 M2350 268 V300 M2450 268 V300" fill="none" stroke="#C8CFD6" stroke-width="2"></path>
+</svg>

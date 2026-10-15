@@ -1,0 +1,18 @@
+{
+  "id": "lunar-industries-mascot-hal",
+  "version": "0.1.0",
+  "title": "HAL",
+  "engine": "^0.3.0",
+  "contributes": {
+    "mascots": [
+      {
+        "id": "hal",
+        "name": "HAL",
+        "desc": "Ordinateur de bord · thème discovery",
+        "theme": "theme-discovery",
+        "themeTitle": "Discovery (sombre, bleu acier)",
+        "light": false
+      }
+    ]
+  }
+}

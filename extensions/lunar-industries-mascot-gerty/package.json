@@ -1,0 +1,10 @@
+{
+  "name": "@bidule/ext-lunar-industries-mascot-gerty",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gerty : Robot assistant lunaire · thème base lunaire",
+  "type": "module",
+  "bidule": {
+    "storeOnly": true
+  }
+}

@@ -4,7 +4,9 @@ Ce dépôt public est le store de Lunar Industries pour [Bidule](https://github.
 les modules `lunar-industries-*`, qui concurrencent des modules officiels de Bidule (Kanban, Branches, Temps, Claude,
 Conteneurs, Terminal) avec leur propre id ; leur nom est celui du module qu'ils remplacent. Ce n'est pas le store de Bidule : ses paquets sont signés par la clé de ce store, et
 Bidule les marque « Communautaire · Lunar Industries ». Plane (`lunar-industries-plane`) n'en remplace aucun : il
-fournit les tâches Plane à côté de celles de Notion.
+fournit les tâches Plane à côté de celles de Notion. Les mascottes Gerty (`lunar-industries-mascot-gerty`, thème clair
+Base lunaire) et HAL (`lunar-industries-mascot-hal`, thème sombre Discovery) n'en remplacent aucun non plus : ce sont
+deux compagnons de plus, à choisir dans Réglages › Compagnon.
 
 - `index.json`, sur la branche `main` : l'index du store, que Bidule lit.
 - Les releases `<id>-<version>` : les paquets signés de chaque version d'un module.
@@ -27,8 +29,8 @@ Dans Réglages › Stores, « Ajouter un store », avec :
 L'empreinte de cette clé est `SHA256:wrC7OJl9hufN6AXZApt2ejhePZiFis/CIfT7J1YzOfA`. Quand Bidule suggère ce store
 (sous « Stores suggérés par Bidule »), il montre cette empreinte : comparez-la avant de l'ajouter.
 
-Un module de ce store remplace un module officiel : désactivez l'officiel dans Réglages › Extensions avant
-d'installer le module Lunar Industries qui le remplace.
+Un module de ce store qui remplace un module officiel demande de désactiver l'officiel dans Réglages › Extensions
+avant de l'installer.
 
 Le Terminal (`lunar-industries-terminal`, dessiné par ghostty-web) est l'exception : il fournit le rôle `terminal`
 comme l'officiel, et Bidule refuse de désactiver le seul terminal tant que des extensions en ont besoin (Claude,

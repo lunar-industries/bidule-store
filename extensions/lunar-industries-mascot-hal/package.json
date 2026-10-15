@@ -1,0 +1,10 @@
+{
+  "name": "@bidule/ext-lunar-industries-mascot-hal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HAL : Ordinateur de bord · thème discovery",
+  "type": "module",
+  "bidule": {
+    "storeOnly": true
+  }
+}
