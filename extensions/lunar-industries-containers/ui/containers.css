@@ -1,15 +1,20 @@
-/* Conteneurs (Lunar Industries, Simon's pages/containers): `lic-` classes, never the official extension's `ctr-`, so
-   that both can be installed. Colours are the theme's tokens. */
-.lic-none {
-  font-size: var(--fs-md);
-  font-weight: 600;
-}
+/* Conteneurs (Lunar Industries), drawn after the maquette « Conteneurs Lunar »: `lic-` classes, never the official
+   extension's `ctr-`, so that both can be installed. Colours are the theme's tokens. */
+
+/* ---------- shared */
 .lic-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--bad-wash);
   color: var(--bad-ink);
   font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.lic-loading {
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .lic-danger {
@@ -18,104 +23,191 @@
 .btn.lic-danger:hover {
   background: var(--bad-wash);
 }
-
-/* What the running containers use of the machine: two cards side by side, each a figure and a bar. */
-.lic-usage {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
+.lic-start:not(:disabled) {
+  color: var(--ok-ink);
 }
-.lic-meter-head {
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
+/* A state's colour: what runs, what needs a look, what failed, what is stopped. */
+.lic-tone-ok {
+  --lic-tone: var(--ok-ink);
+  --lic-dot: var(--mint);
 }
-.lic-meter-value {
-  color: var(--text);
+.lic-tone-warn {
+  --lic-tone: var(--butter);
+  --lic-dot: var(--butter);
 }
-.lic-meter {
-  height: var(--space-2);
-  margin-top: var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--chip);
-  overflow: hidden;
+.lic-tone-bad {
+  --lic-tone: var(--bad-ink);
+  --lic-dot: var(--bad-dot);
 }
-.lic-meter-fill {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--accent-line);
-  transition: width 0.3s ease;
+.lic-tone-off {
+  --lic-tone: var(--text-2);
+  --lic-dot: var(--text-off);
 }
-
-/* The ticked containers and what can be done with them all at once. */
-.lic-selection {
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
-  border: 2px solid var(--accent-line);
-  border-radius: var(--radius-pill);
-  background: var(--card-urgent);
-}
-.lic-selection-count {
+.lic-strong {
+  color: var(--lic-tone);
   font-weight: 700;
 }
-
-.lic-panel {
-  gap: var(--space-4);
+/* A state in a pill: the project's health, the container's state in its view. */
+.lic-health,
+.lic-pill {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--lic-tone) 14%, transparent);
+  color: var(--lic-tone);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  white-space: nowrap;
 }
-/* A Compose project: its containers belong together, in a frame of their own under a band naming the project. */
-.lic-project {
+.lic-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--lic-dot);
+}
+/* A port: a pill; a link when it answers (running, TCP). */
+.lic-port {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--chip);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.lic-port.live {
+  color: var(--blue);
+}
+.lic-port.live:hover {
+  background: var(--coral);
+  color: var(--on-coral);
+}
+
+/* ---------- the list */
+.lic-list {
+  gap: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+.lic-list-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-3);
+}
+.lic-list-head h2 {
+  margin: 0;
+}
+/* « 3 cochés »: a click unticks them. */
+.lic-ticked {
+  padding: 2px var(--space-3);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent-line) 18%, transparent);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.lic-ticked:hover {
+  background: var(--chip-hover);
+}
+.lic-totals strong {
+  color: var(--text);
+  font-weight: 600;
+}
+/* The columns: the same grid for their titles and each line. */
+.lic-columns,
+.lic-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 2fr) minmax(0, 1.4fr) 84px 96px minmax(0, 1.3fr) 160px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+}
+.lic-columns {
+  padding-bottom: var(--space-2);
+  color: var(--text-off);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lic-actions-title,
+.lic-columns .lic-cpu,
+.lic-columns .lic-memory {
+  font-size: inherit;
+  text-align: right;
+}
+.lic-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+/* A project, or the containers outside any: a frame, its band, its lines. */
+.lic-group {
   border: 2px solid var(--card-line);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
-.lic-project-head {
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+.lic-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
   background: var(--chip);
 }
-.lic-project-body {
-  padding: var(--space-1) var(--space-3);
-  border-top: 2px solid var(--card-line);
+.lic-fold {
+  width: 30px;
+  height: 30px;
 }
 .lic-group-name {
-  font-size: var(--fs-md);
-  font-weight: 700;
-  color: var(--text);
-}
-/* The containers started on their own are only listed together: a title and lines, no frame. */
-.lic-loose {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: 0 var(--space-3);
-}
-.lic-loose-title {
   margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 800;
 }
-
-/* One container a line: its tick, its name and image, its ports, what it uses, its state, its actions. */
-.lic-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
+.lic-group-actions {
+  display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: 2px;
+}
+.lic-group-actions .chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  margin-right: var(--space-1);
+}
+.lic-row {
   min-height: 56px;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-top: 1px solid var(--card-line);
+  outline: none;
 }
-.lic-row + .lic-row {
-  border-top: 2px solid var(--card-line);
+.lic-row:hover {
+  background: color-mix(in srgb, var(--chip-hover) 50%, transparent);
 }
-.lic-row.chosen {
+/* The row with the focus, as a desktop list shows it. */
+.lic-row:focus-visible {
+  box-shadow: inset 3px 0 0 var(--ring);
+  background: var(--chip);
+}
+.lic-row.ticked {
   background: color-mix(in srgb, var(--accent-line) 10%, transparent);
 }
-.lic-row.off .lic-name {
-  color: var(--text-2);
+.lic-row.lic-tone-bad {
+  background: var(--card-urgent);
 }
 .lic-row[aria-busy='true'] {
   opacity: 0.6;
 }
+.lic-row.lic-tone-off .lic-name {
+  color: var(--text-2);
+}
 .lic-name-cell {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
@@ -130,6 +222,7 @@
   border: none;
   background: transparent;
   color: var(--text);
+  font-size: var(--fs-md);
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -137,126 +230,251 @@
 .lic-name:hover {
   text-decoration: underline;
 }
-.lic-dot-running {
-  background: var(--mint);
-}
-.lic-dot-paused,
-.lic-dot-restarting {
-  background: var(--butter);
-}
-.lic-dot-exited,
-.lic-dot-created,
-.lic-dot-other {
-  background: var(--text-off);
-}
-.lic-dot-dead {
-  background: var(--bad-dot);
-}
 .lic-ports {
+  display: flex;
   gap: var(--space-1);
   flex-wrap: wrap;
 }
-/* A port: a pill; a link when it answers (running, TCP). */
-.lic-port {
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--chip);
-  color: var(--text-2);
-  font-size: var(--fs-xs);
-  text-decoration: none;
+.lic-cpu,
+.lic-memory {
+  font-size: var(--fs-sm);
+  text-align: right;
 }
-.lic-port.live {
-  color: var(--text);
-}
-.lic-port.live:hover {
-  background: var(--coral);
-  color: var(--on-coral);
-}
-.lic-resources {
+.lic-state {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+.lic-state-label {
+  color: var(--lic-tone);
   font-size: var(--fs-sm);
+  font-weight: 800;
+}
+.lic-usage-narrow {
+  display: none;
 }
 .lic-actions {
-  gap: 2px;
+  display: flex;
   justify-content: flex-end;
+  gap: 2px;
 }
-.lic-start:not(:disabled) {
-  color: var(--ok-ink);
+/* Nothing in view: why, and what to do. */
+.lic-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  color: var(--text-2);
+  font-weight: 600;
+  text-align: center;
+}
+.lic-empty-state p {
+  margin: 0;
+}
+.lic-empty-actions {
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+/* A narrow window: what it uses goes under the state, the shell and the logs into the menu. */
+@media (max-width: 1000px) {
+  .lic-columns,
+  .lic-row {
+    grid-template-columns: 24px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.4fr) 76px;
+  }
+  .lic-cpu,
+  .lic-memory,
+  .lic-act-wide {
+    display: none;
+  }
+  .lic-usage-narrow {
+    display: block;
+  }
 }
 
 /* ---------- a container's view */
-.lic-view-head {
+.lic-fiche {
+  min-height: 560px;
+}
+.lic-fiche-head {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.lic-back {
-  align-self: flex-start;
-  display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-}
-.lic-view-title {
   gap: var(--space-3);
   flex-wrap: wrap;
 }
-.lic-view-name-line {
-  gap: var(--space-3);
+.lic-crumbs-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-md);
 }
-.lic-view-name {
+.lic-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+.lic-back:hover {
+  background: var(--chip-hover);
+  color: var(--text);
+}
+.lic-fiche-name {
   margin: 0;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
 }
-.lic-state-running {
-  color: var(--ok-ink);
+.lic-fiche-sub {
+  min-width: 0;
+  max-width: 40ch;
 }
-.lic-state-dead {
-  color: var(--bad-ink);
-}
-.lic-view-actions {
+.lic-fiche-actions {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
 }
-.lic-view-actions .btn {
+.lic-fiche-actions .chip-btn,
+.lic-crumbs .chip-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
 }
-.lic-view-body {
+/* The logs take what is left of the window's height; the information beside them, or above them in a narrow one. */
+.lic-fiche-body {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: var(--space-4);
-  align-items: start;
 }
-@media (max-width: 1000px) {
-  .lic-view-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.lic-fiche-body.narrow {
+  display: flex;
+  flex-direction: column;
 }
-.lic-view-main {
-  gap: var(--space-3);
+.lic-fiche-main {
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.lic-fiche-body.narrow .lic-fiche-main {
+  flex: 1;
   min-height: 420px;
 }
 .lic-toolbar {
-  gap: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid var(--card-line);
+}
+.lic-tab-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+}
+.lic-tab-note {
+  margin: 0;
+}
+.lic-tab-note.bad,
+.lic-logs-none.bad {
+  color: var(--bad-ink);
 }
 .lic-check {
   gap: var(--space-2);
   font-size: var(--fs-sm);
+  font-weight: 700;
+}
+/* The logs' search: a field with its results' count and the steps between them. */
+.lic-log-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 280px;
+  height: 34px;
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-2);
+}
+.lic-log-search:focus-within {
+  border-color: var(--accent-line);
+}
+.lic-log-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  outline: none;
+}
+.lic-log-count {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.lic-log-step {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.lic-log-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.lic-levels {
+  display: flex;
+  gap: var(--space-1);
+}
+.lic-levels .chip-btn {
+  height: 30px;
+  font-weight: 800;
+}
+.lic-levels .chip-btn[aria-pressed='true'] {
+  border-color: var(--text);
+}
+.lic-level-error {
+  color: var(--bad-ink);
+}
+.lic-level-warn {
+  color: var(--butter);
+}
+.lic-level-count {
+  margin-left: var(--space-1);
+}
+/* The follow stopped: said above the logs. */
+.lic-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--butter) 12%, transparent);
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
-.lic-empty {
-  margin: 0;
-}
-/* The logs: a dark box whatever the theme, a line each, errors and warnings marked. */
+/* The logs: the whole height left, a line each, errors and warnings in their colours, the search's results marked. */
 .lic-logs {
-  height: 480px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--chip);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg);
   font-size: var(--fs-xs);
-  line-height: 1.5;
+  line-height: 1.6;
+  user-select: text;
 }
 .lic-log {
   white-space: pre-wrap;
@@ -266,34 +484,150 @@
   color: var(--bad-ink);
 }
 .lic-log.warn {
-  color: var(--git-ink);
+  color: var(--butter);
+}
+.lic-log mark {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--butter) 30%, transparent);
+  color: inherit;
+}
+.lic-log.current mark {
+  background: var(--butter);
+  color: var(--bg);
 }
 .lic-log-time {
   margin-right: var(--space-2);
+  color: var(--text-off);
+}
+.lic-logs-none {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+/* The information: a label and its value a line, then what it uses now. */
+.lic-fiche-info {
+  min-height: 0;
+  overflow: auto;
+}
+.lic-fiche-info h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+details.lic-fiche-info {
+  flex-shrink: 0;
+  max-height: 50%;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+details.lic-fiche-info:not([open]) {
+  gap: 0;
+}
+details.lic-fiche-info summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-weight: 800;
+  cursor: pointer;
+}
+.lic-info {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.lic-info dt {
   color: var(--text-2);
 }
+.lic-info dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lic-info .mono {
+  font-size: var(--fs-xs);
+}
+.lic-info-ports,
+.lic-mounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.lic-info-port,
+.lic-info-id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.lic-copy {
+  width: 26px;
+  height: 26px;
+}
+.lic-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.lic-meters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--card-line);
+}
+.lic-meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+}
+.lic-meter {
+  height: var(--space-2);
+  margin-top: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--chip);
+  overflow: hidden;
+}
+.lic-meter-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-line);
+  transition: width 0.3s ease;
+}
+/* The resources' tab: two charts side by side, on a fixed scale. */
 .lic-charts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
 }
+.lic-charts .lic-tab-note {
+  grid-column: 1 / -1;
+}
 .lic-chart {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  margin: 0;
 }
 .lic-chart-head {
+  display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-.lic-chart h2,
-.lic-meter-head h2 {
+.lic-chart-head h3 {
   margin: 0;
   font-size: var(--fs-md);
 }
 .lic-chart svg {
   width: 100%;
-  height: 160px;
+  height: 180px;
   border-radius: var(--radius-sm);
   background: var(--chip);
 }
@@ -306,7 +640,47 @@
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
+/* The environment's tab: a variable a line. */
+.lic-env {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+.lic-env-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 120px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--card-line);
+  font-size: var(--fs-xs);
+}
+.lic-env-row dt {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.lic-env-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.lic-env-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-1);
+}
+.lic-env-actions .chip-btn {
+  height: 26px;
+}
+/* The files' tab: where it is, then the folder's entries. */
+.lic-files-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 .lic-crumbs {
+  display: flex;
+  align-items: center;
   gap: var(--space-1);
   flex-wrap: wrap;
 }
@@ -331,45 +705,4 @@
 }
 .lic-file.dir:hover {
   background: var(--chip-hover);
-}
-.lic-view-side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-.lic-view-side h2 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--fs-md);
-}
-.lic-side-meter + .lic-side-meter {
-  margin-top: var(--space-3);
-}
-/* Figures and ids in the side panels: the body's size, on one line. */
-.lic-side-meter .mono,
-.lic-info .mono {
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-}
-.lic-info dd.mono {
-  white-space: normal;
-}
-.lic-info {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2) var(--space-3);
-  margin: 0;
-  font-size: var(--fs-sm);
-}
-.lic-info dt {
-  color: var(--text-2);
-}
-.lic-info dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.lic-mounts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }

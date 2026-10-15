@@ -1,55 +1,59 @@
-import { useEffect, useRef, useState } from 'react'
-import { BannerTools, ToolSearch, useHint, useOn } from '@bidule/sdk'
-import type { ContainerDetail, ContainerFile, LogsEvent } from '../contract.ts'
-import { act, ContainerMenu, copyId, openTerminal } from './actions.tsx'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useHint, useOn } from '@bidule/sdk'
+import { useMenu } from '@bidule/ext-lunar-industries-common/ui/menu'
+import type { ContainerDetail, ContainerHealth } from '../contract.ts'
+import { act, containerEntries, copy, openTerminal } from './actions.tsx'
 import { api, message } from './api.ts'
-import { fmtBytes, fmtPercent, fold, followLogs, isUp, NO_LOGS, parseLine, portLabel, portUrl, relTime, statusOf, usageRowOf, type LogCursor, type LogLine } from './format.ts'
+import { fmtBytes, fmtPercent, isFailed, isUp, portLabel, portsOf, portUrl, sinceOf, stateOf, titleOf, usageRowOf, when, type Tone } from './format.ts'
 import { Icon } from './Icon.tsx'
+import { LogsPanel, useLogs } from './Logs.tsx'
+import { backToList, type Target } from './route.ts'
+import { EnvironmentTab, FilesTab, ResourcesTab, type Samples } from './Tabs.tsx'
 import { useUsage } from './usage.ts'
 
-type Tab = 'logs' | 'stats' | 'files'
+type Tab = 'logs' | 'resources' | 'env' | 'files'
 
-// The logs kept on the view: the oldest go as new ones come.
-const KEPT_LINES = 2000
-// The measures drawn on the statistics: one every few seconds, since the view was opened.
+// The measures drawn in the resources' tab, one every few seconds since the view was opened.
 const KEPT_SAMPLES = 60
-// The messages of the logs kept until the API says which follow is the view's.
-const EARLY_KEPT = 50
+const NARROW = '(max-width: 1000px)'
 
-const STATE_TEXT: Record<string, string> = {
-  running: 'En marche',
-  paused: 'En pause',
-  restarting: 'Redémarre',
-  created: 'Créé',
-  exited: 'Arrêté',
-  dead: 'Mort',
+const HEALTH: Record<ContainerHealth, { label: string; tone: Tone }> = {
+  healthy: { label: 'sain', tone: 'ok' },
+  starting: { label: 'vérification en cours', tone: 'warn' },
+  unhealthy: { label: 'malade', tone: 'bad' },
+}
+const RESTART: Record<string, string> = {
+  no: 'jamais',
+  always: 'toujours',
+  'unless-stopped': 'sauf arrêt manuel',
+  'on-failure': 'après un échec',
 }
 
-// A line through the samples, from the left; `max` is the top of the chart (the highest sample if none).
-function chart(samples: number[], max?: number): { line: string; area: string; top: number } {
-  const top = Math.max(max ?? 0, ...samples, 1e-9) * (max ? 1 : 1.2)
-  if (samples.length < 2) return { line: '', area: '', top }
-  const points = samples.map((v, i) => `${((i / (samples.length - 1)) * 100).toFixed(2)},${(100 - (v / top) * 100).toFixed(2)}`)
-  return { line: points.join(' '), area: `0,100 ${points.join(' ')} 100,100`, top }
+const narrowQuery = () => matchMedia(NARROW)
+function useNarrow(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      const q = narrowQuery()
+      q.addEventListener('change', l)
+      return () => q.removeEventListener('change', l)
+    },
+    () => narrowQuery().matches,
+  )
 }
 
 /**
- * Taken from quack-board (Simon's container page), as in Docker Desktop: what one container is and what can be done
- * with it, its logs (the last ones, then each new line, followed by the engine and pushed by the API), what it uses
- * over the time the view has been open, and the files inside it. The engines are asked for its numbers and follow its
- * logs only while the view shows them.
+ * A container's view (maquette « La fiche d'un conteneur »), at its own address (route.ts): read by its name, so that
+ * it outlives a `docker compose up` that recreates it, and read again on the engines' events. Escape, Alt+← and the
+ * mouse's back button go back to the list.
  */
-export function ContainerView({ target, back }: { target: { engine: string; id: string }; back: () => void }) {
-  const { engine, id } = target
+export function ContainerView({ target }: { target: Target }) {
+  const { engine, name } = target
   const [c, setC] = useState<ContainerDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('logs')
-  const [busy, setBusy] = useState(false)
-  const terminal = Boolean(window.bidule?.terminal)
 
   const reload = () =>
     api
-      .show({ params: { engine, id } })
+      .show({ params: { engine, id: name } })
       .then((d) => {
         setC(d)
         setError(null)
@@ -58,390 +62,348 @@ export function ContainerView({ target, back }: { target: { engine: string; id: 
   useEffect(() => {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, id])
-  // The container started, stopped or went: read again.
+  }, [engine, name])
   useOn('docker.changed', () => void reload())
-  useHint(c ? `${c.name} : ${isUp(c) ? 'il tourne' : 'il dort'}. Coin.` : null)
 
-  // ---- logs: the last lines, then each new one, followed by the engine while their tab shows
-  const [lines, setLines] = useState<LogLine[]>([])
-  const [query, setQuery] = useState('')
-  const [follow, setFollow] = useState(true)
-  const last = useRef<LogCursor>(NO_LOGS)
-  const box = useRef<HTMLDivElement>(null)
-  // The follow this view asked for (another view's lines are not its own), and what came before the API said which
-  // one it is: the first lines may come before its answer.
-  const following = useRef<string | null>(null)
-  const early = useRef<LogsEvent[]>([])
-  // Only what is new is kept: a line already shown (another view's follow, joined, read them too) comes once.
-  const add = (raw: string[]) => {
-    const next = followLogs(raw.map(parseLine), last.current)
-    last.current = next.cursor
-    if (next.fresh.length) setLines((now) => [...now, ...next.fresh].slice(-KEPT_LINES))
-  }
-  useOn('docker.logs', (event) => {
-    if (event.follow === following.current) add(event.lines)
-    else if (!following.current) early.current = [...early.current, event].slice(-EARLY_KEPT)
-  })
+  // Back to the list: Escape (not in a field, a menu or a dialog), Alt+←, the mouse's back button.
   useEffect(() => {
-    last.current = NO_LOGS
-    setLines([])
-  }, [engine, id])
-  // Followed again when the container starts, stops or restarts (a new start time): an engine's follow ends with the
-  // container.
-  const running = c ? c.state === 'running' : null
-  const startedAt = c?.startedAt ?? null
-  useEffect(() => {
-    if (tab !== 'logs' || running === null) return
-    let live = true
-    let mine: string | null = null
-    early.current = []
-    api.logs.follow({ params: { engine, id } }).then(
-      ({ follow: given, lines: read }) => {
-        if (!live) return void api.unfollow({ params: { follow: given } }).catch(() => undefined)
-        mine = given
-        following.current = given
-        add(read)
-        for (const e of early.current) if (e.follow === given) add(e.lines)
-        early.current = []
-      },
-      // A stopped engine or a removed container: the view's own reading says so.
-      () => undefined
-    )
-    return () => {
-      live = false
-      following.current = null
-      if (mine) void api.unfollow({ params: { follow: mine } }).catch(() => undefined)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
+      const t = e.target instanceof HTMLElement ? e.target : null
+      if (e.key === 'Escape' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (document.querySelector('dialog[open], .menu')) return
+        if (t?.closest('input, textarea, select, [contenteditable], .xterm')) return
+        e.preventDefault()
+        backToList()
+      } else if (e.altKey && e.key === 'ArrowLeft' && !t?.closest('input, textarea, [contenteditable], .xterm')) {
+        e.preventDefault()
+        backToList()
+      }
     }
-  }, [tab, engine, id, running, startedAt])
-  const q = fold(query.trim())
-  const shownLines = q ? lines.filter((l) => fold(l.text).includes(q)) : lines
-  // The end of the logs stays in view while « Suivre la fin » is ticked.
-  useEffect(() => {
-    if (follow && box.current) box.current.scrollTop = box.current.scrollHeight
-  }, [shownLines.length, follow, tab])
+    const onMouse = (e: MouseEvent) => {
+      if (e.button !== 3) return
+      e.preventDefault()
+      backToList()
+    }
+    addEventListener('keydown', onKey)
+    addEventListener('mouseup', onMouse)
+    return () => {
+      removeEventListener('keydown', onKey)
+      removeEventListener('mouseup', onMouse)
+    }
+  }, [])
 
-  // ---- what it uses, a measure every few seconds since the view opened
-  const usage = useUsage(true)
-  const [cpuSamples, setCpuSamples] = useState<number[]>([])
-  const [memorySamples, setMemorySamples] = useState<number[]>([])
-  const row = usage ? usageRowOf(usage.containers, { engine, id }) : undefined
+  if (!c) {
+    return (
+      <div className="page">
+        <Crumbs project={null} />
+        {error ? (
+          <div className="empty">
+            <p>
+              {name} n’a pas pu être lu : {error}. Il a peut-être été supprimé, ou son moteur ne répond pas.
+            </p>
+            <p className="row lic-empty-actions">
+              <button type="button" className="btn" onClick={() => void reload()}>
+                Réessayer
+              </button>
+              <button type="button" className="btn" onClick={backToList}>
+                Retour aux conteneurs
+              </button>
+            </p>
+          </div>
+        ) : (
+          <p className="muted lic-loading">Lecture de {name}…</p>
+        )}
+      </div>
+    )
+  }
+  return <Fiche c={c} gone={error} />
+}
+
+// Where the view is: the list, then the project.
+function Crumbs({ project }: { project: string | null }) {
+  return (
+    <nav className="lic-crumbs-head" aria-label="Fil d’Ariane">
+      <button type="button" className="lic-back" title="Retour aux conteneurs (Échap)" onClick={backToList}>
+        <Icon name="left" size={14} />
+        Conteneurs
+      </button>
+      {project && (
+        <>
+          <span aria-hidden="true">/</span>
+          <span>{project}</span>
+        </>
+      )}
+      <span aria-hidden="true">/</span>
+    </nav>
+  )
+}
+
+function Fiche({ c, gone }: { c: ContainerDetail; gone: string | null }) {
+  const [tab, setTab] = useState<Tab>('logs')
+  const [working, setWorking] = useState(false)
+  const [menu, openMenu] = useMenu()
+  const terminal = Boolean(window.bidule?.terminal)
+  const narrow = useNarrow()
+  const logs = useLogs(c, tab === 'logs')
+  const state = stateOf(c)
+  const health = c.health ? HEALTH[c.health] : null
+  const since = sinceOf(c)
+  const ports = portsOf(c.ports)
+  const firstPort = ports.find((p) => portUrl(c, p))
+
+  useHint(
+    c.state === 'running'
+      ? `${titleOf(c)} tourne ${since || 'en ce moment'}${firstPort ? `, et répond sur le port ${firstPort.hostPort}` : ''}.`
+      : isFailed(c)
+        ? `${titleOf(c)} est tombé (${c.state === 'dead' ? 'mort' : `code ${c.exitCode}`}).`
+        : `${titleOf(c)} est ${state.label}.`,
+  )
+
+  // What it uses: the current figures in the side panel, their history in the resources' tab.
+  const usage = useUsage(c.state === 'running')
+  const row = usage ? usageRowOf(usage.containers, c) : undefined
+  const [samples, setSamples] = useState<Samples>({ cpu: [], memory: [], limit: 0 })
   const seen = useRef<object | null>(null)
   useEffect(() => {
     if (!row || !usage || seen.current === usage) return
     seen.current = usage
-    setCpuSamples((s) => [...s, row.cpu].slice(-KEPT_SAMPLES))
-    setMemorySamples((s) => [...s, row.memory].slice(-KEPT_SAMPLES))
+    setSamples((s) => ({
+      cpu: [...s.cpu, row.cpu].slice(-KEPT_SAMPLES),
+      memory: [...s.memory, row.memory].slice(-KEPT_SAMPLES),
+      limit: row.limit,
+    }))
   }, [usage, row])
-  const meters = {
-    cpu: row ? fmtPercent(row.cpu) : '—',
-    memory: row ? fmtBytes(row.memory) : '—',
-    memoryOf: row ? `${fmtBytes(row.memory)} sur ${fmtBytes(row.limit)}` : '—',
-    // A container may take several cores: the bar stops at one.
-    cpuWidth: row ? Math.min(100, Math.max(1, row.cpu)) : 0,
-    memoryWidth: row && row.limit ? Math.min(100, Math.max(1, (row.memory / row.limit) * 100)) : 0,
-  }
-  const cpuChart = chart(cpuSamples)
-  const memoryChart = chart(memorySamples, row?.limit)
-
-  // ---- files, read when their tab shows
-  const [path, setPath] = useState('/')
-  const [files, setFiles] = useState<ContainerFile[] | null>(null)
-  const [filesError, setFilesError] = useState<string | null>(null)
-  useEffect(() => {
-    if (tab !== 'files') return
-    let live = true
-    setFiles(null)
-    api
-      .files({ params: { engine, id }, query: { path } })
-      .then((r) => {
-        if (!live) return
-        setFiles(r.files)
-        setFilesError(null)
-      })
-      .catch((err) => live && setFilesError(message(err)))
-    return () => {
-      live = false
-    }
-  }, [tab, path, engine, id])
-  const parts = path.split('/').filter(Boolean)
-  const crumbs = parts.map((name, i) => ({ name, path: '/' + parts.slice(0, i + 1).join('/') }))
-  const child = (name: string) => (path === '/' ? '' : path) + '/' + name
 
   const run = async (action: 'start' | 'stop' | 'restart') => {
-    if (!c || busy) return
-    setBusy(true)
+    if (working) return
+    setWorking(true)
     try {
-      if (await act(c, action)) await reload()
+      await act(c, action)
     } finally {
-      setBusy(false)
+      setWorking(false)
     }
   }
 
-  if (error && !c)
-    return (
-      <div className="page">
-        <div className="empty">
-          {error} : ce conteneur n’existe plus, ou son moteur ne répond pas.
-          <p>
-            <button type="button" className="btn" onClick={back}>
-              Retour aux conteneurs
-            </button>
-          </p>
-        </div>
-      </div>
-    )
-  if (!c) return <div className="page" />
-
-  return (
-    <div className="page with-tools">
-      {tab === 'logs' && (
-        <BannerTools>
-          <ToolSearch label="Chercher dans les journaux" placeholder="Chercher dans les journaux…" value={query} onChange={setQuery} />
-        </BannerTools>
-      )}
-      {/* Where we are, what this container is, and what can be done with it. */}
-      <header className="lic-view-head">
-        <button type="button" className="btn lic-back" onClick={back}>
-          <Icon name="left" size={16} />
-          Conteneurs
+  const tabs: [Tab, string][] = [
+    ['logs', 'Journaux'],
+    ['resources', 'Ressources'],
+    ...(c.env ? [['env', 'Environnement'] as [Tab, string]] : []),
+    ['files', 'Fichiers'],
+  ]
+  const tabList = (
+    <div className="segmented lic-tabs" role="tablist" aria-label="Contenu du conteneur">
+      {tabs.map(([key, label]) => (
+        <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
+          {label}
         </button>
-        <div className="row lic-view-title">
-          <span className={`dot lic-dot-${c.state}`} aria-hidden="true" />
-          <div className="lic-names">
-            <div className="row lic-view-name-line">
-              <h1 className="mono lic-view-name">{c.name}</h1>
-              <span className={`cream-pill lic-state-${c.state}`}>{STATE_TEXT[c.state] ?? c.state}</span>
-            </div>
-            <p className="legend">
-              {c.image}
-              {c.project && (
-                <>
-                  {' · '}
-                  <span className="mono">projet {c.project}</span>
-                </>
-              )}
-              {' · '}
-              {statusOf(c)}
-            </p>
-          </div>
-          <span className="grow" />
-          <span className="row lic-view-actions">
-            {terminal && (
-              <button type="button" className="btn" disabled={!isUp(c)} onClick={() => void openTerminal(c, 'shell')}>
-                <Icon name="terminal" size={16} />
-                Ouvrir un shell
-              </button>
-            )}
-            {isUp(c) ? (
-              <>
-                <button type="button" className="btn" disabled={busy} onClick={() => void run('restart')}>
-                  <Icon name="restart" size={16} />
-                  Redémarrer
-                </button>
-                <button type="button" className="btn" disabled={busy} onClick={() => void run('stop')}>
-                  <Icon name="stop" size={16} />
-                  Arrêter
-                </button>
-              </>
-            ) : (
-              <button type="button" className="btn" disabled={busy} onClick={() => void run('start')}>
-                <Icon name="play" size={16} />
-                Démarrer
-              </button>
-            )}
-            <ContainerMenu c={c} disabled={busy} removed={back} />
-          </span>
-        </div>
-      </header>
+      ))}
+    </div>
+  )
 
-      <div className="lic-view-body">
-        <section className="panel lic-view-main" aria-label="Contenu du conteneur">
-          <div className="row lic-toolbar">
-            <div className="segmented" role="group" aria-label="Contenu">
-              {(
-                [
-                  ['logs', 'Journaux'],
-                  ['stats', 'Statistiques'],
-                  ['files', 'Fichiers'],
-                ] as const
-              ).map(([key, label]) => (
-                <button key={key} type="button" aria-pressed={tab === key} onClick={() => setTab(key)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <span className="grow" />
-            {tab === 'logs' && (
-              <>
-                <label className="row lic-check">
-                  <input type="checkbox" checked={follow} onChange={() => setFollow(!follow)} />
-                  Suivre la fin
-                </label>
-                {terminal && (
-                  <button type="button" className="btn" onClick={() => void openTerminal(c, 'logs')}>
-                    Ouvrir dans le Terminal
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {tab === 'logs' && (
-            <div ref={box} className="mono lic-logs" role="log" aria-label="Dernières lignes du journal">
-              {shownLines.map((l, i) => (
-                <div key={i} className={`lic-log${l.level ? ` ${l.level}` : ''}`}>
-                  {l.time && <span className="lic-log-time">{l.time}</span>}
-                  {l.text}
-                </div>
-              ))}
-              {!shownLines.length && <p className="legend lic-empty">{query ? 'Aucune ligne ne correspond.' : 'Aucune ligne pour le moment.'}</p>}
-            </div>
-          )}
-
-          {tab === 'stats' && (
-            <>
-              <p className="legend lic-empty">Depuis l’ouverture de cette fiche : une mesure toutes les quelques secondes.</p>
-              <div className="lic-charts">
-                {[
-                  { name: 'Processeur', value: meters.cpu, chart: cpuChart, top: fmtPercent(cpuChart.top) },
-                  { name: 'Mémoire', value: meters.memory, chart: memoryChart, top: fmtBytes(memoryChart.top) },
-                ].map((m) => (
-                  <div key={m.name} className="lic-chart">
-                    <div className="row lic-chart-head">
-                      <h2>{m.name}</h2>
-                      <span className="legend mono">{m.value}</span>
-                    </div>
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Historique : ${m.name}`}>
-                      {m.chart.line && (
-                        <>
-                          <polygon className="lic-area" points={m.chart.area} />
-                          <polyline className="lic-line" points={m.chart.line} />
-                        </>
-                      )}
-                    </svg>
-                    <span className="legend">Échelle : jusqu’à {m.top}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {tab === 'files' && (
-            <>
-              <nav className="row lic-crumbs" aria-label="Dossier affiché">
-                <button type="button" className="chip-btn" onClick={() => setPath('/')}>
-                  /
-                </button>
-                {crumbs.map((b) => (
-                  <button key={b.path} type="button" className="chip-btn" onClick={() => setPath(b.path)}>
-                    {b.name}
-                  </button>
-                ))}
-              </nav>
-              {filesError ? (
-                <p className="legend lic-empty">{isUp(c) ? filesError : 'Les fichiers se lisent dans un conteneur en marche.'}</p>
-              ) : (
-                <div className="mono lic-files">
-                  {path !== '/' && (
-                    <button type="button" className="lic-file dir" onClick={() => setPath('/' + parts.slice(0, -1).join('/'))}>
-                      ../
+  const info = (
+    <dl className="lic-info">
+      {ports.length > 0 && (
+        <>
+          <dt>Ports</dt>
+          <dd className="lic-info-ports">
+            {ports.map((p) => {
+              const href = portUrl(c, p)
+              return (
+                <span key={`${p.hostPort}/${p.port}${p.protocol}`} className="lic-info-port">
+                  {href ? (
+                    <a className="mono lic-port live" href={href} target="_blank" rel="noreferrer" title={`Ouvrir ${href}`}>
+                      {href.replace(/^http:\/\//, '')}
+                    </a>
+                  ) : (
+                    <span className="mono lic-port">{portLabel(p)}</span>
+                  )}
+                  {href && (
+                    <button type="button" className="icon-btn lic-copy" aria-label={`Copier ${href}`} title="Copier l’adresse" onClick={() => void copy(href, 'Adresse copiée')}>
+                      <Icon name="copy" size={14} />
                     </button>
                   )}
-                  {files?.map((f) =>
-                    f.directory ? (
-                      <button key={f.name} type="button" className="lic-file dir" onClick={() => setPath(child(f.name))}>
-                        {f.name}/
-                      </button>
-                    ) : (
-                      <span key={f.name} className="lic-file">
-                        {f.name}
-                      </span>
-                    ),
-                  )}
-                  {files && !files.length && <p className="legend lic-empty">Dossier vide.</p>}
-                  {!files && <p className="legend lic-empty">Lecture…</p>}
-                </div>
-              )}
+                </span>
+              )
+            })}
+          </dd>
+        </>
+      )}
+      {health && (
+        <>
+          <dt>Santé</dt>
+          <dd className={`lic-tone-${health.tone} lic-strong`}>{health.label}</dd>
+        </>
+      )}
+      {c.restart && (
+        <>
+          <dt>Redémarrage</dt>
+          <dd>
+            {RESTART[c.restart.policy] ?? c.restart.policy}
+            {c.restart.policy === 'on-failure' && c.restart.maxRetries ? ` (${c.restart.maxRetries} fois au plus)` : ''}
+            {` · ${c.restart.count} fois`}
+          </dd>
+        </>
+      )}
+      {c.command && c.command.length > 0 && (
+        <>
+          <dt>Commande</dt>
+          <dd className="mono selectable">{c.command.join(' ')}</dd>
+        </>
+      )}
+      <dt>Image</dt>
+      <dd className="mono selectable">{c.image}</dd>
+      {c.mounts.length > 0 && (
+        <>
+          <dt>Volumes</dt>
+          <dd className="lic-mounts">
+            {c.mounts.map((m) => (
+              <span key={m.destination} className="mono selectable" title={m.source}>
+                {m.name ?? m.source} → {m.destination}
+              </span>
+            ))}
+          </dd>
+        </>
+      )}
+      {c.networks.length > 0 && (
+        <>
+          <dt>Réseau</dt>
+          <dd className="mono">{c.networks.join(', ')}</dd>
+        </>
+      )}
+      {c.env && (
+        <>
+          <dt>Environnement</dt>
+          <dd>
+            <button type="button" className="lic-link" onClick={() => setTab('env')}>
+              {c.env.length} variable{c.env.length > 1 ? 's' : ''}
+            </button>
+          </dd>
+        </>
+      )}
+      <dt>Identifiant</dt>
+      <dd className="lic-info-id">
+        <span className="mono">{c.id.slice(0, 12)}</span>
+        <button type="button" className="icon-btn lic-copy" aria-label="Copier l’identifiant" title="Copier l’identifiant" onClick={() => void copy(c.id, 'Identifiant copié')}>
+          <Icon name="copy" size={14} />
+        </button>
+      </dd>
+      <dt>Créé</dt>
+      <dd>{when(c.createdAt)}</dd>
+    </dl>
+  )
+  const meters = c.state === 'running' && (
+    <div className="lic-meters">
+      {[
+        { name: 'Processeur', value: row ? fmtPercent(row.cpu) : '—', width: row ? Math.min(100, row.cpu) : 0 },
+        {
+          name: 'Mémoire',
+          value: row ? `${fmtBytes(row.memory)} sur ${fmtBytes(row.limit)}` : '—',
+          width: row && row.limit ? Math.min(100, (row.memory / row.limit) * 100) : 0,
+        },
+      ].map((m) => (
+        <div key={m.name} className="lic-meter-block">
+          <div className="lic-meter-head">
+            <span className="legend">{m.name}</span>
+            <span className="mono">{m.value}</span>
+          </div>
+          <div className="lic-meter" role="img" aria-label={`${m.name} : ${m.value}`}>
+            <div className="lic-meter-fill" style={{ width: `${Math.max(row ? 1 : 0, m.width)}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className="page fill lic-fiche">
+      <header className="lic-fiche-head">
+        <Crumbs project={c.project} />
+        <h1 className="mono lic-fiche-name" title={c.name}>
+          {titleOf(c)}
+        </h1>
+        <span className={`lic-pill lic-tone-${health?.tone === 'bad' ? 'bad' : state.tone}`}>
+          {state.label}
+          {health && c.state === 'running' ? ` · ${health.label}` : ''}
+        </span>
+        <span className="legend ellipsis lic-fiche-sub">
+          {[c.project && c.service ? c.name : null, c.image, since].filter(Boolean).join(' · ')}
+        </span>
+        <span className="grow" />
+        <span className="lic-fiche-actions">
+          {terminal && (
+            <button type="button" className="chip-btn" disabled={c.state !== 'running'} title={c.state === 'running' ? undefined : 'Le shell s’ouvre dans un conteneur en marche'} onClick={() => void openTerminal(c, 'shell')}>
+              <Icon name="terminal" size={16} />
+              Ouvrir un shell
+            </button>
+          )}
+          {isUp(c) ? (
+            <>
+              <button type="button" className="chip-btn" disabled={working} onClick={() => void run('restart')}>
+                <Icon name="restart" size={16} />
+                Redémarrer
+              </button>
+              <button type="button" className="chip-btn" disabled={working} onClick={() => void run('stop')}>
+                <Icon name="stop" size={16} />
+                Arrêter
+              </button>
+            </>
+          ) : (
+            <button type="button" className="chip-btn lic-start" disabled={working} onClick={() => void run('start')}>
+              <Icon name="play" size={16} />
+              Démarrer
+            </button>
+          )}
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`Plus d’actions pour ${c.name}`}
+            title="Plus d’actions"
+            aria-haspopup="menu"
+            onClick={(e) => openMenu(e.currentTarget, containerEntries(c, { terminal, removed: backToList }), `Actions sur ${c.name}`)}
+          >
+            <Icon name="more" size={18} />
+          </button>
+        </span>
+      </header>
+      {gone && <div className="lic-error" role="alert">{c.name} n’a pas pu être relu : {gone}</div>}
+
+      <div className={`lic-fiche-body${narrow ? ' narrow' : ''}`}>
+        {narrow && (
+          <details className="panel lic-fiche-info">
+            <summary>
+              Informations
+              <span className="legend">
+                {[ports.length ? `${ports.length} port${ports.length > 1 ? 's' : ''}` : null, health?.label, `créé ${when(c.createdAt)}`].filter(Boolean).join(' · ')}
+              </span>
+            </summary>
+            {info}
+            {meters}
+          </details>
+        )}
+        <section className="panel lic-fiche-main" aria-label="Contenu du conteneur">
+          {tab === 'logs' ? (
+            <LogsPanel c={c} logs={logs} terminal={terminal} tabs={tabList} />
+          ) : (
+            <>
+              <div className="lic-toolbar">{tabList}</div>
+              <div className="lic-tab-body">
+                {tab === 'resources' && <ResourcesTab c={c} samples={samples} />}
+                {tab === 'env' && c.env && <EnvironmentTab env={c.env} />}
+                {tab === 'files' && <FilesTab c={c} />}
+              </div>
             </>
           )}
         </section>
-
-        <aside className="lic-view-side">
-          <section className="panel" aria-label="Ressources">
-            <h2>Ressources</h2>
-            {[
-              { name: 'Processeur', value: meters.cpu, width: meters.cpuWidth },
-              { name: 'Mémoire', value: meters.memoryOf, width: meters.memoryWidth },
-            ].map((m) => (
-              <div key={m.name} className="lic-side-meter">
-                <div className="row lic-meter-head">
-                  <span className="legend">{m.name}</span>
-                  <span className="mono">{m.value}</span>
-                </div>
-                <div className="lic-meter" role="img" aria-label={`${m.name} : ${m.value}`}>
-                  <div className="lic-meter-fill" style={{ width: `${m.width}%` }} />
-                </div>
-              </div>
-            ))}
-          </section>
-
-          <section className="panel" aria-label="Informations">
+        {!narrow && (
+          <aside className="panel lic-fiche-info" aria-label="Informations">
             <h2>Informations</h2>
-            <dl className="lic-info">
-              <dt>Identifiant</dt>
-              <dd className="row">
-                <span className="mono">{c.id.slice(0, 12)}</span>
-                <button type="button" className="icon-btn" aria-label="Copier l’identifiant" onClick={() => void copyId(c)}>
-                  <Icon name="copy" size={16} />
-                </button>
-              </dd>
-              <dt>Image</dt>
-              <dd className="mono">{c.image}</dd>
-              {c.ports.length > 0 && (
-                <>
-                  <dt>Ports</dt>
-                  <dd className="row lic-ports">
-                    {c.ports.map((p) => {
-                      const href = portUrl(c, p)
-                      const key = `${p.hostPort}/${p.port}${p.protocol}`
-                      return href ? (
-                        <a key={key} className="mono lic-port live" href={href} target="_blank" rel="noreferrer">
-                          {portLabel(p)}
-                        </a>
-                      ) : (
-                        <span key={key} className="mono lic-port">
-                          {portLabel(p)}
-                        </span>
-                      )
-                    })}
-                  </dd>
-                </>
-              )}
-              {c.networks.length > 0 && (
-                <>
-                  <dt>Réseau</dt>
-                  <dd className="mono">{c.networks.join(', ')}</dd>
-                </>
-              )}
-              {c.mounts.length > 0 && (
-                <>
-                  <dt>Volumes</dt>
-                  <dd className="lic-mounts">
-                    {c.mounts.map((m) => (
-                      <span key={m.destination} className="mono" title={m.source}>
-                        {m.name ?? m.source} → {m.destination}
-                      </span>
-                    ))}
-                  </dd>
-                </>
-              )}
-              <dt>Créé</dt>
-              <dd>{relTime(c.createdAt)}</dd>
-            </dl>
-          </section>
-        </aside>
+            {info}
+            {meters}
+          </aside>
+        )}
       </div>
+      {menu}
     </div>
   )
 }

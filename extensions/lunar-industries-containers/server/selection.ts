@@ -3,7 +3,8 @@ import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
- * The containers ticked (`engine:id`), kept in the extension's data: coming back, even after the app was closed, the
+ * The containers ticked (`engine:project/service`, or `engine:name` outside a project: they outlive a container
+ * recreated with a new id), kept in the extension's data: coming back, even after the app was closed, the
  * user finds them ticked. The only thing this module keeps of its own; the containers are docker's.
  */
 export class Selection {

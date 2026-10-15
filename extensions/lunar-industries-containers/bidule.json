@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-containers",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "title": "Conteneurs",
-  "engine": "^0.3.0",
+  "engine": "^0.3.1",
   "dependencies": {
     "docker": ">=0.2.0"
   },
@@ -21,6 +21,54 @@
         "path": "/lunar-industries/conteneurs",
         "title": "Conteneurs",
         "order": 60
+      }
+    ],
+    "background": true,
+    "shortcuts": [
+      {
+        "keys": "↑ ↓",
+        "title": "Passer d’un conteneur à l’autre",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Entrée",
+        "title": "Ouvrir la fiche du conteneur",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Espace",
+        "title": "Cocher le conteneur",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Menu",
+        "title": "Menu du conteneur (aussi Maj+F10)",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Suppr",
+        "title": "Supprimer le conteneur, après confirmation",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Mod+A",
+        "title": "Cocher tous les conteneurs affichés",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Échap",
+        "title": "Tout décocher",
+        "where": "dans la liste"
+      },
+      {
+        "keys": "Échap",
+        "title": "Revenir à la liste (aussi Alt+←)",
+        "where": "sur la fiche d’un conteneur"
+      },
+      {
+        "keys": "Mod+F",
+        "title": "Chercher dans le journal",
+        "where": "sur la fiche d’un conteneur"
       }
     ]
   }

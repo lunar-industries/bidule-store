@@ -10,6 +10,8 @@ const PATHS = {
   left: 'm15 6-6 6 6 6',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   copy: 'M9 9h10v10H9zM5 15V5h10',
+  search: 'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM15.5 15.5 20 20',
+  save: 'M12 4v11M7 10l5 5 5-5M5 20h14',
 }
 export type IconName = keyof typeof PATHS
 

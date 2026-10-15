@@ -111,8 +111,8 @@ describe('Conteneurs (Lunar Industries) · through docker', () => {
   it('keeps the containers ticked, even after a restart', async () => {
     const first = new ContainersController()
     expect(await first.selection()).toEqual({ keys: [] })
-    await first.select(request({}, { keys: ['podman:web-id', 'docker:db-id'] }))
+    await first.select(request({}, { keys: ['podman:shop/web', 'docker:mailpit'] }))
     start(dir)
-    expect(await new ContainersController().selection()).toEqual({ keys: ['podman:web-id', 'docker:db-id'] })
+    expect(await new ContainersController().selection()).toEqual({ keys: ['podman:shop/web', 'docker:mailpit'] })
   })
 })

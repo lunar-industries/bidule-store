@@ -19,7 +19,7 @@ export const unfollowValidator = vine.create({
   params: vine.object({ follow: vine.string().regex(/^[\w-]{1,64}$/) }),
 })
 
-// The containers ticked, as `engine:id`.
+// The containers ticked, as `engine:project/service` or `engine:name` (the page's tickKeyOf).
 export const selectionValidator = vine.create({
   keys: vine.array(vine.string().maxLength(200)).maxLength(1000),
 })

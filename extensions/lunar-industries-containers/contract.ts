@@ -7,6 +7,7 @@ export type {
   Container,
   ContainerDetail,
   ContainerFile,
+  ContainerHealth,
   ContainerList,
   ContainerPort,
   ContainerRow,
