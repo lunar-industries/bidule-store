@@ -27,6 +27,7 @@ const shown = (b: SharedBranch): KanbanBranch => ({
   reviewRef: b.reviewRef,
   reviewState: b.reviewState,
   ci: b.ci,
+  url: b.url,
 })
 
 /**

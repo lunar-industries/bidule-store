@@ -42,6 +42,13 @@ export function LinkBranches({
   }
   return (
     <Modal label={`Branches de « ${title} »`} onClose={close}>
+      <form
+        className="lik-link-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void submit()
+        }}
+      >
       <h2>Branches de « {title} »</h2>
       <label className="field">
         Chercher une branche
@@ -71,10 +78,11 @@ export function LinkBranches({
         <button type="button" className="btn" onClick={close}>
           Annuler
         </button>
-        <button type="button" className="btn-cta" disabled={saving} onClick={() => void submit()}>
-          Enregistrer
+        <button type="submit" className="btn-cta" disabled={saving}>
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </div>
+      </form>
     </Modal>
   )
 }

@@ -3,25 +3,32 @@ import { describe, expect, test } from 'vitest'
 import type { KanbanBranch } from '../contract.ts'
 import {
   applicableMerges,
+  attentionOf,
   badgeOf,
   boardColumns,
   branchKey,
   branchLabel,
+  branchWords,
   choiceOf,
   columnColor,
   columnOf,
   groupsOf,
   linkRows,
   marksOf,
+  matchesFilter,
+  matchesQuery,
   moveCandidates,
   moveName,
+  noteOf,
   openings,
   orderColumns,
   orphansOf,
   parseMerges,
   shortBranch,
-  trayIsOpen,
+  sortTasks,
+  tasksForBranch,
   withChoice,
+  type TaskContext,
 } from '../ui/layout.ts'
 
 const task = (id: string, status: string, patch: Partial<Task> = {}): Task => ({
@@ -63,6 +70,7 @@ const branch = (name: string, patch: Partial<KanbanBranch> = {}): KanbanBranch =
   reviewRef: null,
   reviewState: null,
   ci: null,
+  url: null,
   ...patch,
 })
 
@@ -241,27 +249,34 @@ describe('statuses merged into another column', () => {
   })
 })
 
-describe('badges', () => {
+describe('badges and notes', () => {
   const today = '2026-10-01'
-  test("due today is urgent, a past date late, a close one warm; a finished task has none", () => {
-    expect(badgeOf(task('1', 'x', { due: '2026-10-01T09:00:00' }), false, today)).toEqual({ text: "Aujourd'hui", tone: 'accent' })
-    expect(badgeOf(task('1', 'x', { due: '2026-09-28' }), false, today)?.tone).toBe('bad')
-    expect(badgeOf(task('1', 'x', { due: '2026-10-03' }), false, today)?.tone).toBe('warn')
-    expect(badgeOf(task('1', 'x', { due: '2026-10-20' }), false, today)?.tone).toBe('neutral')
+  test('only a late task stands out; today is said, a later date written, a finished task has none', () => {
+    expect(badgeOf(task('1', 'x', { due: '2026-09-28' }), false, today)).toEqual({ text: 'en retard · 3 j', tone: 'accent' })
+    expect(badgeOf(task('1', 'x', { due: '2026-10-01T09:00:00' }), false, today)).toEqual({ text: "aujourd'hui", tone: 'warn' })
+    expect(badgeOf(task('1', 'x', { due: '2026-10-03' }), false, today)?.tone).toBe('neutral')
     expect(badgeOf(task('1', 'x', { due: '2026-09-28' }), true, today)).toBeNull()
     expect(badgeOf(task('1', 'x'), false, today)).toBeNull()
+  })
+
+  test('the note says a task the user only takes part in, and one unchanged for two weeks', () => {
+    const now = Date.parse('2026-10-20T12:00:00Z')
+    expect(noteOf({ role: 'participant', lastEdited: '2026-10-19T12:00:00Z' }, false, now)).toBe('participant')
+    expect(noteOf({ role: 'owner', lastEdited: '2026-10-01T12:00:00Z' }, false, now)).toBe('inchangée depuis 19 j')
+    expect(noteOf({ role: 'owner', lastEdited: '2026-10-01T12:00:00Z' }, true, now)).toBeNull()
+    expect(noteOf({ role: 'owner', lastEdited: null }, false, now)).toBeNull()
   })
 })
 
 describe('branches', () => {
-  test('a branch is shown without its type and its task ID; the others counted', () => {
+  test('the card shows its first branch in full, the others counted; nothing without one', () => {
+    expect(branchLabel([branch('feat/TSK-1-a'), branch('fix/TSK-1-b')])).toBe('feat/TSK-1-a +1')
+    expect(branchLabel([])).toBe('')
+    // The panel and the dialog still shorten a name where it helps.
     expect(shortBranch('feat/TSK-42-export-csv')).toBe('export-csv')
-    expect(shortBranch('tsk-7-fix')).toBe('fix')
-    expect(branchLabel([branch('feat/TSK-1-a'), branch('fix/TSK-1-b')])).toBe('a +1')
-    expect(branchLabel([])).toBe('sans branche')
   })
 
-  test('the tray holds the recent branches without a task, not merged', () => {
+  test('the panel holds the recent branches without a task, not merged', () => {
     const now = Date.parse('2026-10-01T12:00:00Z')
     const list = [
       branch('recent', { lastCommitAt: '2026-09-30T12:00:00Z' }),
@@ -272,7 +287,7 @@ describe('branches', () => {
     expect(orphansOf(list, now).map((b) => b.name)).toEqual(['recent'])
   })
 
-  test('a branch linked to a task the board does not show is in the tray too', () => {
+  test('a branch linked to a task the board does not show is in the panel too', () => {
     const now = Date.parse('2026-10-01T12:00:00Z')
     const list = [
       branch('shown', { lastCommitAt: '2026-09-30T12:00:00Z', taskId: 't1' }),
@@ -281,21 +296,20 @@ describe('branches', () => {
     expect(orphansOf(list, now, new Set(['t1'])).map((b) => b.name)).toEqual(['hidden-task'])
   })
 
-  test('a review known by its number alone still has its mark', () => {
-    const marks = marksOf([branch('a', { reviewNumber: 12, ci: 'ok' })])
-    expect(marks.map((m) => m.text)).toEqual(['#12'])
-  })
-
-  test('one mark per branch with a review or a pipeline', () => {
+  test('a branch has its review mark, then its CI while it matters; a merged one says so, without CI', () => {
     const marks = marksOf([
-      branch('a', { reviewRef: 'MR !12', reviewNumber: 12, ci: 'fail' }),
+      branch('a', { reviewRef: 'MR !12', reviewNumber: 12, ci: 'fail', url: 'https://r/12' }),
       branch('b', { ci: 'pending' }),
       branch('c', { ci: 'none' }),
+      branch('d', { reviewNumber: 9, reviewState: 'merged', ci: 'merged' }),
     ])
-    expect(marks.map((m) => [m.text, m.tone, m.tip])).toEqual([
-      ['!12', 'bad', 'app · MR !12 · CI en échec'],
-      ['CI', 'warn', 'app · CI en cours'],
+    expect(marks.map((m) => [m.text, m.tone])).toEqual([
+      ['!12', 'neutral'],
+      ['CI rouge', 'bad'],
+      ['CI en cours', 'info'],
+      ['#9 fusionnée', 'neutral'],
     ])
+    expect(marks[0].url).toBe('https://r/12')
   })
 
   test('the dialog lists the task’s branches first, then free ones, then the others’, merged last', () => {
@@ -312,15 +326,51 @@ describe('branches', () => {
     expect(rows[2].note).toBe('liée à Une autre')
     expect(linkRows(list, 't', 'LIB', () => '', new Set()).map((r) => r.name)).toEqual(['elsewhere'])
   })
+
+  test('a branch’s task: those whose title or reference has its words first, the unfinished before the others', () => {
+    expect(branchWords('feat/TSK-142-export-csv')).toEqual(['tsk', '142', 'export', 'csv'])
+    const tasks = [
+      task('a', 'À faire', { title: 'Traduire les messages' }),
+      task('b', 'Terminé', { title: 'Export PDF des factures', ref: 'TSK-97' }),
+      task('c', 'À faire', { title: 'Exporter les temps en CSV', ref: 'TSK-142' }),
+    ]
+    const done = (t: Task) => t.status === 'Terminé'
+    expect(tasksForBranch(tasks, 'feat/TSK-142-export-csv', '', done).map((t) => t.id)).toEqual(['c', 'b', 'a'])
+    expect(tasksForBranch(tasks, 'feat/TSK-142-export-csv', 'trad', done).map((t) => t.id)).toEqual(['a'])
+  })
 })
 
-describe('settings', () => {
-  test('the branch tray is open unless the user closed it', () => {
-    expect(trayIsOpen('false')).toBe(false)
-    expect(trayIsOpen('true')).toBe(true)
-    // Not stored yet (the settings not read), or anything else: open, the default.
-    expect(trayIsOpen(undefined)).toBe(true)
-    expect(trayIsOpen('')).toBe(true)
+describe('finding a task', () => {
+  const today = '2026-10-01'
+  const tasks = [
+    task('late', 'À faire', { due: '2026-09-28', title: 'Exporter en CSV', ref: 'TSK-1' }),
+    task('today', 'En cours', { due: '2026-10-01', role: 'participant' }),
+    task('later', 'À faire', { due: '2026-10-09' }),
+    task('none', 'À faire'),
+    task('done', 'Terminé', { due: '2026-09-01' }),
+  ]
+  const branches = new Map([['today', [branch('feat/x', { ci: 'fail' })]]])
+  const ctx: TaskContext = { done: (t) => t.status === 'Terminé', branches: (t) => branches.get(t.id) ?? [], today }
+
+  test('the filters: a role, late, due today, a failing CI; a finished task is never late', () => {
+    const ids = (filter: Parameters<typeof matchesFilter>[1]) => tasks.filter((t) => matchesFilter(t, filter, ctx)).map((t) => t.id)
+    expect(ids('participant')).toEqual(['today'])
+    expect(ids('late')).toEqual(['late'])
+    expect(ids('today')).toEqual(['today'])
+    expect(ids('ci')).toEqual(['today'])
+    expect(ids('all')).toHaveLength(5)
+    expect(attentionOf(tasks, ctx)).toEqual({ late: 1, today: 1, ci: 1 })
+  })
+
+  test('the search looks in the title, the reference and the branches, accents and case aside', () => {
+    expect(matchesQuery(tasks[0], 'csv tsk-1', [])).toBe(true)
+    expect(matchesQuery(tasks[0], 'EXPORTER', [])).toBe(true)
+    expect(matchesQuery(tasks[1], 'feat/x', branches.get('today')!)).toBe(true)
+    expect(matchesQuery(tasks[2], 'csv', [])).toBe(false)
+  })
+
+  test('a column puts the late tasks first, then by due date, those without one last', () => {
+    expect(sortTasks(tasks, today).map((t) => t.id)).toEqual(['done', 'late', 'today', 'later', 'none'])
   })
 })
 

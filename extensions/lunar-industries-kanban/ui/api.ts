@@ -45,4 +45,5 @@ export const setBranches = (taskId: string, list: BranchRef[]) =>
 export const reviewUrl = (ref: BranchRef) =>
   json<{ url: string | null }>(`${BASE}/review?${new URLSearchParams(ref).toString()}`)
 
-export const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err))
+// What to tell the user: the SDK's (« Service local injoignable » when the API does not answer).
+export { errorMessage } from '@bidule/sdk'

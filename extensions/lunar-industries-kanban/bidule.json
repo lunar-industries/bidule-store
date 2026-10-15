@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "title": "Kanban",
   "engine": "^0.3.0",
   "dependencies": {
@@ -76,13 +76,56 @@
           "hidden": true
         },
         {
-          "key": "lunar-industries-kanban.trayOpen",
+          "key": "lunar-industries-kanban.role",
           "type": "text",
-          "title": "Tiroir des branches ouvert",
-          "default": "true",
+          "title": "Rôle montré",
+          "default": "\"all\"",
           "hidden": true
         }
       ]
-    }
+    },
+    "background": true,
+    "shortcuts": [
+      {
+        "keys": "↑ ↓ ← →",
+        "title": "Passer d’une carte à l’autre",
+        "where": "sur le tableau"
+      },
+      {
+        "keys": "Entrée",
+        "title": "Ouvrir la tâche dans son outil",
+        "where": "sur une carte"
+      },
+      {
+        "keys": "Menu",
+        "title": "Menu de la carte (aussi Maj+F10)",
+        "where": "sur une carte"
+      },
+      {
+        "keys": "Alt+← →",
+        "title": "Déplacer la carte vers la colonne voisine",
+        "where": "sur une carte"
+      },
+      {
+        "keys": "Espace",
+        "title": "Sélectionner la carte (Maj : jusqu’à elle)",
+        "where": "sur une carte"
+      },
+      {
+        "keys": "Mod+A",
+        "title": "Sélectionner toutes les cartes affichées",
+        "where": "sur le tableau"
+      },
+      {
+        "keys": "Échap",
+        "title": "Tout désélectionner",
+        "where": "sur le tableau"
+      },
+      {
+        "keys": "/",
+        "title": "Chercher une tâche",
+        "where": "sur le tableau"
+      }
+    ]
   }
 }

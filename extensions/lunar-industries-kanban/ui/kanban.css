@@ -1,186 +1,296 @@
-/* Kanban (Lunar Industries, Simon's): the tray of branches without a task, then the columns grouped by stage. */
+/* Kanban (Lunar Industries, Simon's), maquette « Kanban Lunar »: what needs attention, then the stages and their
+   columns, each column scrolling on its own under its head; the board fits the window (`page fill`). */
 .lik-page {
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
-/* Recent branches without a task, dragged from here onto a card to link them. */
-.lik-tray {
+/* A reading that failed, above the board already read: why, and Réessayer. */
+.lik-alert {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--accent-line);
+  border-radius: var(--radius-md);
+  background: var(--card-urgent);
+  font-size: var(--fs-sm);
 }
-.lik-tray-toggle {
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
+
+/* « À surveiller »: late, due today, failing CI, each a button that filters the board (pressed while it does). */
+.lik-attention-row {
+  flex-wrap: wrap;
   gap: var(--space-2);
-  padding: 0 var(--space-1) 0 var(--space-3);
-  border: 0;
+}
+.lik-attention-title {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+}
+.lik-attention {
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: 2px solid var(--card-line);
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text);
-  cursor: pointer;
-}
-.lik-tray-toggle:hover {
-  background: var(--chip-hover);
-}
-.lik-orphans {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.lik-orphan {
-  height: 32px;
-  padding: 0 var(--space-3);
-  display: inline-flex;
-  align-items: center;
-  border: 2px dashed var(--card-line);
-  border-radius: var(--radius-pill);
-  background: var(--card);
-  font-family: 'JetBrains Mono', monospace;
   font-size: var(--fs-sm);
-  cursor: grab;
+  font-weight: 800;
 }
-.lik-orphan:hover {
+.lik-attention:hover {
   background: var(--chip-hover);
+}
+.lik-attention-late {
+  border-color: var(--accent-line);
+  color: var(--accent-text);
+}
+.lik-attention-today {
+  border-color: var(--butter);
+  color: var(--butter);
+}
+.lik-attention[aria-pressed='true'] {
+  background: var(--card-urgent);
 }
 
-/* One column per status of the source, consecutive ones of a group side by side; the board scrolls sideways. */
+/* In a narrow window, one stage at a time. */
+.lik-stage-tabs {
+  gap: var(--space-2);
+}
+.lik-stage-tabs [aria-selected='true'] {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* The board: the stages side by side, scrolling sideways; each takes the window's height left. */
 .lik-board {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: flex-start;
   gap: var(--space-4);
   overflow-x: auto;
   padding-bottom: var(--space-2);
 }
-/* A group is as wide as its columns: growing on its own, it would widen the columns of a group with few of them. */
-.lik-group {
+.lik-stage {
   flex: 0 0 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
-.lik-group-columns {
+/* The stage's name over its columns, with a line to its right. */
+.lik-stage-title {
+  margin: 0;
+  padding: 0 var(--space-1);
   display: flex;
-  align-items: flex-start;
-  /* Each column has its own padding: the wider gap stays between groups. */
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lik-stage-title::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: var(--card-line);
+}
+.lik-stage-columns {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   gap: var(--space-2);
 }
-/* 248 px at least, wider when there is room to spare. The width, not only the basis: a flex item is never narrower
-   than its content without one, and a long branch name (cut by an ellipsis, but counted in full) would widen it. */
+
+/* A column: its head (fold chevron, dot, name, count), then its cards, scrolling under the head. */
 .lik-column {
-  width: 248px;
-  flex: 1 0 248px;
+  width: 252px;
+  flex: 0 0 252px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 2px solid transparent;
-  border-radius: var(--radius-lg);
+  border: 2px solid var(--card-done-line);
+  border-radius: var(--radius-md);
+  background: var(--card-done);
 }
-.lik-column.folded {
-  flex: 0 0 auto;
-  width: auto;
-}
-.lik-column.drop-over {
+.lik-column.drop-over,
+.lik-folded.drop-over {
   border-color: var(--ring);
   border-style: dashed;
 }
 .lik-column-head {
+  margin: 0;
+  border-bottom: 2px solid var(--card-done-line);
+}
+.lik-column-toggle {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 32px;
-  padding: 0 var(--space-2);
-}
-.lik-column-head h2 {
-  margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 700;
-}
-.lik-column-toggle {
+  padding: var(--space-2) var(--space-3);
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   background: transparent;
   color: var(--text);
-  cursor: pointer;
+  font-size: var(--fs-md);
+  font-weight: 800;
+  text-align: left;
 }
 .lik-column-toggle:hover {
-  background: var(--chip-hover);
+  background: var(--chip);
 }
-/* An empty column still shows where a card can be dropped. */
-.lik-drop-hint {
-  min-height: 96px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed var(--card-line);
-  border-radius: var(--radius-lg);
+.lik-column-toggle svg {
   color: var(--text-2);
-  font-size: var(--fs-sm);
-  font-weight: 600;
+  flex-shrink: 0;
 }
-
-/* A card: its branch and badge, its title, its review or CI marks, then the other extensions' badges and advice. */
-.lik-card {
+.lik-cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-2);
+}
+/* A folded column: a narrow band with its dot, count and name written upwards; a click unfolds it. */
+.lik-folded {
+  width: 44px;
+  flex: 0 0 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border: 2px solid var(--card-done-line);
+  border-radius: var(--radius-md);
+  background: var(--card-done);
+  color: var(--text-2);
+}
+.lik-folded:hover {
+  background: var(--chip);
+}
+.lik-folded-name {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+}
+/* Said only when it helps: while a card is dragged, or when the search leaves the column empty. */
+.lik-drop-hint {
+  margin: 0;
+  padding: var(--space-4) var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.lik-drop-hint:empty {
+  display: none;
+}
+.lik-board.dragging .lik-drop-hint {
+  border: 2px dashed var(--card-line);
+  border-radius: var(--radius-md);
+}
+
+/* A card (maquette, La carte): reference, tool, due date; title; branch; marks; note. */
+.lik-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
   border: 2px solid var(--card-line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--card);
   color: var(--text);
-  /* Dragged to another column; a click opens nothing (its right-click menu says where it opens). */
   cursor: grab;
 }
 .lik-card:hover {
   border-color: var(--card-hover);
 }
-.lik-card.urgent {
+.lik-card:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+/* Late: the one card that stands out. */
+.lik-card.late {
   border-color: var(--accent-line);
+  background: var(--card-urgent);
+}
+.lik-card.selected {
+  border-color: var(--coral);
+  background: var(--chip-hover);
 }
 .lik-card.done {
-  opacity: 0.75;
+  border-color: var(--card-done-line);
+  background: var(--card-done);
+  color: var(--text-2);
 }
-/* The card a branch from the tray is about to be dropped on. */
+/* A branch from the panel about to be dropped on it. */
 .lik-card.branch-over {
-  border-color: var(--ring);
+  border-color: var(--accent-line);
   border-style: dashed;
 }
 .lik-card-head {
-  gap: var(--space-2);
+  gap: 6px;
   min-height: 22px;
+}
+.lik-check-mark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--coral);
+  color: var(--on-coral);
+}
+.lik-ref {
+  color: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+/* The tool a task comes from, when two give tasks. */
+.lik-tool {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--chip);
+  color: var(--blue);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+.lik-card .card-title {
+  overflow-wrap: anywhere;
 }
 .lik-branch {
   min-width: 0;
   color: var(--mono);
   font-size: var(--fs-xs);
 }
-/* The column no longer widens for its cards: a long word (a pasted URL) breaks rather than overflows. */
-.lik-card .card-title {
-  overflow-wrap: anywhere;
+.lik-link-hint {
+  padding: var(--space-1) var(--space-2);
+  border: 2px dashed var(--accent-line);
+  border-radius: var(--radius-sm);
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
+  font-weight: 700;
 }
-.lik-done-dot {
-  width: 8px;
-  height: 8px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--ok-ink);
-}
-.lik-marks,
-.lik-badges {
+.lik-marks {
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: 6px;
+}
+.lik-marks:empty {
+  display: none;
 }
 .lik-mark {
   border: 0;
   cursor: pointer;
 }
+.lik-note {
+  color: var(--text-off);
+  font-size: var(--fs-xs);
+}
 
-/* The tones of a badge or a mark (a review's CI). */
+/* The tones of a badge or a mark. */
 .lik-tone-ok {
   background: var(--ok-bg);
   color: var(--ok-ink);
@@ -190,11 +300,11 @@
   color: var(--bad-ink);
 }
 .lik-tone-warn {
-  background: var(--git-bg);
-  color: var(--git-ink);
+  background: color-mix(in srgb, var(--butter) 16%, transparent);
+  color: var(--butter);
 }
 .lik-tone-info {
-  background: var(--chip);
+  background: color-mix(in srgb, var(--blue) 16%, transparent);
   color: var(--blue);
 }
 .lik-tone-neutral {
@@ -206,7 +316,171 @@
   color: var(--on-coral);
 }
 
-/* « Lier des branches… »: ticked rows grouped by repo. */
+/* The states without a board: loading (hollow columns), and the empty ones with what to do next. */
+.lik-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.lik-skeleton {
+  display: flex;
+  gap: var(--space-2);
+}
+.lik-skeleton span {
+  width: 252px;
+  height: 320px;
+  border: 2px solid var(--card-done-line);
+  border-radius: var(--radius-md);
+  background: var(--card-done);
+}
+.lik-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+.lik-empty strong {
+  color: var(--text);
+  font-family: 'Baloo 2', sans-serif;
+  font-size: var(--fs-xl);
+}
+.lik-empty-actions {
+  gap: var(--space-2);
+}
+
+/* The branches without a task (maquette, Lier des branches): a panel at the window's right edge, under the title bar. */
+.lik-panel {
+  position: fixed;
+  z-index: 30;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--card-line);
+  background: var(--banner);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+}
+.lik-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 2px solid var(--card-line);
+}
+.lik-panel-head h2 {
+  margin: 0;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: var(--fs-xl);
+}
+.lik-panel-head p {
+  margin: 0;
+}
+.lik-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.lik-panel-repo h3 {
+  margin: 0 var(--space-2) var(--space-1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 800;
+}
+.lik-panel-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.lik-panel-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: grab;
+}
+.lik-panel-row:hover {
+  background: var(--chip);
+}
+.lik-panel-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.lik-panel-row.picking {
+  border-color: var(--accent-line);
+  background: var(--card-urgent);
+}
+.lik-panel-line {
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+}
+.lik-panel-note {
+  color: var(--butter);
+  font-size: var(--fs-xs);
+}
+.lik-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 2px solid var(--card-line);
+}
+.lik-panel-foot kbd {
+  font-family: 'JetBrains Mono', monospace;
+}
+/* The search of a branch's task: a field, then the tasks found (the chosen one `active`). */
+.lik-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  cursor: default;
+}
+.lik-picker input {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 2px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-md);
+}
+.lik-picker-list {
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+.lik-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+.lik-picker-item.active {
+  background: var(--chip-hover);
+}
+.lik-picker-none {
+  padding: var(--space-2);
+}
+
+/* « Lier des branches… »: a form (Enter saves), its ticked rows grouped by repo. */
+.lik-link-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 .lik-checks {
   max-height: 50vh;
   overflow-y: auto;
@@ -236,11 +510,6 @@
   white-space: nowrap;
 }
 
-.lik-menu {
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
 /* Réglages › Kanban: the source's statuses, one row each in the board's order (dragged by the row, or ↑ ↓), each with
    its choice (shown, hidden, merged into another column). A row not shown in a column of its own steps back; the row
    dragged fades; where it would land: a line before (or, for the last, after) the row under the pointer. */
@@ -252,11 +521,11 @@
   padding: 0;
   list-style: none;
 }
-/* A row: the grip, the name, its stage (and what it shows besides), its choice, ↑ ↓; columns of one width each, so
-   that the choices line up from row to row. */
+/* A row: the grip, the name, its stage, its choice, ↑ ↓. In a wide panel, one line with its columns lined up from row
+   to row; in a narrow one, the choice and the arrows go under the name. */
 .lik-status {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 12rem) 14rem auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 12rem) minmax(10rem, 14rem) auto auto;
   gap: var(--space-2);
   align-items: center;
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
@@ -287,4 +556,24 @@
 }
 .lik-status-choice {
   width: 100%;
+}
+.lik-missing {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1000px) {
+  .lik-column {
+    width: auto;
+    flex: 1 0 300px;
+  }
+  .lik-status {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .lik-status-info {
+    display: none;
+  }
+  .lik-status-choice {
+    grid-column: 1 / -1;
+    order: 1;
+  }
 }

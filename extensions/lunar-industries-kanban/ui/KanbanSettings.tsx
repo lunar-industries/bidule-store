@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { saveSettingValues, useSettingValues, type Board } from '@bidule/sdk'
-import { board as readBoard } from './api.ts'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { react, saveSettingValues, useSettingValues, type Board } from '@bidule/sdk'
+import { board as readBoard, errorMessage } from './api.ts'
 import {
   boardColumns,
   choiceOf,
@@ -31,17 +31,48 @@ const choiceFrom = (value: string): StatusChoice =>
 export function KanbanSettings() {
   // undefined: not read yet; null: no source of tasks gave a board.
   const [board, setBoard] = useState<Board | null | undefined>(undefined)
+  const [error, setError] = useState<string | null>(null)
   // The row dragged, and the gap it would land in.
   const [dragged, setDragged] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
+  // The row just moved with ↑ ↓: its arrow keeps the focus, or the other one when it can no longer move that way.
+  const [moved, setMoved] = useState<{ name: string; up: boolean } | null>(null)
+  const arrows = useRef(new Map<string, HTMLButtonElement>())
   const values = useSettingValues()
-  useEffect(() => {
+  const read = useCallback(() => {
     void readBoard().then(
       (b) => setBoard(b.source === null ? null : b),
-      () => setBoard(null),
+      (err: unknown) => setError(errorMessage(err)),
     )
   }, [])
-  if (board === undefined || !values) return null
+  useEffect(read, [read])
+  useEffect(() => {
+    if (!moved) return
+    const own = arrows.current.get(`${moved.name}\n${moved.up ? 'up' : 'down'}`)
+    const other = arrows.current.get(`${moved.name}\n${moved.up ? 'down' : 'up'}`)
+    ;(own && !own.disabled ? own : other)?.focus()
+  }, [moved, values])
+  if (error)
+    return (
+      <div className="fields">
+        <p className="test-result bad wide" role="alert">
+          Les statuts n'ont pas pu être lus : {error}
+        </p>
+        <div className="row wide">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setError(null)
+              read()
+            }}
+          >
+            Réessayer
+          </button>
+        </div>
+      </div>
+    )
+  if (board === undefined || !values) return <p className="muted">Lecture des statuts…</p>
   const hidden = parseList(values[HIDDEN])
   const merges = parseMerges(values[MERGE])
   const columns = boardColumns(board?.columns ?? [], parseList(values[ORDER]))
@@ -51,11 +82,14 @@ export function KanbanSettings() {
   // The columns another status can be merged into: those shown in their own column.
   const shown = names.filter((name) => choiceOf(name, hidden, merges).kind === 'shown')
 
+  // A write that fails is said by the mascot; the settings stay as they were.
+  const save = (patch: Record<string, string>) =>
+    void saveSettingValues(patch).catch((err: unknown) => react('panic', errorMessage(err), errorMessage(err)))
   const choose = (name: string, choice: StatusChoice) => {
     const next = withChoice(name, choice, hidden, merges)
-    void saveSettingValues({ [HIDDEN]: JSON.stringify(next.hidden), [MERGE]: JSON.stringify(Object.fromEntries(next.merges)) })
+    save({ [HIDDEN]: JSON.stringify(next.hidden), [MERGE]: JSON.stringify(Object.fromEntries(next.merges)) })
   }
-  const move = (name: string, to: number) => void saveSettingValues({ [ORDER]: JSON.stringify(moveName(names, name, to)) })
+  const move = (name: string, to: number) => save({ [ORDER]: JSON.stringify(moveName(names, name, to)) })
   const drop = () => {
     if (dragged !== null && dropAt !== null) move(dragged, dropAt)
     setDragged(null)
@@ -136,22 +170,30 @@ export function KanbanSettings() {
                     ))}
                   </select>
                   <button
+                    ref={(el) => void (el ? arrows.current.set(`${c.name}\nup`, el) : arrows.current.delete(`${c.name}\nup`))}
                     type="button"
                     className="icon-btn"
                     aria-label={`Monter ${c.name}`}
                     title="Monter"
                     disabled={i === 0}
-                    onClick={() => move(c.name, i - 1)}
+                    onClick={() => {
+                      setMoved({ name: c.name, up: true })
+                      move(c.name, i - 1)
+                    }}
                   >
                     ↑
                   </button>
                   <button
+                    ref={(el) => void (el ? arrows.current.set(`${c.name}\ndown`, el) : arrows.current.delete(`${c.name}\ndown`))}
                     type="button"
                     className="icon-btn"
                     aria-label={`Descendre ${c.name}`}
                     title="Descendre"
                     disabled={i === columns.length - 1}
-                    onClick={() => move(c.name, i + 2)}
+                    onClick={() => {
+                      setMoved({ name: c.name, up: false })
+                      move(c.name, i + 2)
+                    }}
                   >
                     ↓
                   </button>
@@ -161,7 +203,7 @@ export function KanbanSettings() {
           </ol>
         )}
         {missing.length > 0 && (
-          <div className="row" style={{ flexWrap: 'wrap' }} role="group" aria-label="Statuts masqués introuvables">
+          <div className="row lik-missing" role="group" aria-label="Statuts masqués introuvables">
             <span className="legend">Masqués, introuvables dans la source</span>
             {missing.map((name) => (
               <button key={name} type="button" className="chip-btn" title="Ne plus masquer" onClick={() => choose(name, { kind: 'shown' })}>

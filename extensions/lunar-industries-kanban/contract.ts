@@ -26,6 +26,9 @@ export type KanbanBranch = {
   reviewRef: string | null
   reviewState: ReviewState | null
   ci: Ci | null
+  // Its review's address, else its pipeline's, as the forges gave them: a mark opens it at once (null: asked of the
+  // forge, GET review).
+  url: string | null
 }
 
 export type Branches = { available: boolean; branches: KanbanBranch[] }

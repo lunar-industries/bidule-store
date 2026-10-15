@@ -1,4 +1,4 @@
-import { statusColor, type Board, type Task, type TaskColumn, type TaskGroup } from '@bidule/sdk'
+import { relTime, statusColor, type Board, type Task, type TaskColumn, type TaskGroup } from '@bidule/sdk'
 import type { KanbanBranch } from '../contract.ts'
 
 // Taken from quack-board (Simon's kanban.ts and core/format.ts): what the board shows, without drawing it.
@@ -198,9 +198,8 @@ export interface Column extends TaskColumn {
   unknown: boolean
   // The other statuses it shows (merged into it).
   merged: string[]
-  // Finished columns start folded; a column the user folded or unfolded against that keeps their choice.
+  // Folded: the finished columns start so; a column the user folded or unfolded against that keeps their choice.
   folded: boolean
-  foldable: boolean
   tasks: Task[]
 }
 
@@ -248,12 +247,12 @@ export function groupsOf(
   ]
     .filter((c) => !hidden.includes(c.name))
     .map((c) => {
-      const foldable = c.group === 'done'
+      // Every column folds; the finished ones start folded, until the user unfolds them.
+      const byDefault = c.group === 'done'
       return {
         ...c,
         merged: mergedInto(c.name, merges),
-        foldable,
-        folded: foldable !== toggled.has(c.name),
+        folded: byDefault !== toggled.has(c.name),
         tasks: board.tasks.filter((t) => columnOf(t, merges) === c.name),
       }
     })
@@ -276,51 +275,153 @@ const DATE = new Intl.DateTimeFormat('fr', { weekday: 'short', day: 'numeric' })
 
 export type Badge = { text: string; tone: Tone }
 
-// A card's badge: due today (the one urgent one), late, or its due date (warm within three days); none once done.
-export function badgeOf(task: Task, done: boolean, today: string): Badge | null {
-  if (done || !task.due) return null
-  const due = task.due.slice(0, 10)
-  if (due === today) return { text: "Aujourd'hui", tone: 'accent' }
-  const days = Math.round((Date.parse(`${due}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 864e5)
-  if (days < 0) return { text: 'En retard', tone: 'bad' }
-  return { text: DATE.format(new Date(`${due}T12:00:00`)), tone: days <= 3 ? 'warn' : 'neutral' }
+// Days from `today` to the task's due date (negative: late); null without one.
+export function daysLeft(task: Pick<Task, 'due'>, today: string): number | null {
+  if (!task.due) return null
+  return Math.round((Date.parse(`${task.due.slice(0, 10)}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 864e5)
 }
 
-// The first branch's short name, « +N » for the others.
+// A card's badge: late (the one card that stands out: `accent`), due today, or its due date; none once done.
+export function badgeOf(task: Task, done: boolean, today: string): Badge | null {
+  const days = done ? null : daysLeft(task, today)
+  if (days === null || !task.due) return null
+  if (days < 0) return { text: `en retard · ${-days} j`, tone: 'accent' }
+  if (days === 0) return { text: "aujourd'hui", tone: 'warn' }
+  return { text: DATE.format(new Date(`${task.due.slice(0, 10)}T12:00:00`)), tone: 'neutral' }
+}
+
+// What the card says under its marks when it says something: the user only takes part, or the task has not changed
+// for two weeks (it may be stuck). Nothing for a finished one.
+export const STALE_DAYS = 14
+export function noteOf(task: Pick<Task, 'role' | 'lastEdited'>, done: boolean, now = Date.now()): string | null {
+  const parts: string[] = []
+  if (task.role === 'participant') parts.push('participant')
+  if (!done && task.lastEdited) {
+    const days = Math.floor((now - Date.parse(task.lastEdited)) / 864e5)
+    if (days >= STALE_DAYS) parts.push(`inchangée depuis ${days} j`)
+  }
+  return parts.length ? parts.join(' · ') : null
+}
+
+// The card's branch: the first one's full name, « +N » for the others; empty without one (the card says nothing).
 export function branchLabel(branches: KanbanBranch[]): string {
   const [first] = branches
-  if (!first) return 'sans branche'
-  return shortBranch(first.name) + (branches.length > 1 ? ` +${branches.length - 1}` : '')
+  if (!first) return ''
+  return first.name + (branches.length > 1 ? ` +${branches.length - 1}` : '')
 }
 
-const CI_TONE: Record<string, Tone> = { ok: 'ok', fail: 'bad', pending: 'warn', none: 'neutral', merged: 'info' }
-const CI_TEXT: Record<string, string> = {
-  ok: 'CI OK',
-  fail: 'CI en échec',
-  pending: 'CI en cours',
-  none: 'sans CI',
-  merged: 'mergée',
+const CI_MARK: Partial<Record<string, { text: string; tone: Tone }>> = {
+  ok: { text: 'CI verte', tone: 'ok' },
+  fail: { text: 'CI rouge', tone: 'bad' },
+  pending: { text: 'CI en cours', tone: 'info' },
 }
 
-export type Mark = { key: string; repo: string; name: string; text: string; tone: Tone; tip: string }
+export type Mark = { key: string; repo: string; name: string; url: string | null; text: string; tone: Tone; tip: string }
 
-// One mark per branch with a review or a pipeline: « !12 », « #4 », or « CI »; a click opens it on the forge.
+// A branch's marks: its review (« !12 », « !12 fusionnée »), then its CI while it matters (verte, rouge, en cours); a
+// click opens it on the forge (`url`, the review's, else the pipeline's).
 export function marksOf(branches: KanbanBranch[]): Mark[] {
-  return branches
-    .filter((b) => b.reviewRef || b.reviewNumber !== null || (b.ci && b.ci !== 'none'))
-    .map((b) => {
-      const ci = b.ci ?? 'none'
-      // A provider may give the review's number without its reference (« !12 »).
-      const ref = b.reviewRef || (b.reviewNumber !== null ? `#${b.reviewNumber}` : '')
-      return {
-        key: branchKey(b),
-        repo: b.repo,
-        name: b.name,
-        text: ref ? ref.replace(/^[A-Z]+\s*/, '') : 'CI',
-        tone: CI_TONE[ci],
-        tip: [b.repoLabel, ref, ref && ci === 'merged' ? '' : CI_TEXT[ci]].filter(Boolean).join(' · '),
-      }
-    })
+  return branches.flatMap((b) => {
+    const marks: Mark[] = []
+    // A provider may give the review's number without its reference (« !12 »).
+    const ref = b.reviewRef || (b.reviewNumber !== null ? `#${b.reviewNumber}` : '')
+    const merged = b.reviewState === 'merged' || b.ci === 'merged'
+    const base = { repo: b.repo, name: b.name, url: b.url }
+    if (ref) {
+      const short = ref.replace(/^[A-Z]+\s*/, '')
+      marks.push({
+        ...base,
+        key: `${branchKey(b)}\u0000review`,
+        text: merged ? `${short} fusionnée` : b.reviewState === 'closed' ? `${short} fermée` : short,
+        tone: 'neutral',
+        tip: `${b.repoLabel} · ${ref}`,
+      })
+    }
+    const ci = !merged && b.ci ? CI_MARK[b.ci] : undefined
+    if (ci) marks.push({ ...base, key: `${branchKey(b)}\u0000ci`, ...ci, tip: `${b.repoLabel} · ${b.name} · ${ci.text}` })
+    return marks
+  })
+}
+
+// ---------- finding a task: the search, the filter, and what needs attention
+
+export type TaskFilter = 'all' | 'owner' | 'participant' | 'late' | 'today' | 'ci'
+
+export const FILTER_LABELS: Record<TaskFilter, string> = {
+  all: 'Toutes',
+  owner: 'Responsable',
+  participant: 'Participant',
+  late: 'En retard',
+  today: "Pour aujourd'hui",
+  ci: 'CI rouge',
+}
+
+// What the board needs to tell each task apart: its stage (done or not) and its branches.
+export type TaskContext = { done: (task: Task) => boolean; branches: (task: Task) => KanbanBranch[]; today: string }
+
+const failing = (branches: KanbanBranch[]) => branches.some((b) => b.ci === 'fail')
+
+export function matchesFilter(task: Task, filter: TaskFilter, ctx: TaskContext): boolean {
+  if (filter === 'all') return true
+  if (filter === 'owner' || filter === 'participant') return task.role === filter
+  if (ctx.done(task)) return false
+  const days = daysLeft(task, ctx.today)
+  if (filter === 'late') return days !== null && days < 0
+  if (filter === 'today') return days === 0
+  return failing(ctx.branches(task))
+}
+
+// Every word of the search in the task's title, its reference or one of its branches' names, accents and case aside.
+export function matchesQuery(task: Task, query: string, branches: KanbanBranch[]): boolean {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const text = fold([task.title, task.ref ?? '', ...branches.map((b) => b.name)].join(' '))
+  return words.every((w) => text.includes(w))
+}
+
+// How many tasks need attention, the finished ones aside: late, due today, with a failing CI.
+export function attentionOf(tasks: readonly Task[], ctx: TaskContext): { late: number; today: number; ci: number } {
+  const open = tasks.filter((t) => !ctx.done(t))
+  return {
+    late: open.filter((t) => matchesFilter(t, 'late', ctx)).length,
+    today: open.filter((t) => matchesFilter(t, 'today', ctx)).length,
+    ci: open.filter((t) => matchesFilter(t, 'ci', ctx)).length,
+  }
+}
+
+// The words a branch's name brings to find its task: its parts (`feat/TSK-142-export-csv` → tsk, 142, export, csv),
+// without its kind (feat, fix…) and the words too short to mean anything.
+const KINDS = new Set(['feat', 'feature', 'fix', 'hotfix', 'chore', 'docs', 'doc', 'refactor', 'test', 'tests', 'ci', 'build', 'perf', 'style'])
+export function branchWords(name: string): string[] {
+  return fold(name)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 3 && !KINDS.has(w))
+}
+
+/**
+ * The tasks to offer for a branch, best first: those whose title or reference has the most of the branch's words, the
+ * unfinished ones before the others; only those matching every word typed (`query`), eight at most.
+ */
+export function tasksForBranch(tasks: readonly Task[], branch: string, query: string, done: (task: Task) => boolean): Task[] {
+  const words = branchWords(branch)
+  const typed = fold(query).split(/\s+/).filter(Boolean)
+  const text = (t: Task) => fold(`${t.ref ?? ''} ${t.title}`)
+  return tasks
+    .filter((t) => typed.every((w) => text(t).includes(w)))
+    .map((task, i) => ({ task, i, score: words.filter((w) => text(task).includes(w)).length, done: done(task) }))
+    .sort((a, b) => b.score - a.score || Number(a.done) - Number(b.done) || a.i - b.i)
+    .slice(0, 8)
+    .map(({ task }) => task)
+}
+
+// A column's cards: the late ones first (the longest overdue first), then by due date, then those without one, each
+// keeping the order the core gave otherwise.
+export function sortTasks(tasks: readonly Task[], today: string): Task[] {
+  const rank = (t: Task) => daysLeft(t, today) ?? Number.POSITIVE_INFINITY
+  return tasks
+    .map((task, i) => ({ task, i }))
+    .sort((a, b) => rank(a.task) - rank(b.task) || a.i - b.i)
+    .map(({ task }) => task)
 }
 
 export type LinkRow = { key: string; name: string; repo: string; note: string; checked: boolean }
@@ -356,16 +457,6 @@ export function linkRows(
     }))
 }
 
-const RELATIVE = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' })
-// « il y a 3 jours », « hier ».
-export function relTime(at: string | null, now = Date.now()): string {
-  if (!at) return ''
-  const minutes = (new Date(at).getTime() - now) / 60_000
-  if (Math.abs(minutes) < 60) return RELATIVE.format(Math.round(minutes), 'minute')
-  if (Math.abs(minutes) < 60 * 24) return RELATIVE.format(Math.round(minutes / 60), 'hour')
-  return RELATIVE.format(Math.round(minutes / 60 / 24), 'day')
-}
-
 export function parseList(value: unknown): string[] {
   try {
     const list = JSON.parse(String(value ?? '[]'))
@@ -374,6 +465,3 @@ export function parseList(value: unknown): string[] {
     return []
   }
 }
-
-// The branch tray (setting `lunar-industries-kanban.trayOpen`): open unless the user closed it (« false »).
-export const trayIsOpen = (value: unknown) => value !== 'false'

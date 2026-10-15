@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import {
+  BannerTools,
   busy,
+  navigate,
   objectProviders,
   openDialog,
   react,
-  saveSettingValues,
+  registerCommands,
+  relTime,
+  runOnApi,
+  toast,
+  ToolFilter,
+  ToolSearch,
+  useCommands,
   useHint,
   useOn,
+  useSavedState,
   useSettingValues,
   type ObjectProvider,
-  type SettingValues,
   type Task,
 } from '@bidule/sdk'
+import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
+import { nextTicks } from '@bidule/ext-lunar-industries-common/ui/list'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
 import {
   board as readBoard,
@@ -23,73 +33,65 @@ import {
   writeMove,
   type Loaded,
 } from './api.ts'
-import { CardMenu } from './CardMenu.tsx'
+import { BranchPanel } from './BranchPanel.tsx'
+import { Card, type Part } from './Card.tsx'
 import {
   applicableMerges,
-  badgeOf,
+  attentionOf,
   branchKey,
-  branchLabel,
   columnColor,
   columnOf,
   dayKey,
+  FILTER_LABELS,
   groupsOf,
-  marksOf,
+  matchesFilter,
+  matchesQuery,
   moveCandidates,
   openings,
   ORDER,
   orphansOf,
   parseList,
   parseMerges,
-  shortBranch,
-  trayIsOpen,
+  sortTasks,
   type Column,
   type Mark,
-  type Tone,
+  type TaskContext,
+  type TaskFilter,
 } from './layout.ts'
 import { latestOf } from './latest.ts'
 import { LinkBranches } from './LinkBranches.tsx'
 import { useKanbanContributions } from './points.ts'
 
-// The columns folded or unfolded against their default, and whether the branch tray is open: hidden settings of the
-// module, kept by the API (the page's own storage starts empty at each launch of the app, a new port being a new
-// origin).
+// The columns folded or unfolded against their default, and the role the board shows: hidden settings of the module,
+// kept by the API from one launch to the next (useSavedState).
 const TOGGLED = 'lunar-industries-kanban.toggled'
-const TRAY = 'lunar-industries-kanban.trayOpen'
-
-// A hidden setting shown changed at once: what was just written stands until the API's value moves (to it, or to
-// another window's), or until the write fails (the mascot says why).
-function useWrittenSetting(key: string, values: SettingValues | null): [unknown, (raw: string) => void] {
-  const [written, setWritten] = useState<{ from: unknown; raw: string } | null>(null)
-  const stored = values?.[key]
-  const write = (raw: string) => {
-    setWritten({ from: stored, raw })
-    saveSettingValues({ [key]: raw }).catch((err: unknown) => {
-      setWritten(null)
-      const message = errorMessage(err)
-      react('panic', message, message)
-    })
-  }
-  return [written && written.from === stored ? written.raw : stored, write]
-}
+const ROLE = 'lunar-industries-kanban.role'
+type Role = 'all' | 'owner' | 'participant'
+const ROLES: Role[] = ['all', 'owner', 'participant']
+const readList = (raw: unknown) => (Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : null)
+const readRole = (raw: unknown) => ROLES.find((r) => r === raw) ?? null
+// What needs attention, as the row under the banner filters it.
+type Attention = Exclude<TaskFilter, Role>
 
 // The badges this board leaves out, by extension: the official Git extension's (`branches`) counts the task's
-// branches (« 2 branches », « Aucune branche »), which the card's head already says better (its first branch by name,
-// « +N » for the others, « sans branche »).
+// branches, which the card already says.
 const SAID_BY_THE_CARD = new Set(['branches'])
 
-// What a drag carries: a card (to another column) or a branch of the tray (onto a card).
+// What a drag carries: cards (to another column, their ids one per line) or a branch of the panel (onto a card).
 const TASK_TYPE = 'application/x-lik-task'
 const BRANCH_TYPE = 'application/x-lik-branch'
 const carries = (e: DragEvent, type: string) => e.dataTransfer.types.includes(type)
 
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
 const columnLabel = (name: string) => name || 'Sans statut'
 const mergedTip = (column: Column) => (column.merged.length ? `Réunit aussi : ${column.merged.join(', ')}` : undefined)
+const isMac = () => window.bidule?.platform === 'darwin'
 
-// The board, reloaded whenever the core says the tasks changed (a sync, a move from elsewhere); only the last reading
-// asked is shown.
-function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => void] {
+// The board, read again whenever the core says the tasks changed; only the last reading asked is shown. `readAt`: when
+// the one shown was read; `error`: why the last one failed (the board shown stays).
+function useBoard() {
   const [board, setBoard] = useState<Loaded | null>(null)
+  const [readAt, setReadAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [readLatest] = useState(() => latestOf(readBoard))
   const reload = useCallback(
@@ -97,6 +99,7 @@ function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => v
       void readLatest().then(
         (b) => {
           setBoard(b)
+          setReadAt(Date.now())
           setError(null)
         },
         (err) => setError(errorMessage(err)),
@@ -107,57 +110,93 @@ function useBoard(): [Loaded | null, (b: Loaded) => void, string | null, () => v
   useOn('objects.changed', ({ type }) => {
     if (type === 'task') reload()
   })
-  return [board, setBoard, error, reload]
+  return { board, setBoard, readAt, error, reload }
 }
 
-// What the branches are made of: a change to any of them reads them again (a link is announced on its task, or on
-// the branch for one unlinked by hand).
+// What the branches are made of: a change to any of them reads them again.
 const BRANCH_TYPES = new Set(['branch', 'repository', 'review', 'pipeline', 'task'])
 
-// The branches, from the core (none without a provider of them), read again whenever they change.
-function useBranches(): [Branches, (b: Branches) => void] {
+// The branches, from the core, read again whenever they change; a reading that fails keeps the last ones and says so.
+function useBranches() {
   const [branches, setBranches] = useState<Branches>({ available: false, branches: [] })
-  const reload = () => void readBranches().then(setBranches, () => undefined)
-  useEffect(reload, [])
+  const [error, setError] = useState<string | null>(null)
+  const reload = useCallback(
+    () =>
+      void readBranches().then(
+        (b) => {
+          setBranches(b)
+          setError(null)
+        },
+        (err) => setError(errorMessage(err)),
+      ),
+    [],
+  )
+  useEffect(reload, [reload])
   useOn('objects.changed', ({ type }) => {
     if (BRANCH_TYPES.has(type)) reload()
   })
-  return [branches, setBranches]
+  return { git: branches, setGit: setBranches, gitError: error, reloadGit: reload }
+}
+
+// Narrower than this, the board shows one stage at a time (maquette « Fenêtre de 900 px »).
+const NARROW = '(max-width: 1000px)'
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => matchMedia(NARROW).matches)
+  useEffect(() => {
+    const media = matchMedia(NARROW)
+    const change = () => setNarrow(media.matches)
+    media.addEventListener('change', change)
+    return () => media.removeEventListener('change', change)
+  }, [])
+  return narrow
 }
 
 /**
- * Taken from quack-board (Simon's Kanban): one column per status of the source (less those hidden or merged into
- * another), in the order chosen in Réglages › Kanban, neighbouring ones of a stage side by side (the finished ones
- * folded), the recent branches without a task to drop on a card, each card's branch, due date and review or CI marks.
- * The other extensions' right-click actions and badges come through the point `kanban`, like on any Kanban; their
- * advice does not: this board shows none.
+ * The board (maquette « Kanban Lunar ») : the search, the role filter, the branches without a task and the sync at the
+ * banner's edge; what needs attention in a row under it; then one column per status of the source (less those hidden or
+ * merged into another), in the order chosen in Réglages › Kanban, under their stage. Each column scrolls on its own and
+ * keeps its head. One stop of Tab for the whole board: the arrows move between the cards, Alt with ← → moves a card to
+ * the next column, Enter opens it in its tool, the Menu key its menu; Ctrl+click and Shift+click select several cards.
  */
 export function Kanban() {
-  const [board, setBoard, error, reload] = useBoard()
-  const [git, setGit] = useBranches()
+  const { board, setBoard, readAt, error, reload } = useBoard()
+  const { git, setGit, gitError, reloadGit } = useBranches()
   const values = useSettingValues()
-  // `actionsFor`: the actions of the card whose menu is open, by its task's group (an extension may offer some only on
-  // tasks to do).
   const contributions = useKanbanContributions()
   const { actionsFor } = contributions
-  const [toggledRaw, writeToggled] = useWrittenSetting(TOGGLED, values)
-  const toggled = useMemo((): ReadonlySet<string> => new Set(parseList(toggledRaw)), [toggledRaw])
-  const [trayRaw, writeTray] = useWrittenSetting(TRAY, values)
-  const trayOpen = trayIsOpen(trayRaw)
+  const [toggledList, setToggled] = useSavedState<string[]>(TOGGLED, [], readList)
+  const toggled = useMemo((): ReadonlySet<string> => new Set(toggledList), [toggledList])
+  const [role, setRole] = useSavedState<Role>(ROLE, 'all', readRole)
+  const [attention, setAttention] = useState<Attention | null>(null)
+  const [query, setQuery] = useState('')
+  const [panel, setPanel] = useState(false)
+  const panelButton = useRef<HTMLButtonElement>(null)
+  const [stage, setStage] = useState<string | null>(null)
+  const narrow = useNarrow()
   const [over, setOver] = useState<string | null>(null)
   const [branchOver, setBranchOver] = useState<string | null>(null)
-  const [menu, setMenu] = useState<{ task: Task; x: number; y: number } | null>(null)
-  // The active providers of tasks, by id and title: the tools a card's menu opens it in (layout.ts, openings). Read
-  // once: an extension turned on or off restarts the app.
+  const [dragging, setDragging] = useState(false)
+  const [active, setActive] = useState<string | null>(null)
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [anchor, setAnchor] = useState<string | null>(null)
+  const cards = useRef(new Map<string, HTMLElement>())
+  // A card to give the focus once drawn (after it moved to another column).
+  const focusNext = useRef<string | null>(null)
+  const [menu, openMenu] = useMenu()
+  // The active providers of tasks, by id and title: the tools a card opens in, and its tool when there are two.
   const [providers, setProviders] = useState<ObjectProvider[]>([])
   useEffect(() => {
     void objectProviders('task').then(setProviders, () => setProviders([]))
   }, [])
 
   const hidden = parseList(values?.['lunar-industries-kanban.hidden'])
-  // The columns' order, chosen in Réglages › Kanban (layout.ts: orderColumns).
   const order = parseList(values?.[ORDER])
   const ready = board && board.source !== null ? board : null
+  // The board as last drawn, for what runs later (an undo from a notice).
+  const latest = useRef(ready)
+  useEffect(() => {
+    latest.current = ready
+  })
   const mergeRaw = values?.['lunar-industries-kanban.statusMerge']
   const merges = useMemo(
     () => applicableMerges(parseMerges(mergeRaw), ready?.columns.map((c) => c.name) ?? []),
@@ -177,48 +216,127 @@ export function Kanban() {
   const orphans = orphansOf(git.branches, Date.now(), ready ? new Set(ready.tasks.map((t) => t.id)) : undefined)
   const today = dayKey(new Date())
   const groupOf = (task: Task) => ready?.columns.find((c) => c.name === columnOf(task, merges))?.group ?? null
+  const ctx: TaskContext = { done: (t) => groupOf(t) === 'done', branches: (t) => byTask.get(t.id) ?? [], today }
+  const attentionCount = ready ? attentionOf(ready.tasks, ctx) : { late: 0, today: 0, ci: 0 }
+  const twoTools = providers.length > 1
+  const toolOf = (task: Task) => (twoTools ? (providers.find((p) => p.id === task.provider)?.title ?? null) : null)
+  const parts: Part[] = contributions.parts
+    .filter(({ id }) => !SAID_BY_THE_CARD.has(id))
+    .flatMap(({ id, kanban }) => (kanban.badges ? [{ id, title: id, badges: kanban.badges }] : []))
+
+  // What the board shows: the search, the role and what needs attention, each column sorted (late ones first).
+  const shownTasks = (col: Column) =>
+    sortTasks(
+      col.tasks.filter(
+        (t) =>
+          matchesQuery(t, query, ctx.branches(t)) &&
+          matchesFilter(t, role, ctx) &&
+          (attention === null || matchesFilter(t, attention, ctx)),
+      ),
+      today,
+    )
+  const stages = groups.reduce<{ key: string; label: string; columns: Column[] }[]>((out, g) => {
+    const key = g.label || g.key
+    const last = out.at(-1)
+    if (last && last.key === key) last.columns.push(...g.columns)
+    else out.push({ key, label: g.label || columnLabel(g.columns[0].name), columns: [...g.columns] })
+    return out
+  }, [])
+  const shownStage = narrow ? (stages.find((s) => s.key === stage) ?? stages.find((s) => s.columns.some((c) => !c.folded)) ?? stages[0]) : null
+  const shownStages = shownStage ? [shownStage] : stages
+  // The cards the arrows go through: the open columns shown, and their cards in the order shown.
+  const grid = shownStages.flatMap((s) => s.columns.filter((c) => !c.folded).map((c) => ({ column: c, tasks: shownTasks(c) })))
+  const firstCard = grid.find((g) => g.tasks.length)?.tasks[0]?.id ?? null
+  const activeCard = active !== null && grid.some((g) => g.tasks.some((t) => t.id === active)) ? active : firstCard
+
+  useEffect(() => {
+    const id = focusNext.current
+    if (!id) return
+    focusNext.current = null
+    cards.current.get(id)?.focus()
+  })
 
   const toggleFold = (name: string) => {
     const next = new Set(toggled)
     if (!next.delete(name)) next.add(name)
-    writeToggled(JSON.stringify([...next]))
+    setToggled([...next])
   }
-  const toggleTray = () => writeTray(String(!trayOpen))
 
-  // Optimistic: the card jumps to its new column at once; a failure snaps it back. Once moved, the board is read
-  // again, as its provider wrote it.
-  const move = async (task: Task, status: string) => {
-    // Dropped back in its own column: nothing to write (the column's name would replace a status merged into it).
-    if (!ready || columnOf(task, merges) === status) return
-    const previous = ready
-    setBoard({ ...ready, tasks: ready.tasks.map((t) => (t.id === task.id ? { ...t, status } : t)) })
+  // Optimistic: the cards jump to their new column at once; a failure snaps them back. Once moved, the board is read
+  // again, as its provider wrote it, and a notice offers to undo it for 8 s.
+  const move = async (tasks: Task[], status: string, undoing = false) => {
+    // The board as it is now: an undo runs from a notice drawn earlier.
+    const now = latest.current
+    if (!now) return
+    const moving = tasks.filter((t) => columnOf(t, merges) !== status)
+    if (!moving.length) return
+    const previous = now
+    const ids = new Set(moving.map((t) => t.id))
+    setBoard({ ...now, tasks: now.tasks.map((t) => (ids.has(t.id) ? { ...t, status } : t)) })
     try {
-      await busy(writeMove(task, moveCandidates(task, status, merges, ready.tasks)))
+      await busy(Promise.all(moving.map((t) => writeMove(t, moveCandidates(t, status, merges, now.tasks)))))
     } catch (err) {
       setBoard(previous)
       react('panic', errorMessage(err), errorMessage(err))
+      reload()
       return
     }
     reload()
-    const done = ready.columns.find((c) => c.name === status)?.group === 'done'
-    const name = task.ref ?? task.title
-    react(
-      'quack',
-      done ? `Coin coin ! ${name} est terminée !` : `${name} passe en ${columnLabel(status)}, coin !`,
-      `${task.title} → ${columnLabel(status)} dans ${ready.source}`,
-    )
+    if (undoing) return
+    const done = now.columns.find((c) => c.name === status)?.group === 'done'
+    const name = moving.length > 1 ? plural(moving.length, 'tâche', 'tâches') : (moving[0].ref ?? moving[0].title)
+    react('quack', done ? `Coin coin ! ${name} ${moving.length > 1 ? 'sont terminées' : 'est terminée'} !` : `${name} → ${columnLabel(status)}, coin !`)
+    toast(`${moving.length > 1 ? name : `« ${moving[0].title} »`} → ${columnLabel(status)}`, {
+      action: {
+        label: 'Annuler',
+        run: () => {
+          // Each one back to where it was, one status at a time.
+          for (const from of new Set(moving.map((t) => t.status)))
+            void move(
+              moving.filter((t) => t.status === from).map((t) => ({ ...t, status })),
+              from,
+              true,
+            )
+        },
+      },
+    })
   }
 
   const saveBranches = async (task: Task, refs: BranchRef[]) => {
     try {
       setGit(await busy(setBranches(task.id, refs)))
-      react('quack', `Branches de « ${task.title} » enregistrées. Coin !`, `Branches de « ${task.title} » enregistrées`)
+      toast(`Branches de « ${task.title} » enregistrées`)
     } catch (err) {
       react('panic', errorMessage(err), errorMessage(err))
       throw err
     }
   }
-  const titleOf = (id: string) => ready?.tasks.find((t) => t.id === id)?.title ?? 'une autre tâche'
+  const refsOf = (taskId: string, without?: KanbanBranch) =>
+    (byTask.get(taskId) ?? []).filter((b) => !without || branchKey(b) !== branchKey(without)).map(({ repo, name }) => ({ repo, name }))
+  // A branch onto a task: added to its branches; the notice offers to put it back where it was.
+  const linkBranch = async (branch: KanbanBranch, task: Task) => {
+    const before = branch.taskId
+    try {
+      setGit(await busy(setBranches(task.id, [...refsOf(task.id), { repo: branch.repo, name: branch.name }])))
+    } catch (err) {
+      react('panic', errorMessage(err), errorMessage(err))
+      throw err
+    }
+    toast(`${branch.name} liée à ${task.ref ?? `« ${task.title} »`}`, {
+      action: {
+        label: 'Annuler',
+        run: () =>
+          void busy(
+            setBranches(task.id, refsOf(task.id, branch)).then(() =>
+              before ? setBranches(before, [...refsOf(before), { repo: branch.repo, name: branch.name }]) : null,
+            ),
+          )
+            .then(reloadGit)
+            .catch((err: unknown) => react('panic', errorMessage(err), errorMessage(err))),
+      },
+    })
+  }
+  const titleOf = (id: string) => ready?.tasks.find((t) => t.id === id)?.title ?? 'une tâche que le tableau ne montre pas'
   const chooseBranches = (task: Task) =>
     openDialog((close) => (
       <LinkBranches
@@ -227,36 +345,142 @@ export function Kanban() {
         branches={git.branches}
         titleOf={titleOf}
         save={(refs) => saveBranches(task, refs)}
-        close={close}
+        close={() => {
+          close()
+          cards.current.get(task.id)?.focus()
+        }}
       />
     ))
 
-  const openMark = async (e: MouseEvent, mark: Mark) => {
-    e.stopPropagation()
+  const openUrl = (url: string) => window.open(url, '_blank', 'noopener')
+  const openTask = (task: Task) => {
+    const [first] = openings(task, providers)
+    if (first) openUrl(first.url)
+    else react('quack', "Cette tâche n'a pas d'adresse dans son outil. Coin.")
+  }
+  const openMark = async (mark: Mark) => {
+    if (mark.url) return openUrl(mark.url)
     try {
-      const { url } = await reviewUrl({ repo: mark.repo, name: mark.name })
-      if (url) window.open(url, '_blank', 'noopener')
+      const { url } = await busy(reviewUrl({ repo: mark.repo, name: mark.name }))
+      if (url) openUrl(url)
       else react('quack', 'Je ne trouve ni la revue ni le pipeline de cette branche. Coin.')
     } catch (err) {
       react('panic', errorMessage(err), errorMessage(err))
     }
   }
+  const copy = (text: string, what: string) =>
+    navigator.clipboard.writeText(text).then(() => toast(`${what} copié${what.endsWith('lien') ? '' : 'e'}`))
 
-  const doing = ready?.tasks.filter((t) => groupOf(t) === 'doing') ?? []
-  const due = ready?.tasks.find((t) => groupOf(t) !== 'done' && t.due?.slice(0, 10) === today)
-  useHint(
-    !board
-      ? null
-      : board.source === null
-        ? 'Il me faut une source de tâches : une extension comme Notion. Coin.'
-        : !board.configured
-          ? `Branche-moi à ${board.source} dans les Réglages, que je voie tes tâches.`
-          : due
-            ? `${due.ref ?? due.title} est à rendre aujourd'hui. On s'y met ?`
-            : `${plural(doing.length, 'tâche')} en cours. Laquelle on avance ?`,
-  )
+  // A command the other modules contribute to the menu: its id is known at run time only, so it is looked up (as
+  // `execute` does for a known one) rather than typed.
+  const commands = useCommands()
+  const runCommand = (id: string, args: unknown) => {
+    const command = commands.find((c) => c.id === id)
+    return command ? command.run(args) : runOnApi(id, args)
+  }
 
-  const openMenu = (task: Task, x: number, y: number) => setMenu({ task, x, y })
+  // The cards a gesture acts on: the selection when the card is part of it, else the card alone.
+  const actedOn = (task: Task) => (selected.has(task.id) && selected.size > 1 ? (ready?.tasks.filter((t) => selected.has(t.id)) ?? [task]) : [task])
+
+  const entriesFor = (task: Task): MenuEntry[] => {
+    const tasks = actedOn(task)
+    const several = tasks.length > 1
+    const current = columnOf(task, merges)
+    const reviews = (byTask.get(task.id) ?? []).filter((b) => b.url)
+    const actions = actionsFor(groupOf(task))
+    return [
+      ...(several
+        ? []
+        : openings(task, providers).map((o, i) => ({ label: `Ouvrir dans ${o.title}`, run: () => openUrl(o.url), shortcut: i === 0 ? 'Entrée' : undefined }))),
+      !several && reviews.length === 1 && { label: 'Ouvrir la revue', run: () => openUrl(reviews[0].url!) },
+      ...(several ? [] : actions.map((a) => ({ label: a.title, run: () => runCommand(a.command, { taskId: task.id }) }))),
+      'separator',
+      !several && git.available && { label: 'Lier des branches…', run: () => chooseBranches(task) },
+      !several && { label: "Copier l'ID", run: () => copy(task.ref ?? task.id, "L'ID") },
+      !several && task.url ? { label: 'Copier le lien', run: () => copy(task.url!, 'Le lien') } : null,
+      'separator',
+      ...columns
+        .filter((c) => c.name !== current)
+        .map((c) => ({
+          label: several ? `Déplacer les ${tasks.length} tâches vers ${columnLabel(c.name)}` : `Déplacer vers ${columnLabel(c.name)}`,
+          run: () => move(tasks, c.name),
+        })),
+      several && 'separator',
+      several && { label: 'Tout désélectionner', run: () => setSelected(new Set()), shortcut: 'Échap' },
+    ]
+  }
+
+  // The keys of a card (the board's one stop of Tab): the arrows, Home and End move; Alt with ← → moves it to the
+  // next column; Enter opens it; Space selects it; the Menu key opens its menu; Escape lets the selection go.
+  const onCardKey = (task: Task, at: { col: number; row: number }) => (e: KeyboardEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget) return
+    const go = (col: number, row: number) => {
+      const target = grid[col]
+      if (!target?.tasks.length) return
+      const next = target.tasks[Math.max(0, Math.min(row, target.tasks.length - 1))]
+      setActive(next.id)
+      cards.current.get(next.id)?.focus()
+    }
+    // The next open column with cards, to the left or the right.
+    const neighbour = (step: number) => {
+      for (let c = at.col + step; c >= 0 && c < grid.length; c += step) if (grid[c].tasks.length) return c
+      return null
+    }
+    if (isMenuKey(e)) return openMenu(e, entriesFor(task), `Actions sur ${task.title}`)
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault()
+      const to = grid[at.col + (e.key === 'ArrowLeft' ? -1 : 1)]?.column ?? null
+      if (!to) return
+      focusNext.current = task.id
+      return void move(actedOn(task), to.name)
+    }
+    const mod = isMac() ? e.metaKey : e.ctrlKey
+    if (mod && e.key.toLowerCase() === 'a') {
+      e.preventDefault()
+      return setSelected(new Set(grid.flatMap((g) => g.tasks.map((t) => t.id))))
+    }
+    if (e.altKey || e.ctrlKey || e.metaKey) return
+    const keys: Record<string, () => void> = {
+      ArrowDown: () => go(at.col, at.row + 1),
+      ArrowUp: () => go(at.col, at.row - 1),
+      ArrowLeft: () => {
+        const c = neighbour(-1)
+        if (c !== null) go(c, at.row)
+      },
+      ArrowRight: () => {
+        const c = neighbour(1)
+        if (c !== null) go(c, at.row)
+      },
+      Home: () => go(at.col, 0),
+      End: () => go(at.col, Number.MAX_SAFE_INTEGER),
+      Enter: () => openTask(task),
+      ' ': () => {
+        const next = nextTicks(selected, grid[at.col].tasks.map((t) => t.id), task.id, { shift: e.shiftKey, anchor })
+        setSelected(next.ticked)
+        setAnchor(next.anchor)
+      },
+      Escape: () => setSelected(new Set()),
+    }
+    if (e.key === 'Escape' && !selected.size) return
+    const key = keys[e.key]
+    if (!key) return
+    e.preventDefault()
+    if (e.key === 'Escape') e.stopPropagation()
+    key()
+  }
+  // A click selects with Ctrl (⌘ on macOS) or Shift, else lets the selection go; the card gets the focus either way.
+  const onCardClick = (task: Task, col: number) => (e: MouseEvent<HTMLElement>) => {
+    setActive(task.id)
+    const mod = isMac() ? e.metaKey : e.ctrlKey
+    if (!mod && !e.shiftKey) {
+      if (selected.size) setSelected(new Set())
+      return
+    }
+    const next = nextTicks(selected, grid[col]?.tasks.map((t) => t.id) ?? [], task.id, { shift: e.shiftKey, anchor })
+    setSelected(next.ticked)
+    setAnchor(next.anchor)
+  }
+
   const dropOnColumn = (column: Column) => ({
     onDragOver: (e: DragEvent) => {
       if (!carries(e, TASK_TYPE)) return
@@ -266,10 +490,12 @@ export function Kanban() {
     onDragLeave: () => setOver((o) => (o === column.name ? null : o)),
     onDrop: (e: DragEvent) => {
       setOver(null)
+      setDragging(false)
       if (!carries(e, TASK_TYPE)) return
       e.preventDefault()
-      const task = ready?.tasks.find((t) => t.id === e.dataTransfer.getData(TASK_TYPE))
-      if (task) void move(task, column.name)
+      const ids = new Set(e.dataTransfer.getData(TASK_TYPE).split('\n'))
+      const tasks = ready?.tasks.filter((t) => ids.has(t.id)) ?? []
+      if (tasks.length) void move(tasks, column.name)
     },
   })
   const dropOnCard = (task: Task) => ({
@@ -287,236 +513,331 @@ export function Kanban() {
       e.preventDefault()
       e.stopPropagation()
       const branch = git.branches.find((b) => branchKey(b) === e.dataTransfer.getData(BRANCH_TYPE))
-      if (!branch) return
-      const refs = [...(byTask.get(task.id) ?? []), branch].map(({ repo, name }) => ({ repo, name }))
-      void saveBranches(task, refs).catch(() => undefined)
+      if (branch) void linkBranch(branch, task).catch(() => undefined)
     },
   })
-
-  if (error && !board) {
-    return (
-      <div className="page">
-        <div className="empty">
-          Le Kanban ne peut pas charger tes tâches : {error}
-          <p>
-            <button type="button" className="btn" onClick={reload}>
-              Réessayer
-            </button>
-          </p>
-        </div>
-      </div>
-    )
+  const dragCard = (task: Task) => (e: DragEvent<HTMLElement>) => {
+    e.dataTransfer.setData(TASK_TYPE, actedOn(task).map((t) => t.id).join('\n'))
+    e.dataTransfer.effectAllowed = 'move'
+    setDragging(true)
   }
-  if (!board) return <div className="page" />
-  if (board.source === null || !board.configured || !board.tasks.length) {
+  const dragBranch = (e: DragEvent<HTMLElement>, branch: KanbanBranch) => {
+    e.dataTransfer.setData(BRANCH_TYPE, branchKey(branch))
+    e.dataTransfer.setData('text/plain', branch.name)
+    e.dataTransfer.effectAllowed = 'link'
+  }
+  useEffect(() => {
+    const end = () => setDragging(false)
+    addEventListener('dragend', end)
+    return () => removeEventListener('dragend', end)
+  }, [])
+
+  const sync = () =>
+    void busy(syncTasks()).then(
+      () => toast(`${ready?.source ?? 'La source'} relue`),
+      (err: unknown) => react('panic', errorMessage(err), errorMessage(err)),
+    )
+  useEffect(
+    () => registerCommands({ id: 'lunar-industries-kanban.sync', group: 'Kanban', title: 'Synchroniser les tâches', run: sync }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ready?.source],
+  )
+
+  // The mascot says what needs attention first: the late tasks, the failing CI, then today's.
+  const firstLate = ready?.tasks.find((t) => !ctx.done(t) && matchesFilter(t, 'late', ctx))
+  useHint(
+    !board
+      ? null
+      : board.source === null
+        ? 'Il me faut une source de tâches : une extension comme Notion. Coin.'
+        : !board.configured
+          ? `Branche-moi à ${board.source} dans les Réglages, que je voie tes tâches.`
+          : attentionCount.late
+            ? `${plural(attentionCount.late, 'tâche en retard', 'tâches en retard')}, dont ${firstLate?.ref ?? firstLate?.title}.${attentionCount.ci ? ` Et ${plural(attentionCount.ci, 'CI rouge', 'CI rouges')}.` : ''}`
+            : attentionCount.ci
+              ? `${plural(attentionCount.ci, 'tâche a sa CI rouge', 'tâches ont leur CI rouge')}. On regarde ?`
+              : attentionCount.today
+                ? `${plural(attentionCount.today, 'tâche est à rendre', 'tâches sont à rendre')} aujourd'hui. On s'y met ?`
+                : `Rien en retard. Laquelle on avance ?`,
+  )
+
+  const tools = (
+    <BannerTools>
+      <ToolSearch label="Chercher une tâche" placeholder="Titre, référence, branche…" value={query} onChange={setQuery} />
+      <ToolFilter
+        label="Rôle"
+        options={ROLES.map((key) => ({ key, label: FILTER_LABELS[key] }))}
+        value={role}
+        onChange={setRole}
+      />
+      {git.available && (
+        <button
+          ref={panelButton}
+          type="button"
+          className="chip-btn"
+          aria-expanded={panel}
+          title="Les branches récentes sans tâche"
+          onClick={() => setPanel(!panel)}
+        >
+          Branches sans tâche {orphans.length > 0 && <span className="pill-count">{orphans.length}</span>}
+        </button>
+      )}
+      <button type="button" className="icon-btn" aria-label="Synchroniser" title="Synchroniser les tâches" onClick={sync}>
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    </BannerTools>
+  )
+
+  // The states without a board: each one with what to do next (maquette « États sans tableau »).
+  if (!board) {
     return (
       <div className="page">
-        <div className="empty">
-          {board.source === null
-            ? 'Aucune source de tâches : installe une extension comme Notion.'
-            : !board.configured
-              ? `Branche ${board.source} dans les Réglages pour voir tes tâches.`
-              : `Aucune tâche ${board.source} où tu es responsable ou participant.`}
-          {board.source !== null && board.configured && (
-            <p>
-              <button type="button" className="btn" onClick={() => void busy(syncTasks())}>
-                Synchroniser
+        {error ? (
+          <section className="panel extension-error" role="alert">
+            <p>Le Kanban n'a pas pu lire tes tâches.</p>
+            <p className="test-result bad selectable">{error}</p>
+            <div className="row">
+              <button type="button" className="btn" onClick={reload}>
+                Réessayer
               </button>
-            </p>
-          )}
-        </div>
+            </div>
+          </section>
+        ) : (
+          <div className="lik-loading">
+            <p className="muted">Lecture des tâches…</p>
+            <div className="lik-skeleton" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        )}
       </div>
     )
   }
-
-  return (
-    <div className="page lik-page">
-      {orphans.length > 0 && (
-        <section className="lik-tray" aria-labelledby="lik-tray-title">
-          <button type="button" className="lik-tray-toggle" aria-expanded={trayOpen} onClick={toggleTray}>
-            <h2 id="lik-tray-title" className="legend">
-              Branches récentes sans tâche
-            </h2>
-            <span className="pill-count">{orphans.length}</span>
-          </button>
-          {trayOpen && (
+  if (board.source === null || !board.configured || !board.tasks.length) {
+    const settingsOf = providers[0]?.id
+    return (
+      <div className="page">
+        {tools}
+        <div className="empty lik-empty">
+          {board.source === null ? (
             <>
-              <span className="legend">Glisse-en une sur une tâche pour l’y lier.</span>
-              <div className="lik-orphans">
-                {orphans.map((b) => (
-                  <span
-                    key={branchKey(b)}
-                    className="lik-orphan"
-                    draggable
-                    title={`${b.repoLabel} · ${b.name}`}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(BRANCH_TYPE, branchKey(b))
-                      e.dataTransfer.setData('text/plain', b.name)
-                      e.dataTransfer.effectAllowed = 'link'
-                    }}
-                    onDragEnd={() => setBranchOver(null)}
-                  >
-                    {shortBranch(b.name)}
-                  </span>
-                ))}
+              <strong>Aucune source de tâches</strong>
+              <span>Le Kanban montre les tâches d'une extension comme Notion ou Plane.</span>
+              <button type="button" className="btn-cta" onClick={() => navigate('/reglages/extensions')}>
+                Installer une source de tâches
+              </button>
+            </>
+          ) : !board.configured ? (
+            <>
+              <strong>{board.source} n'est pas encore branché</strong>
+              <span>Le Kanban lit tes tâches dans {board.source}. Donne-lui ce qu'il demande dans ses réglages.</span>
+              <button type="button" className="btn-cta" onClick={() => navigate(settingsOf ? `/reglages/${settingsOf}` : '/reglages')}>
+                Ouvrir les réglages de {board.source}
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>Aucune tâche où tu as un rôle</strong>
+              <span>
+                {board.source} n'a aucune tâche où tu es responsable ou participant. Si tu viens d'en créer une, relis{' '}
+                {board.source}.
+              </span>
+              <div className="row lik-empty-actions">
+                <button type="button" className="btn" onClick={sync}>
+                  Synchroniser
+                </button>
+                {hidden.length > 0 && (
+                  <button type="button" className="btn" onClick={() => navigate('/reglages/lunar-industries-kanban')}>
+                    Voir les statuts masqués
+                  </button>
+                )}
               </div>
             </>
           )}
-        </section>
-      )}
-
-      <div className="lik-board">
-        {groups.map((g) => (
-          <div key={g.key} className="lik-group" role="group" aria-label={g.label || columnLabel(g.columns[0].name)} style={{ flexGrow: g.grow }}>
-            <div className="lik-group-columns">
-              {g.columns.map((col) => (
-                <section
-                  key={col.name}
-                  className={`lik-column${col.folded ? ' folded' : ''}${over === col.name ? ' drop-over' : ''}`}
-                  aria-label={columnLabel(col.name)}
-                  {...dropOnColumn(col)}
-                >
-                  {col.foldable ? (
-                    <button type="button" className="lik-column-head lik-column-toggle" aria-expanded={!col.folded} onClick={() => toggleFold(col.name)}>
-                      <span className="dot" style={{ background: columnColor(col) }} />
-                      <h2 className="ellipsis" title={mergedTip(col)}>{columnLabel(col.name)}</h2>
-                      <span className="pill-count">{col.tasks.length}</span>
-                    </button>
-                  ) : (
-                    <div className="lik-column-head">
-                      <span className="dot" style={{ background: columnColor(col) }} />
-                      <h2 className="ellipsis" title={mergedTip(col)}>{columnLabel(col.name)}</h2>
-                      {col.unknown && <span className="tag lik-tone-warn">absent de {board.source}</span>}
-                    </div>
-                  )}
-                  {!col.folded &&
-                    (col.tasks.length ? (
-                      col.tasks.map((t) => (
-                        <Card
-                          key={t.id}
-                          task={t}
-                          done={groupOf(t) === 'done'}
-                          today={today}
-                          branches={byTask.get(t.id) ?? []}
-                          showBranches={git.available}
-                          badges={contributions.parts
-                            .filter(({ id }) => !SAID_BY_THE_CARD.has(id))
-                            .map(({ id, kanban }) => (
-                              <span key={id}>{kanban.badges?.(t)}</span>
-                            ))}
-                          branchOver={branchOver === t.id}
-                          openMark={openMark}
-                          openMenu={openMenu}
-                          drop={dropOnCard(t)}
-                        />
-                      ))
-                    ) : (
-                      <div className="lik-drop-hint">Glisse une tâche ici</div>
-                    ))}
-                </section>
-              ))}
-            </div>
-          </div>
-        ))}
+          {readAt && <span className="legend">Lu {relTime(new Date(readAt).toISOString())}</span>}
+        </div>
       </div>
-
-      {menu && (
-        <CardMenu
-          {...menu}
-          opens={openings(menu.task, providers)}
-          actions={actionsFor(groupOf(menu.task))}
-          current={columnOf(menu.task, merges)}
-          link={git.available ? () => chooseBranches(menu.task) : null}
-          columns={columns.map((c) => ({ name: c.name, label: columnLabel(c.name) }))}
-          move={(status) => void move(menu.task, status)}
-          close={() => setMenu(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-const TONE_CLASS: Record<Tone, string> = {
-  ok: 'lik-tone-ok',
-  bad: 'lik-tone-bad',
-  warn: 'lik-tone-warn',
-  info: 'lik-tone-info',
-  neutral: 'lik-tone-neutral',
-  accent: 'lik-tone-accent',
-}
-
-function Card({
-  task,
-  done,
-  today,
-  branches,
-  showBranches,
-  badges,
-  branchOver,
-  openMark,
-  openMenu,
-  drop,
-}: {
-  task: Task
-  done: boolean
-  today: string
-  branches: KanbanBranch[]
-  showBranches: boolean
-  badges: React.ReactNode[]
-  branchOver: boolean
-  openMark: (e: MouseEvent, mark: Mark) => void
-  openMenu: (task: Task, x: number, y: number) => void
-  drop: Pick<React.HTMLAttributes<HTMLElement>, 'onDragOver' | 'onDragLeave' | 'onDrop'>
-}) {
-  const badge = badgeOf(task, done, today)
-  const marks = marksOf(branches)
-  const label = showBranches ? branchLabel(branches) : task.ref
-  // A click opens nothing: the card's menu says where it opens (one line per tool). Enter, the menu key or Shift+F10
-  // open that menu, at the card.
-  const onKey = (e: KeyboardEvent<HTMLElement>) => {
-    if (e.key === 'Enter' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
-      e.preventDefault()
-      const r = e.currentTarget.getBoundingClientRect()
-      openMenu(task, r.left + 16, r.top + 24)
-    }
+    )
   }
+
+  const chip = (key: Attention, count: number, label: string) =>
+    count > 0 && (
+      <button
+        type="button"
+        className={`lik-attention lik-attention-${key}`}
+        aria-pressed={attention === key}
+        onClick={() => setAttention(attention === key ? null : key)}
+      >
+        {label}
+      </button>
+    )
+  const filtered = query.trim() !== '' || role !== 'all' || attention !== null
+
   return (
-    <article
-      className={`lik-card${done ? ' done' : ''}${badge?.tone === 'accent' ? ' urgent' : ''}${branchOver ? ' branch-over' : ''}`}
-      tabIndex={0}
-      aria-haspopup="menu"
-      aria-label={label ? `${task.title}, ${label}` : task.title}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(TASK_TYPE, task.id)
-        e.dataTransfer.effectAllowed = 'move'
-      }}
-      onKeyDown={onKey}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        openMenu(task, e.clientX, e.clientY)
-      }}
-      {...drop}
-    >
-      <div className="row lik-card-head">
-        {done && <span className="lik-done-dot" aria-hidden="true" />}
-        {label && <span className="mono lik-branch ellipsis">{label}</span>}
+    <div className="page fill lik-page">
+      {tools}
+      {error && (
+        <div className="lik-alert" role="alert">
+          <span className="grow">
+            <strong>Les tâches n'ont pas pu être relues.</strong> {error} Le tableau montre la lecture{' '}
+            {readAt ? relTime(new Date(readAt).toISOString()) : "d'avant"}.
+          </span>
+          <button type="button" className="btn" onClick={reload}>
+            Réessayer
+          </button>
+        </div>
+      )}
+      {gitError && (
+        <div className="lik-alert" role="alert">
+          <span className="grow">Les branches n'ont pas pu être lues : {gitError}</span>
+          <button type="button" className="btn" onClick={reloadGit}>
+            Réessayer
+          </button>
+        </div>
+      )}
+      <div className="row lik-attention-row" role="group" aria-label="À surveiller">
+        {(attentionCount.late > 0 || attentionCount.today > 0 || attentionCount.ci > 0) && <span className="lik-attention-title">À surveiller</span>}
+        {chip('late', attentionCount.late, plural(attentionCount.late, 'en retard', 'en retard'))}
+        {chip('today', attentionCount.today, `${attentionCount.today} pour aujourd'hui`)}
+        {chip('ci', attentionCount.ci, plural(attentionCount.ci, 'CI rouge', 'CI rouges'))}
         <span className="grow" />
-        {task.role === 'participant' && <span className="cream-pill">participant</span>}
-        {badge && <span className={`tag ${TONE_CLASS[badge.tone]}`}>{badge.text}</span>}
+        {filtered && (
+          <button
+            type="button"
+            className="chip-btn"
+            onClick={() => {
+              setQuery('')
+              setRole('all')
+              setAttention(null)
+            }}
+          >
+            Tout montrer
+          </button>
+        )}
+        <span className="legend">
+          {readAt && `Lu dans ${ready!.source} ${relTime(new Date(readAt).toISOString())} · `}
+          {plural(ready!.tasks.length, 'tâche', 'tâches')}
+        </span>
       </div>
-      <div className="card-title">{task.title}</div>
-      {marks.length > 0 && (
-        <div className="row lik-marks">
-          {marks.map((m) => (
-            <button key={m.key} type="button" className={`tag lik-mark ${TONE_CLASS[m.tone]}`} title={m.tip} onClick={(e) => void openMark(e, m)}>
-              {m.text}
+      {narrow && (
+        <div className="row lik-stage-tabs" role="tablist" aria-label="Étapes">
+          {stages.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              role="tab"
+              aria-selected={s === shownStage}
+              className="chip-btn"
+              onClick={() => setStage(s.key)}
+            >
+              {s.label} · {s.columns.reduce((n, c) => n + shownTasks(c).length, 0)}
             </button>
           ))}
         </div>
       )}
-      {badges.length > 0 && <div className="row lik-badges">{badges}</div>}
-    </article>
+      <div className={`lik-board${dragging ? ' dragging' : ''}`}>
+        {shownStages.map((s) => (
+          <section key={s.key} className="lik-stage" aria-label={s.label}>
+            {!narrow && (
+              <h2 className="lik-stage-title">
+                <span>{s.label}</span>
+              </h2>
+            )}
+            <div className="lik-stage-columns">
+              {s.columns.map((col) => {
+                const tasks = shownTasks(col)
+                const at = grid.findIndex((g) => g.column === col)
+                return col.folded ? (
+                  <button
+                    key={col.name}
+                    type="button"
+                    className={`lik-folded${over === col.name ? ' drop-over' : ''}`}
+                    aria-expanded="false"
+                    title={`Déplier ${columnLabel(col.name)}`}
+                    onClick={() => toggleFold(col.name)}
+                    {...dropOnColumn(col)}
+                  >
+                    <span className="dot" style={{ background: columnColor(col) }} />
+                    <span className="pill-count">{tasks.length}</span>
+                    <span className="lik-folded-name">{columnLabel(col.name)}</span>
+                  </button>
+                ) : (
+                  <section
+                    key={col.name}
+                    className={`lik-column${over === col.name ? ' drop-over' : ''}`}
+                    aria-label={columnLabel(col.name)}
+                    {...dropOnColumn(col)}
+                  >
+                    <h3 className="lik-column-head">
+                      <button type="button" className="lik-column-toggle" aria-expanded="true" title={mergedTip(col) ?? `Replier ${columnLabel(col.name)}`} onClick={() => toggleFold(col.name)}>
+                        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" fill="none" />
+                        </svg>
+                        <span className="dot" style={{ background: columnColor(col) }} />
+                        <span className="grow ellipsis">{columnLabel(col.name)}</span>
+                        {col.unknown && <span className="tag lik-tone-warn">absent de {ready!.source}</span>}
+                        <span className="pill-count">{tasks.length}</span>
+                      </button>
+                    </h3>
+                    <div className="lik-cards" role="list" aria-label={`Tâches ${columnLabel(col.name)}`}>
+                      {tasks.map((t, row) => (
+                        <Card
+                          key={t.id}
+                          task={t}
+                          done={ctx.done(t)}
+                          today={today}
+                          branches={ctx.branches(t)}
+                          tool={toolOf(t)}
+                          parts={parts}
+                          active={t.id === activeCard}
+                          selected={selected.has(t.id)}
+                          branchOver={branchOver === t.id}
+                          cardRef={(el) => {
+                            if (el) cards.current.set(t.id, el)
+                            else cards.current.delete(t.id)
+                          }}
+                          onKeyDown={onCardKey(t, { col: at, row })}
+                          onClick={onCardClick(t, at)}
+                          onOpen={() => openTask(t)}
+                          onMenu={(e) => {
+                            setActive(t.id)
+                            openMenu(e, entriesFor(t), `Actions sur ${t.title}`)
+                          }}
+                          onMark={(m) => void openMark(m)}
+                          drag={dragCard(t)}
+                          drop={dropOnCard(t)}
+                        />
+                      ))}
+                      {!tasks.length && (
+                        <p className="lik-drop-hint">{dragging ? 'Lâche la carte ici' : filtered && col.tasks.length ? 'Aucune tâche ne correspond' : ''}</p>
+                      )}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+      {panel && (
+        <BranchPanel
+          branches={orphans}
+          tasks={ready!.tasks}
+          titleOf={titleOf}
+          done={ctx.done}
+          link={linkBranch}
+          drag={dragBranch}
+          close={() => {
+            setPanel(false)
+            panelButton.current?.focus()
+          }}
+        />
+      )}
+      {menu}
+    </div>
   )
 }
-

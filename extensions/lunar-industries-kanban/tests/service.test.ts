@@ -70,6 +70,8 @@ describe('the cards’ branches', () => {
         reviewRef: null,
         reviewState: null,
         ci: null,
+        // Kept, for a card's mark to open its review at once.
+        url: null,
       },
     ])
   })
