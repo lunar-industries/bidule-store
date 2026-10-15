@@ -247,7 +247,7 @@
     },
     "lunar-industries-kanban": {
       "title": "Kanban",
-      "description": "Le Kanban, version Lunar Industries : colonnes groupées par étape, branches récentes sans tâche à glisser sur une carte, pastilles de revue et de CI, branches d'une tâche à cocher",
+      "description": "Le Kanban, version Lunar Industries : colonnes groupées par étape, recherche et filtres, ce qui demande l’attention, branches sans tâche à lier, pastilles de revue et de CI, tout au clavier",
       "versions": {
         "0.5.3": {
           "engine": "^0.3.0",
@@ -354,6 +354,24 @@
               "size": 17325,
               "sha256": "4ccddf29c69060338bacbb05d3894f0cff98a759f4fd62ee3a6e5104ff158cba",
               "signature": "gB+5j7T1TI6xukuqV/K73iPXGtIQ5A9aiZktQ8aXIRjfO+pZ2ZN9Nojfqk/HzHDBm+HZUEW3wJfSGci4mQNPBA=="
+            }
+          }
+        },
+        "0.8.0": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-15",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-kanban-0.8.0/lunar-industries-kanban-0.8.0.tgz",
+              "size": 27291,
+              "sha256": "ecc90fe694a0cb88ff6bed1968da2f8bd9fb83021513a2a0fc00ff1328271d12",
+              "signature": "FZVDXkFIHtAgko2iUFKfbbb7cCg1MhbeU4ErexFi3W3laEHvMNWNw7Lzdc26nC1oV1MP18p4YijyH6CMvtLgBg=="
             }
           }
         }
