@@ -516,6 +516,50 @@
           }
         }
       }
+    },
+    "lunar-industries-mascot-gerty": {
+      "title": "Gerty",
+      "description": "Gerty : Robot assistant lunaire · thème base lunaire",
+      "versions": {
+        "0.1.0": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "mascots",
+          "unofficial": true,
+          "released": "2026-10-15",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-mascot-gerty-0.1.0/lunar-industries-mascot-gerty-0.1.0.tgz",
+              "size": 5621,
+              "sha256": "b1704d431043f53f46e0063ab84b180dd8ef7af6310e2706b9f0a8399ba35d2c",
+              "signature": "xYZSbenmRCYwiy6yHZ/0ABWBBC6gWq0qMX0m3zOB132sltJK9LKJNOpKOacj38zx++cD8kA70vSTG4ciFeCHAg=="
+            }
+          }
+        }
+      }
+    },
+    "lunar-industries-mascot-hal": {
+      "title": "HAL",
+      "description": "HAL : Ordinateur de bord · thème discovery",
+      "versions": {
+        "0.1.0": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "mascots",
+          "unofficial": true,
+          "released": "2026-10-15",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-mascot-hal-0.1.0/lunar-industries-mascot-hal-0.1.0.tgz",
+              "size": 6756,
+              "sha256": "74096faf70be25fb43528adf3fefa288a76ec9a7d6d09bbac801e93226e35e99",
+              "signature": "cvULzr92zo4YPxlqIgBDiEj5Tl5U8FpEZL/9PrbyLbMRJKvSYFNBDasedKhbmP5hsUc2E31/VECjlgi2YAhBDQ=="
+            }
+          }
+        }
+      }
     }
   }
 }
