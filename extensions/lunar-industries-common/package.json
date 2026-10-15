@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     "./contract": "./contract.ts",
-    "./server/*": "./server/*.ts"
+    "./server/*": "./server/*.ts",
+    "./ui/menu": "./ui/menu.tsx",
+    "./ui/list": "./ui/list.ts"
   },
   "bidule": {
     "storeOnly": true
