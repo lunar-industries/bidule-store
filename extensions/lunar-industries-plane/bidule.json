@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-plane",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "title": "Plane",
   "engine": "^0.3.0",
   "activation": [

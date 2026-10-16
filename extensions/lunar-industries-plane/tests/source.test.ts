@@ -55,7 +55,7 @@ describe('the sync', () => {
     const { tasks, mirror } = source(plane)
     await tasks.syncCount()
     plane.world.items = [
-      item('w1', 'Une', { state: 's-doing', updatedAt: '2026-10-06T10:00:00.000Z', updatedBy: 'u2' }),
+      item('w1', 'Une', { state: 's-doing', updatedAt: '2026-10-06T10:00:00.000Z', updatedBy: 'me' }),
       item('w2', 'Deux renommée', { updatedAt: '2026-10-06T11:00:00.000Z', updatedBy: 'me' }),
     ]
     const read = await tasks.syncCount()
@@ -69,6 +69,25 @@ describe('the sync', () => {
     // An edit by someone else, the status unchanged: nothing for the user.
     plane.world.items[1] = item('w2', 'Deux encore', { updatedAt: '2026-10-06T12:00:00.000Z', updatedBy: 'u2' })
     expect(await tasks.syncCount()).toMatchObject({ moves: 0, edits: 0 })
+  })
+
+  test('a change the user did not make is not their activity: someone else’s, or one Plane cannot attribute', async () => {
+    const plane = fakePlane([item('w1', 'Une'), item('w2', 'Deux')])
+    const { tasks, mirror } = source(plane)
+    await tasks.syncCount()
+    // Camille moves the user's work item to « En cours »; a key the team shares renames the other.
+    plane.world.items = [
+      item('w1', 'Une', { state: 's-doing', updatedAt: '2026-10-06T10:00:00.000Z', updatedBy: 'u2' }),
+      item('w2', 'Deux renommée', { updatedAt: '2026-10-06T11:00:00.000Z', updatedBy: null }),
+    ]
+    expect(await tasks.syncCount()).toMatchObject({ moves: 0, edits: 0 })
+    expect(await mirror.statusChanges('2026-10-06T00:00:00Z', '2026-10-07T00:00:00Z')).toEqual([])
+    expect(await mirror.edits('2026-10-06T00:00:00Z', '2026-10-07T00:00:00Z')).toEqual([])
+    // The mirror still follows them: the status and the title are Plane's.
+    expect((await mirror.tasks()).map((t) => [t.id, t.title, t.status])).toEqual([
+      ['w2', 'Deux renommée', 'À faire'],
+      ['w1', 'Une', 'En cours'],
+    ])
   })
 
   test('an unconfigured source says what is missing, and a bad key fails with Plane’s words', async () => {

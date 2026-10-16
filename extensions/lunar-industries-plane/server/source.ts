@@ -60,7 +60,8 @@ export class PlaneTasks {
   /**
    * Reads the work items assigned to the user into the mirror: new and changed ones are written, a state change and
    * an edit by the user are kept as activity (Plane shows a work item's last change only, so what happened between
-   * two syncs is dated by it), and the ones gone from the user's are hidden, not deleted.
+   * two syncs is dated by it), and the ones gone from the user's are hidden, not deleted. A change counts as the user's
+   * only when Plane says they made it: one by someone else, or by a key the team shares, is not the user's time.
    */
   async syncCount(): Promise<{ tasks: number; edits: number; moves: number; who: string }> {
     const { api, base, workspace } = await this.#need()
@@ -99,12 +100,11 @@ export class PlaneTasks {
       })
       seen.add(item.id)
       const previous = before.get(item.id)
-      if (!previous || previous.lastEdited === item.updatedAt) continue
+      if (!previous || previous.lastEdited === item.updatedAt || item.updatedBy !== me.id) continue
       if (previous.status && previous.status !== status) {
         await this.mirror.addStatusChange(item.updatedAt, item.id, previous.status, status)
         moves += 1
-      } else if (!item.updatedBy || item.updatedBy === me.id) {
-        // Any other edit counts when the user made it (or when who did is unknown).
+      } else {
         await this.mirror.addEdit(item.updatedAt, item.id, `« ${item.name} » modifiée dans Plane`)
         edits += 1
       }

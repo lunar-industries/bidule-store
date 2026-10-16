@@ -1,6 +1,6 @@
 {
   "name": "@bidule/ext-lunar-industries-plane",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Les tâches Plane, version Lunar Industries : les work items assignés à l'utilisateur à côté de ceux de Notion, les cartes déplacées dans Plane, les commentaires, et les tâches migrées de Notion réunies en une seule carte",
   "type": "module",
