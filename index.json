@@ -255,7 +255,7 @@
     },
     "lunar-industries-common": {
       "title": "Commun",
-      "description": "Ce que les modules Lunar Industries partagent : les branches telles que le cœur les a (tâche, revue, CI), le lien d'une branche à une tâche fait à la main, et les réglages communs (branches d'intégration, cibles des MR, nommage des branches)",
+      "description": "Ce que les modules Lunar Industries partagent : les branches telles que le cœur les a (tâche, revue, CI), le lien d'une branche à une tâche fait à la main, et les réglages communs (branches d'intégration, cibles des revues, nommage des branches)",
       "versions": {
         "0.1.1": {
           "engine": "^0.3.0",
@@ -334,6 +334,22 @@
               "size": 5566,
               "sha256": "8ef45ad9b4c14fb26a9d99c01a4d928569032181b3de3e70163aa4a326bee808",
               "signature": "X+lfljP6+4Nw/h6KBNoTRXlfmO8V2RZ3CE8YxDxBOVtvw+L16spAQfnODsfpt6WSPe9/wvaLnS43diTKYuIMBg=="
+            }
+          }
+        },
+        "0.1.6": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-common-0.1.6/lunar-industries-common-0.1.6.tgz",
+              "size": 5577,
+              "sha256": "671b47cb3038498a2b84f632ea712f278225812be7e9084a72526206d293b405",
+              "signature": "TRjALZUrNFdQD9vulA1h5/gbmDDm5MiL6ZNFhztCu85pMMRkp9LqQk1uAexoFp+5trfBoWUCWS30Wwe+aH91Cw=="
             }
           }
         }
