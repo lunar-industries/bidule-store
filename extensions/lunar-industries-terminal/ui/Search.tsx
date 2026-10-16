@@ -1,8 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { terminals } from './tabs.ts'
 
 /**
- * Searching the active tab's scrollback (Ctrl+Shift+F; the pane with the focus in a split tab): Enter goes to the next
+ * Searching the active tab's scrollback (Ctrl+Shift+R; the pane with the focus in a split tab): Enter goes to the next
  * match, Shift+Enter to the previous one, Escape closes; the match shown is selected, and the matches are counted.
  * Another tab or pane chosen meanwhile is searched in turn.
  */
@@ -35,7 +36,8 @@ export function TerminalSearch() {
     setText(value)
     terminals.find(value, { caseSensitive, typed: true })
   }
-  const count = !text || !found ? '' : found.matches.length === 0 ? 'Aucun' : `${found.index + 1}/${found.matches.length}`
+  const none = Boolean(text && found && found.matches.length === 0)
+  const count = !text || !found ? '' : none ? 'Aucun résultat' : `${found.index + 1}/${found.matches.length}`
 
   return (
     <div className="row lterm-search" role="search">
@@ -56,7 +58,7 @@ export function TerminalSearch() {
           }
         }}
       />
-      <span className="lterm-search-count" aria-live="polite">
+      <span className={`lterm-search-count${none ? ' none' : ''}`} aria-live="polite">
         {count}
       </span>
       <button
@@ -70,13 +72,13 @@ export function TerminalSearch() {
         Aa
       </button>
       <button type="button" className="icon-btn" aria-label="Précédent" title="Précédent (Maj+Entrée)" onClick={() => terminals.find(text, { caseSensitive, backwards: true })}>
-        ↑
+        <Icon name="up" size={14} />
       </button>
       <button type="button" className="icon-btn" aria-label="Suivant" title="Suivant (Entrée)" onClick={() => terminals.find(text, { caseSensitive })}>
-        ↓
+        <Icon name="down" size={14} />
       </button>
       <button type="button" className="icon-btn" aria-label="Fermer la recherche" title="Fermer (Échap)" onClick={() => terminals.closeSearch()}>
-        ×
+        <Icon name="close" size={14} />
       </button>
     </div>
   )

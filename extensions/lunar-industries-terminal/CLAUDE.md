@@ -64,7 +64,9 @@ Le module épingle une version exacte de ghostty-web (`package.json`), parce qu'
   le module l'ouvre d'un simple clic (`findUrls`), comme l'officiel.
 - **Le thème** est lu à la création de chaque terminal (`ui/theme.ts`) : ghostty-web fixe les couleurs des cellules
   à leur écriture et ne sait pas changer de thème ensuite. Un thème choisi plus tard ne vaut que pour les nouveaux
-  onglets.
+  onglets : le fond du volet garde la couleur prise à la création (le raccord ne se voit pas), et la mascotte le dit
+  quand des terminaux sont ouverts (`ui/theme-notice.ts`).
+- **Le champ caché** de ghostty-web, nommé « Terminal input », est renommé « Saisie du terminal ».
 - **Effacer** remonte la ligne du curseur en haut puis efface l'historique (CSI S, CSI 3 J), comme `clear()` de
   xterm.js ; celui de ghostty-web effaçait aussi l'invite.
 
@@ -72,11 +74,30 @@ Limites connues de ghostty-web 0.4.0 : son historique garde sa taille par défau
 sur l'écran secondaire (un programme plein écran) ; chaque terminal dessine dans une boucle d'animation tant qu'il
 existe, même caché (le navigateur la suspend quand la fenêtre est cachée).
 
-## Un onglet divisé dans la barre
+## La page (maquette « Terminal Lunar »)
 
-Un onglet divisé montre ses terminaux côte à côte dans sa pastille (`PaneTitles` de `ui/TabStrip.tsx`) : le titre de
-chacun, un clic pour y aller, un clic du milieu pour fermer ce seul volet ; celui qui a le focus est mis en avant. Dans
-la liste (quand les onglets ne tiennent plus en ligne), l'onglet porte les titres de ses terminaux (`heading`).
+- **Les onglets** (`ui/TabStrip.tsx`) : un seul arrêt de Tab, sur l'onglet actif ; ← → Début Fin passent d'un onglet à
+  l'autre et l'affichent, Suppr le ferme, la touche Menu ouvre son menu. Chaque onglet est un seul bouton
+  (`role="tab"`) ; sa × est hors de la liste pour un lecteur d'écran (`aria-hidden`, la souris seule : Suppr la
+  remplace au clavier). Le clic droit d'un onglet ouvre le menu commun (`tabEntries` de `ui/TabMenu.tsx` : renommer,
+  sa couleur sur une ligne à soi, fermer).
+- **Un onglet divisé** montre ses terminaux côte à côte dans son bouton (`PaneTitles`) : le titre de chacun, un clic
+  pour y aller, un clic du milieu pour fermer ce seul volet ; celui qui a le focus est mis en avant. Dans la liste
+  (quand les onglets ne tiennent plus en ligne), l'onglet porte les titres de ses terminaux (`heading`).
+- **Fermer** un onglet ou un volet où une commande tourne (`commands.running`, d'après l'intégration du shell) demande
+  d'abord la confirmation commune, le focus sur « Annuler » (`askClose` de `ui/tabs.ts`) ; à l'invite, il se ferme
+  aussitôt.
+- **La recherche** : Ctrl+Maj+R (« Rechercher » ; Ctrl+Maj+F est le mode focus du cœur, pris avant la page), ou la
+  loupe au bord du bandeau. Son champ a l'anneau de focus, et elle dit « Aucun résultat ».
+- **Le clic droit dans le terminal** ouvre le menu commun ; « Copier » est grisé sans sélection, avec sa raison.
+- **Les états** : « Ouverture du terminal… » pendant que le premier se charge (`opening`), sans bouton ; un terminal
+  qui ne peut pas se charger le dit (`Empty` commun, avec Réglages › Rôles) et « + », « Scripts » et la loupe
+  disparaissent ; la ligne « Relancer » d'un shell arrêté, sous laquelle la mascotte ne descend pas en mode focus.
+- **Les scripts** : une palette sans script dit pourquoi (« Aucun script dans … », « Aucun dépôt connu »).
+- **Un terminal qui attend ta réponse** (la marque `waiting` qu'une extension pose, Claude Code qui demande) se voit
+  depuis les autres pages : la partie de fond (`ui/index.tsx`) met leur nombre sur l'onglet Terminal du bandeau.
+- **Le mode focus** : les règles que le cœur donne à ses onglets de terminal valent pour `lterm-tabs`, `lterm-tab` et
+  `lterm-switch`.
 
 ## Classes CSS
 
@@ -88,8 +109,9 @@ Elles sont dans `ui/lterm.css`, toutes sous `lterm-`, jamais les `terminal-` de 
   `position: relative` et `overflow: hidden`.
 - `lterm-split` étire ses volets (`align-items: stretch`) : il porte aussi la classe `row` du design system, qui les
   centrerait, et un volet prendrait alors la taille de son canvas.
-- `lterm-tab-panes` > `lterm-tab-name` (le nom donné par l'utilisateur) et `lterm-tab-pane` (un terminal ; un trait
-  entre deux ; `focused` net, l'autre estompé sur l'onglet affiché).
+- `lterm-tab-panes` (sur le bouton d'un onglet divisé) > `lterm-tab-name` (le nom donné par l'utilisateur) et
+  `lterm-tab-pane` (un terminal ; un trait entre deux ; `focused` net, l'autre estompé sur l'onglet affiché).
+- `lterm-search-count` (`none` : « Aucun résultat », en rouge).
 
 ## Tests
 

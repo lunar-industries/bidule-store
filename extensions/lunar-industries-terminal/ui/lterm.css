@@ -164,8 +164,23 @@
   background: transparent;
   color: var(--text-2);
 }
+/* In focus mode, the core's rules for its terminal's tabs (core/web/src/styles/app.css: .terminal-tabs, .terminal-tab),
+   given to these: out of the title bar's drag area, 32 px high, white pills among the page's tools. */
+.titlebar .focus-bar :is(.lterm-tabs, .lterm-switch) {
+  -webkit-app-region: no-drag;
+}
 .titlebar .focus-bar .lterm-switch-button {
   height: 32px;
+}
+.titlebar .focus-bar .lterm-tabs {
+  padding: 2px;
+}
+.titlebar .focus-bar .lterm-tab {
+  height: 28px;
+}
+.focus-tools .lterm-tabs {
+  border: none;
+  background: var(--card);
 }
 .lterm-tab {
   flex-shrink: 0;
@@ -195,9 +210,17 @@
 }
 /* A split tab: its terminals side by side in its pill, a thin line between them; on the tab shown, the one without the
    focus steps back like its pane. The user's name for the tab comes first. */
-.lterm-tab-panes {
+.lterm-tab-title.lterm-tab-panes {
+  max-width: 360px;
   height: 100%;
   align-items: center;
+  gap: 0;
+}
+/* The tab the arrows are on: the keyboard's ring, inside the strip's pill. */
+.lterm-tab-title:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-pill);
 }
 .lterm-tab-name {
   max-width: 160px;
@@ -207,6 +230,7 @@
 }
 .lterm-tab-pane {
   max-width: 160px;
+  padding: 0 var(--space-2);
 }
 .lterm-tab-pane + .lterm-tab-pane {
   margin-left: var(--space-1);
@@ -323,7 +347,7 @@
   border-color: var(--text);
 }
 
-/* ---------- searching the scrollback (Ctrl+Shift+F): a bar over the terminal's top right corner */
+/* ---------- searching the scrollback (Ctrl+Shift+R): a bar over the terminal's top right corner */
 .lterm-search {
   position: absolute;
   z-index: 2;
@@ -339,18 +363,34 @@
 }
 .lterm-search input {
   width: 200px;
+  height: 28px;
+  padding: 0 var(--space-2);
   border: none;
+  border-radius: var(--radius-pill);
   outline: none;
   background: transparent;
   color: var(--text);
   font-size: var(--fs-sm);
 }
+/* The field has the keyboard: the app's ring, as every field. The browser's own clear button would double the bar's ×. */
+.lterm-search input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.lterm-search input::-webkit-search-cancel-button {
+  display: none;
+}
 .lterm-search-count {
   min-width: 48px;
+  margin-left: var(--space-2);
   color: var(--text-2);
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.lterm-search-count.none {
+  color: var(--bad-ink);
+  font-weight: 700;
 }
 /* A file held over the terminal: the panel says it takes it. */
 .lterm-host.dropping {

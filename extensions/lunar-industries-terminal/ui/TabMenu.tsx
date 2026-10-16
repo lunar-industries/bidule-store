@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import { Modal, openDialog } from '@bidule/sdk'
+import type { MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { TAB_COLORS, type TabColor } from './order.ts'
 import { terminals, type TerminalTab } from './tabs.ts'
 
@@ -54,68 +54,43 @@ function RenameDialog({ tab, close }: { tab: TerminalTab; close: () => void }) {
   )
 }
 
-// A tab's right click: rename it, colour it, close it. Closes on a click elsewhere or Escape.
-export function TabMenu({ tab, x, y, close }: { tab: TerminalTab; x: number; y: number; close: () => void }) {
-  const menu = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    menu.current?.querySelector('button')?.focus()
-    const away = (e: MouseEvent) => !menu.current?.contains(e.target as Node) && close()
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
-      close()
-    }
-    addEventListener('mousedown', away)
-    addEventListener('keydown', esc, true)
-    return () => {
-      removeEventListener('mousedown', away)
-      removeEventListener('keydown', esc, true)
-    }
-  }, [close])
-  const run = (fn: () => void) => () => {
-    close()
-    fn()
-  }
-  // In the page's body: the tabs sit on the banner's edge, moved by a transform, which would make a fixed menu inside
-  // them open away from the click.
-  return createPortal(
-    <div
-      ref={menu}
-      className="menu floating"
-      role="menu"
-      aria-label={tab.label}
-      style={{ left: Math.min(x, innerWidth - 240), top: Math.min(y, innerHeight - 200) }}
-    >
-      <button type="button" role="menuitem" className="menu-item" onClick={run(() => renameTab(tab))}>
-        Renommer…
-      </button>
-      <div className="row lterm-colors" role="group" aria-label="Couleur">
-        <button
-          type="button"
-          className="lterm-color none"
-          aria-pressed={tab.color === null}
-          aria-label="Sans couleur"
-          title="Sans couleur"
-          onClick={run(() => terminals.recolor(tab, null))}
-        />
-        {TAB_COLORS.map((c) => (
+// A tab's right click, in the common menu: rename it, colour it, close it (asked first while a command runs there).
+export function tabEntries(tab: TerminalTab): MenuEntry[] {
+  return [
+    { label: 'Renommer…', run: () => renameTab(tab) },
+    {
+      label: 'Couleur de l’onglet',
+      // The arrows reach the swatches as the items (menuitemradio); a click colours the tab and leaves the menu open.
+      row: (
+        <div className="row lterm-colors">
           <button
-            key={c}
             type="button"
-            className="lterm-color"
-            style={{ background: `var(--${c})` }}
-            aria-pressed={tab.color === c}
-            aria-label={COLOR_NAMES[c]}
-            title={COLOR_NAMES[c]}
-            onClick={run(() => terminals.recolor(tab, c))}
+            role="menuitemradio"
+            tabIndex={-1}
+            className="lterm-color none"
+            aria-checked={tab.color === null}
+            aria-label="Sans couleur"
+            title="Sans couleur"
+            onClick={() => terminals.recolor(tab, null)}
           />
-        ))}
-      </div>
-      <hr className="menu-sep" />
-      <button type="button" role="menuitem" className="menu-item" onClick={run(() => terminals.close(tab))}>
-        Fermer
-      </button>
-    </div>,
-    document.body,
-  )
+          {TAB_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="menuitemradio"
+              tabIndex={-1}
+              className="lterm-color"
+              style={{ background: `var(--${c})` }}
+              aria-checked={tab.color === c}
+              aria-label={COLOR_NAMES[c]}
+              title={COLOR_NAMES[c]}
+              onClick={() => terminals.recolor(tab, c)}
+            />
+          ))}
+        </div>
+      ),
+    },
+    'separator',
+    { label: 'Fermer', run: () => terminals.askClose(tab), shortcut: 'Ctrl+Maj+W' },
+  ]
 }

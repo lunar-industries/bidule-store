@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import type { TerminalMark } from '../contract.ts'
 import { bannerCap, roomBeside, tabsFit } from './fit.ts'
 import { dropIndex } from './order.ts'
-import { renameTab, TabMenu } from './TabMenu.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
+import { isMenuKey, useMenu } from '@bidule/ext-lunar-industries-common/ui/menu'
+import { renameTab, tabEntries } from './TabMenu.tsx'
 import { terminals, type TerminalTab } from './tabs.ts'
 
 // A tab dragged to another place (its key), as the drag carries it.
@@ -38,7 +40,7 @@ export function TabStrip() {
   const [listed, setListed] = useState(false)
   const [open, setOpen] = useState(false)
   const [room, setRoom] = useState(() => bannerCap(innerWidth))
-  const [tabMenu, setTabMenu] = useState<{ tab: TerminalTab; x: number; y: number } | null>(null)
+  const [tabMenu, openTabMenu] = useMenu()
   // Where a dragged tab would land (a gap between tabs), drawn as a mark.
   const [dropAt, setDropAt] = useState<number | null>(null)
   const { tabs, active } = terminals
@@ -67,9 +69,25 @@ export function TabStrip() {
     onDragEnd: () => setDropAt(null),
   })
   const mark = (index: number) => (dropAt === index ? ' drop-before' : dropAt === index + 1 && index === tabs.length - 1 ? ' drop-after' : '')
-  const openMenu = (t: TerminalTab) => (e: React.MouseEvent) => {
-    e.preventDefault()
-    setTabMenu({ tab: t, x: e.clientX, y: e.clientY })
+  const openMenu = (t: TerminalTab) => (e: React.MouseEvent) => openTabMenu(e, tabEntries(t), `Onglet ${t.label}`)
+
+  // The tabs, one stop of Tab (the active one): ← → Début Fin go to another and show it, Suppr closes it (asked first
+  // while a command runs), the Menu key opens its menu.
+  const onTabKey = (t: TerminalTab) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const at = tabs.indexOf(t)
+    const to = e.key === 'ArrowRight' ? at + 1 : e.key === 'ArrowLeft' ? at - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null
+    if (to !== null) {
+      e.preventDefault()
+      const next = tabs[(to + tabs.length) % tabs.length]
+      if (!next) return
+      terminals.select(next, false)
+      requestAnimationFrame(() => root.current?.querySelector<HTMLElement>(`[data-tab="${next.key}"]`)?.focus())
+    } else if (e.key === 'Delete') {
+      e.preventDefault()
+      void terminals.askClose(t)
+    } else if (isMenuKey(e)) {
+      openTabMenu(e, tabEntries(t), `Onglet ${t.label}`)
+    }
   }
 
   // The room, when the window or the row the strip sits in changes size.
@@ -143,16 +161,18 @@ export function TabStrip() {
       <div ref={measure} className="row lterm-tabs lterm-tabs-measure" aria-hidden="true" inert>
         {tabs.map((t) => (
           <div key={t.key} className={`row lterm-tab${t === active ? ' active' : ''}`}>
-            {t.split ? (
-              <PaneTitles tab={t} />
-            ) : (
-              <button type="button" className="lterm-tab-title ellipsis" tabIndex={-1}>
-                <TabMark tab={t} />
-                {t.label}
-              </button>
-            )}
+            <button type="button" className={`lterm-tab-title ellipsis${t.split ? ' row lterm-tab-panes' : ''}`} tabIndex={-1}>
+              {t.split ? (
+                <PaneTitles tab={t} />
+              ) : (
+                <>
+                  <TabMark tab={t} />
+                  {t.label}
+                </>
+              )}
+            </button>
             <button type="button" className="lterm-tab-close" tabIndex={-1}>
-              ×
+              <Icon name="close" size={12} />
             </button>
           </div>
         ))}
@@ -163,29 +183,35 @@ export function TabStrip() {
           {tabs.map((t, i) => (
             <div
               key={t.key}
+              role="presentation"
               className={`row lterm-tab${t === active ? ' active' : ''}${colorOf(t)}${mark(i)}`}
               {...dragProps(t, i, 'x')}
               onContextMenu={openMenu(t)}
             >
-              {t.split ? (
-                <PaneTitles tab={t} live />
-              ) : (
-                <button
-                  type="button"
-                  role="tab"
-                  className="lterm-tab-title ellipsis"
-                  aria-selected={t === active}
-                  title={`${t.label} — double clic pour renommer`}
-                  onClick={() => terminals.select(t)}
-                  onDoubleClick={() => renameTab(t)}
-                  onAuxClick={(e) => e.button === 1 && terminals.close(t)}
-                >
-                  <TabMark tab={t} />
-                  {t.label}
-                </button>
-              )}
-              <button type="button" className="lterm-tab-close" aria-label={`Fermer ${t.heading}`} onClick={() => terminals.close(t)}>
-                ×
+              {/* One button per tab, a split tab's terminals inside it: a click on one of them goes to it. */}
+              <button
+                type="button"
+                role="tab"
+                data-tab={t.key}
+                className={`lterm-tab-title ellipsis${t.split ? ' row lterm-tab-panes' : ''}`}
+                aria-selected={t === active}
+                tabIndex={t === active ? 0 : -1}
+                title={`${t.heading} — double clic pour renommer, Suppr pour fermer`}
+                onClick={() => terminals.select(t)}
+                onKeyDown={onTabKey(t)}
+                onDoubleClick={() => renameTab(t)}
+                onAuxClick={(e) => e.button === 1 && void terminals.askClose(t)}
+              >
+                {t.split ? <PaneTitles tab={t} live /> : (
+                  <>
+                    <TabMark tab={t} />
+                    {t.label}
+                  </>
+                )}
+              </button>
+              {/* Out of the tabs for a screen reader (Suppr closes a tab from the keyboard): the mouse's ×. */}
+              <button type="button" className="lterm-tab-close" tabIndex={-1} aria-hidden="true" title="Fermer (Suppr)" onClick={() => void terminals.askClose(t)}>
+                <Icon name="close" size={12} />
               </button>
             </div>
           ))}
@@ -228,8 +254,8 @@ export function TabStrip() {
                     <TabMark tab={t} />
                     {t.heading}
                   </button>
-                  <button type="button" className="lterm-tab-close" aria-label={`Fermer ${t.heading}`} onClick={() => terminals.close(t)}>
-                    ×
+                  <button type="button" className="lterm-tab-close" aria-label={`Fermer ${t.heading}`} onClick={() => void terminals.askClose(t)}>
+                    <Icon name="close" size={12} />
                   </button>
                 </div>
               ))}
@@ -249,20 +275,21 @@ export function TabStrip() {
           )}
         </>
       )}
-      {tabMenu && <TabMenu {...tabMenu} close={() => setTabMenu(null)} />}
+      {tabMenu}
     </div>
   )
 }
 
 /**
- * A split tab in the strip: each of its terminals by its title, side by side in the tab's pill (its name first when the
- * user gave it one). A click goes to that terminal, the one with the focus stands out, a middle click closes it alone,
- * a double click renames the tab. `live` false: the copy drawn out of sight to be measured.
+ * A split tab's terminals, inside its one tab button: each by its title, side by side (the tab's name first when the
+ * user gave it one), the one with the focus standing out. A click on one goes to it, a middle click closes it alone
+ * (asked first while a command runs). Ctrl+Shift with an arrow goes from one to the other from the keyboard. `live`
+ * false: the copy drawn out of sight to be measured.
  */
 function PaneTitles({ tab, live = false }: { tab: TerminalTab; live?: boolean }) {
   const shown = terminals.active === tab
   return (
-    <div className="row lterm-tab-panes" role={live ? 'tab' : undefined} aria-selected={live ? shown : undefined}>
+    <>
       {tab.name && (
         <span className="lterm-tab-name ellipsis">
           <TabMark tab={tab} />
@@ -270,29 +297,34 @@ function PaneTitles({ tab, live = false }: { tab: TerminalTab; live?: boolean })
         </span>
       )}
       {tab.panes.map((pane, i) => (
-        <button
+        <span
           key={i}
-          type="button"
-          className={`lterm-tab-title lterm-tab-pane ellipsis${shown && i === tab.focused ? ' focused' : ''}`}
-          tabIndex={live ? undefined : -1}
-          aria-label={live ? `${pane.title}, terminal ${i + 1} sur ${tab.panes.length}` : undefined}
+          className={`lterm-tab-pane ellipsis${shown && i === tab.focused ? ' focused' : ''}`}
           title={live ? `${pane.title} — clic du milieu pour fermer ce terminal` : undefined}
           onClick={
             live
-              ? () => {
+              ? (e) => {
+                  e.stopPropagation()
                   terminals.select(tab)
                   terminals.focusPane(i, tab)
                 }
               : undefined
           }
-          onDoubleClick={live ? () => renameTab(tab) : undefined}
-          onAuxClick={live ? (e) => e.button === 1 && terminals.closePane(tab, pane) : undefined}
+          onAuxClick={
+            live
+              ? (e) => {
+                  if (e.button !== 1) return
+                  e.stopPropagation()
+                  void terminals.askClose(tab, pane)
+                }
+              : undefined
+          }
         >
           {i === 0 && !tab.name && <TabMark tab={tab} />}
           {pane.title}
-        </button>
+        </span>
       ))}
-    </div>
+    </>
   )
 }
 

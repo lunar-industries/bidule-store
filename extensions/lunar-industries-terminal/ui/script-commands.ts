@@ -90,6 +90,17 @@ let tabRepo: Repo | null = null
 // The palette's scope on the Terminal's page: the active tab's repo's scripts, else the list of the repos.
 export const scriptsScope = (): PaletteScope => (tabRepo ? repoScope(tabRepo) : ROOT)
 
+// Why the palette has no script to offer: a line that says it, and says it again when chosen.
+const NONE_IN_REPO = 'Ni package.json, ni composer.json, ni Makefile, ni bidule.scripts.json n’y déclare de script.'
+const NO_REPO = 'Ce terminal n’est dans aucun dépôt, et git n’en a lu aucun : ouvre un terminal dans un dépôt pour voir ses scripts.'
+const empty = (id: string, title: string, group: string, why: string): Command => ({
+  id,
+  title,
+  group,
+  detail: why,
+  run: () => react('quack', why, why),
+})
+
 // A file or a script that cannot run is not left out silently: a line of the repo's scripts that says why when chosen.
 const problem = (id: string, title: string, group: string, message: string): Command => ({
   id,
@@ -167,7 +178,13 @@ export function syncScripts(terminals: TerminalTabs): void {
       detail: r.path,
       run: () => pick(r),
     }))
-    if (repo) commands.push(...commandsOf(terminals, repo, listed))
+    if (repo) {
+      const own = commandsOf(terminals, repo, listed)
+      commands.push(...own)
+      // A repo without a script: the palette says why it is empty instead of showing nothing.
+      if (!own.length) commands.push(empty(`terminal.scripts-none:${repo.path}`, `Aucun script dans ${repo.label}`, repoScope(repo).group, NONE_IN_REPO))
+    }
+    if (!repos.length) commands.push(empty('terminal.scripts-none', 'Aucun dépôt connu', ROOT.group, NO_REPO))
     unregister = registerCommands(...commands)
   }
 

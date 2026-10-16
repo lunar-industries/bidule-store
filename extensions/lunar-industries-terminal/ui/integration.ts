@@ -41,6 +41,11 @@ export class CommandTracker {
     return this.#running
   }
 
+  // The line of the command running, when the shell said it (null otherwise, or when none runs).
+  get command(): string | null {
+    return this.#running ? this.#command : null
+  }
+
   line(command: string): void {
     if (this.#running && this.#command === null) this.#command = command
     else this.#pending = command

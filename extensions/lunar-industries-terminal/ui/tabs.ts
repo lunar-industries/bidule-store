@@ -1,6 +1,7 @@
-import { FitAddon, Terminal, type Ghostty, type ILink } from 'ghostty-web'
+import { FitAddon, Terminal, type Ghostty, type ILink, type ITheme } from 'ghostty-web'
 import type { TerminalBridge, TerminalTarget, ShellPlace } from '@bidule/api/bridge'
 import { isPaletteKey, navigate, parseWslPath, react, readTasks } from '@bidule/sdk'
+import { confirm } from '@bidule/ext-lunar-industries-common/ui/confirm'
 import type { TerminalMark } from '../contract.ts'
 import { findMatches, pickMatch, viewFor, type Match } from './find.ts'
 import { emulator, ready, rowOffset, selectCells, type BufferLine } from './ghostty.ts'
@@ -133,6 +134,8 @@ export class TerminalPane {
     this.box.className = 'lterm-pane'
     term.loadAddon(this.fit)
     term.open(this.box)
+    // ghostty-web names its hidden field in English (« Terminal input »).
+    for (const field of this.box.querySelectorAll('textarea, input')) field.setAttribute('aria-label', 'Saisie du terminal')
   }
 
   // The WSL distribution its paths are of (`default`: the default one), or null for this machine's.
@@ -248,10 +251,12 @@ export class TerminalTabs {
   #listening = false
   #listeners = new Set<() => void>()
   #version = 0
-  // The search bar is open (Ctrl+Shift+F).
+  // The search bar is open (Ctrl+Shift+R).
   searching = false
   // Why no terminal can be made (the page refuses WebAssembly…): said by the page in place of its button.
   problem: string | null = null
+  // A first terminal is being opened (the emulator loads, the shell starts): the page says so, without a button.
+  opening = false
 
   // An emulator for a new pane; what keeps it from loading is kept for the page, then thrown.
   async #emulator(): Promise<Ghostty> {
@@ -264,6 +269,35 @@ export class TerminalTabs {
       this.#changed()
       throw err
     }
+  }
+
+  // How many tabs wait for the user's answer (Claude Code asking, through another extension's mark): the count on the
+  // Terminal's tab of the banner.
+  waiting(): number {
+    return this.tabs.filter((t) => this.markOf(t)?.state === 'waiting').length
+  }
+
+  /**
+   * Closes a tab, or one pane of a split tab, once the user agreed when a command still runs there (the common
+   * confirmation: something is lost, the focus on « Annuler »). A tab at its prompt closes at once.
+   */
+  async askClose(tab: TerminalTab, pane?: TerminalPane): Promise<void> {
+    const panes = pane && tab.split ? [pane] : tab.panes
+    const busy = panes.find((p) => p.pty !== null && p.commands.running)
+    if (busy) {
+      const command = busy.commands.command
+      const ok = await confirm({
+        title: pane && tab.split ? `Fermer ce volet de « ${tab.heading} » ?` : `Fermer « ${tab.heading} » ?`,
+        text: command
+          ? `La commande ${command} tourne encore dans ce terminal : elle sera arrêtée avec lui.`
+          : 'Une commande tourne encore dans ce terminal : elle sera arrêtée avec lui.',
+        action: 'Fermer',
+        danger: true,
+      })
+      if (!ok || !this.tabs.includes(tab)) return
+    }
+    if (pane && tab.split) this.closePane(tab, pane)
+    else this.close(tab)
   }
 
   subscribe = (listener: () => void) => {
@@ -305,7 +339,17 @@ export class TerminalTabs {
   // (its shell already runs, and its output is kept).
   async add(target?: TerminalTarget, title?: string, folder?: string, options: { keep?: boolean } = {}): Promise<void> {
     this.#listen()
-    const ghostty = await this.#emulator()
+    // The first one: the page says « Ouverture du terminal… » while the emulator loads.
+    if (!this.tabs.length) {
+      this.opening = true
+      this.#changed()
+    }
+    let ghostty: Ghostty
+    try {
+      ghostty = await this.#emulator()
+    } finally {
+      this.opening = false
+    }
     const key = ++this.#lastKey
     const tab = new TerminalTab(key, title ?? `Terminal ${key}`, target, folder, options.keep)
     const pane = this.#newPane(ghostty, tab, tab.fallbackTitle, target, folder)
@@ -317,7 +361,10 @@ export class TerminalTabs {
 
   // A pane of the tab, on its own emulator: its view, wired to its shell and to the shell integration.
   #newPane(ghostty: Ghostty, tab: TerminalTab, title: string, target?: TerminalTarget, folder?: string): TerminalPane {
-    const pane = new TerminalPane(tab, title, this.#makeTerm(ghostty), target, folder)
+    const theme = themeNow()
+    const pane = new TerminalPane(tab, title, this.#makeTerm(ghostty, theme), target, folder)
+    // ghostty-web keeps the colours it was made with: what its cells leave keeps them too, whatever theme comes later.
+    pane.box.style.background = theme.background ?? ''
     this.#integrate(pane)
     pane.term.onTitleChange((t) => {
       pane.title = t.trim() || pane.fallbackTitle
@@ -330,8 +377,9 @@ export class TerminalTabs {
     return pane
   }
 
-  // Puts the tab's view in the page, sized to it.
-  select(tab: TerminalTab): void {
+  // Puts the tab's view in the page, sized to it; the keyboard goes to it, unless `focusView` is false (the arrows on the
+  // tabs, which keep it).
+  select(tab: TerminalTab, focusView = true): void {
     this.active = tab
     // Seen: the mark of a command that ended out of sight goes.
     if (this.#host) tab.notice = null
@@ -339,7 +387,7 @@ export class TerminalTabs {
     if (!this.#host) return
     this.#layout(tab)
     this.fit()
-    tab.term.focus()
+    if (focusView) tab.term.focus()
   }
 
   // The tab's panes in the page: its one view, or both with the handle between; each view opened once, then moved.
@@ -694,14 +742,14 @@ export class TerminalTabs {
     return new Set(this.tabs.filter((t) => t.folder && t.panes[0]?.state !== 'exited').map((t) => t.folder!))
   }
 
-  #makeTerm(ghostty: Ghostty): Terminal {
+  #makeTerm(ghostty: Ghostty, theme: ITheme): Terminal {
     // ghostty-web's scrollback (10 000 by default) is left as it is; its colours are the theme's of the moment.
     const term = new Terminal({
       ghostty,
       fontFamily: '"JetBrains Mono", monospace',
       fontSize: 13,
       cursorBlink: true,
-      theme: themeNow(),
+      theme,
     })
     term.attachCustomKeyEventHandler((e) => this.#shortcut(e, term))
     return term
@@ -810,7 +858,7 @@ export class TerminalTabs {
    * - Shift+Tab (the back tab), the other shifted keys and Alt with a character are sent as xterm sends them, which
    *   ghostty-web 0.4.0 does not (keys.ts); Shift+Page Up / Down scroll the scrollback;
    * - Ctrl+Shift+T opens a tab, Ctrl+Shift+W closes it, Ctrl+PageDown / PageUp go to the next / previous one;
-   * - Ctrl+Shift+F searches the scrollback;
+   * - Ctrl+Shift+R searches the scrollback (Ctrl+Shift+F is the core's focus mode);
    * - Ctrl+Shift+E splits the tab side by side, Ctrl+Shift+O one above the other, Ctrl+Shift+an arrow goes to the
    *   other pane, and Ctrl+Shift+W closes the pane of a split tab;
    * - Ctrl+K (⌘K on macOS) goes to the command palette; on macOS, Ctrl+K stays the shell's.
@@ -834,8 +882,9 @@ export class TerminalTabs {
       if (key === 'c') return run(() => this.copy())
       if (key === 'v') return run(() => this.paste())
       if (key === 't') return run(() => this.add())
-      if (key === 'w') return run(() => this.active && this.closePane(this.active))
-      if (key === 'f') return run(() => this.openSearch())
+      if (key === 'w') return run(() => this.active && this.askClose(this.active, this.active.pane))
+      // R for « Rechercher »: Ctrl+Shift+F is the core's focus mode, taken before the page.
+      if (key === 'r') return run(() => this.openSearch())
     }
     if (e.ctrlKey && !e.shiftKey && !e.altKey) {
       if (key === 'c' && term.hasSelection()) return run(() => this.copy())

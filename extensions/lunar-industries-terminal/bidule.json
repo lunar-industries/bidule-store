@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-terminal",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "title": "Terminal",
-  "engine": "^0.3.0",
+  "engine": "^0.3.1",
   "permissions": [
     "shell"
   ],
@@ -40,6 +40,7 @@
         "order": 30
       }
     ],
+    "background": true,
     "commands": [
       {
         "id": "terminal.new",
@@ -95,7 +96,7 @@
       },
       {
         "keys": "Ctrl+Maj+W",
-        "title": "Fermer le volet, ou le terminal",
+        "title": "Fermer le volet, ou le terminal (demandé d’abord si une commande tourne)",
         "where": "dans un terminal"
       },
       {
@@ -144,9 +145,19 @@
         "where": "dans un terminal"
       },
       {
-        "keys": "Ctrl+Maj+F",
+        "keys": "Ctrl+Maj+R",
         "title": "Rechercher dans l’historique",
         "where": "dans un terminal"
+      },
+      {
+        "keys": "← → Début Fin",
+        "title": "Passer d’un onglet à l’autre",
+        "where": "sur les onglets du terminal"
+      },
+      {
+        "keys": "Suppr",
+        "title": "Fermer l’onglet (demandé d’abord si une commande tourne)",
+        "where": "sur les onglets du terminal"
       },
       {
         "keys": "Entrée",
