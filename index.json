@@ -1018,6 +1018,24 @@
               "signature": "oHmLsR1Q77dAIONsOxlIzLDeUEIkm76j6xpxV33uf9PFnL+BiT6heoWY/yLSjHxNOVjM12J611k77fEA5rtOAg=="
             }
           }
+        },
+        "0.2.1": {
+          "engine": "^0.3.1",
+          "dependencies": {},
+          "permissions": [
+            "shell"
+          ],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-terminal-0.2.1/lunar-industries-terminal-0.2.1.tgz",
+              "size": 1041120,
+              "sha256": "7dbec7e0882072d4293d5230078d223c3efd84b5f789d68cd20203cc00b15af3",
+              "signature": "LbdoBkYBscWSVUiCQtcLU30qCOqdjbos5qMVvlSeo4AAGk5qPLuArnFY67GLUxX1hNtD1eFHSVV/aN/OcWKRCg=="
+            }
+          }
         }
       }
     },
