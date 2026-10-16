@@ -506,10 +506,15 @@ export function TempsPage() {
     e.currentTarget.setPointerCapture(e.pointerId)
     drag.current = { x0: e.clientX, width: bar.current.getBoundingClientRect().width, scale, from: lines, left, right }
   }
+  // Each move is counted from where the grip was taken: back there (no change), the shares are those of the start
+  // again, not the last ones drawn.
   const move = (e: PointerEvent<HTMLSpanElement>) => {
     const d = drag.current
     if (!d) return
-    setShares(d.from, d.left, d.right, Math.round(((e.clientX - d.x0) / d.width) * d.scale))
+    const start = d.from.map((l) => l.share)
+    const next = shift(start, d.left, d.right, Math.round(((e.clientX - d.x0) / d.width) * d.scale)) ?? start
+    if (next.every((s, i) => lines[i]?.share === s)) return
+    setLines(d.from.map((l, i) => ({ ...l, share: next[i] })))
   }
   // A drag saves once, when the grip is released.
   const drop = () => {

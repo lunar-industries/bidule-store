@@ -19,7 +19,10 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
   laquelle il a agi (un commit sur sa branche), garde son nom.
 - **`work.ts`** lit le cœur (dépôts, branches, activité, tâches) et trouve le Time Log (le fournisseur des objets
   `timeEntry`, Notion). Ce que l'activité dit de l'utilisateur est l'affaire de chaque fournisseur : Temps prend
-  toute l'activité qu'on lui donne.
+  toute l'activité qu'on lui donne, sauf celle d'une tâche qui n'existe plus dans le cœur (partie de son outil, la
+  corbeille de Notion) : ses modifications et changements de statut ne comptent plus, et une branche qui lui était
+  liée revient comme branche sans tâche. Le cœur retire aussi une tâche dont l'utilisateur n'est plus responsable ni
+  participant : son activité ne compte alors plus non plus.
 
 ## La page (`ui/TempsPage.tsx`)
 

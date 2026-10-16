@@ -48,7 +48,7 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
     async events(since, until) {
       if (!has('activity')) return []
       const gitThere = has('branch') && has('repository')
-      const [activity, repos, branches, taskOf, toBranch, toRepo, toTask, columns] = await Promise.all([
+      const [activity, repos, branches, taskOf, toBranch, toRepo, toTask, columns, tasks] = await Promise.all([
         objects.list('activity', { between: { field: 'at', from: since, to: until } }),
         gitThere ? objects.list('repository', { withDeleted: true }) : [],
         gitThere ? objects.list('branch', { withDeleted: true }) : [],
@@ -57,7 +57,12 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
         gitThere ? objects.relations({ kind: 'repository', fromType: 'activity', toType: 'repository' }) : [],
         has('task') ? objects.relations({ kind: 'task', fromType: 'activity', toType: 'task' }) : [],
         has('task') ? objects.columns() : [],
+        has('task') ? objects.list('task') : [],
       ])
+      // The tasks that still exist: one gone from its tool (Notion's trash) no longer counts, neither its edits and
+      // status changes nor the branches linked to it, which come back as branches without a task.
+      const live = new Set(tasks.map((t) => t.id))
+      const alive = (id: string | null | undefined) => (id && live.has(id) ? id : null)
       const linked = (links: { from: { id: string }; to: { id: string } }[]) =>
         new Map(links.map((l) => [l.from.id, l.to.id]))
       const [branchOf, repoOf, taskOfActivity] = [linked(toBranch), linked(toRepo), linked(toTask)]
@@ -68,7 +73,7 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
       return activity.flatMap((a): WorkEvent[] => {
         const branch = branchById.get(branchOf.get(a.id) ?? '')
         const repo = repoById.get(repoOf.get(a.id) ?? branch?.repositoryId ?? '')
-        const task = taskOfActivity.get(a.id)
+        const task = alive(taskOfActivity.get(a.id))
         if (repo && a.kind !== 'status')
           return [
             {
@@ -77,7 +82,7 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
               repo: repo.path,
               branch: branch?.name ?? null,
               detail: a.detail ?? '',
-              taskId: branch ? (taskOf.get(branch.id) ?? null) : null,
+              taskId: branch ? alive(taskOf.get(branch.id)) : null,
             },
           ]
         if (task && a.kind === 'edit')
