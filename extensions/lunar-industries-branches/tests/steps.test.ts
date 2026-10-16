@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { actionOf, countsOf, findTasks, hintOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf, turnedRed } from '../ui/steps.ts'
+import { actionOf, countsOf, hintOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf, turnedRed } from '../ui/steps.ts'
 import { listed, task } from './fakes.ts'
 
 describe('a branch’s step', () => {
@@ -119,15 +119,5 @@ describe('the table', () => {
     expect(turnedRed(seen, [listed({ name: 'a', ci: 'pending', headSha: '2' })])).toEqual([])
     expect(turnedRed(seen, [red('2')]).map((b) => b.name)).toEqual(['a'])
     expect(turnedRed(seen, [red('2')])).toEqual([])
-  })
-
-  test('a task is found by its title, its ID or a branch, those not done first', () => {
-    const tasks = [task('1', 'Fini', { status: 'Terminé' }), task('2', 'Écran de connexion', { ref: 'TSK-4' }), task('3', 'Autre fini')]
-    const done = new Set(['Terminé'])
-    const branches = [listed({ name: 'feat/tsk-9-paiement', taskId: '3' })]
-    expect(findTasks(tasks, done, branches, 'ecran').map((t) => t.id)).toEqual(['2'])
-    expect(findTasks(tasks, done, branches, 'tsk-4').map((t) => t.id)).toEqual(['2'])
-    expect(findTasks(tasks, done, branches, 'paiement').map((t) => t.id)).toEqual(['3'])
-    expect(findTasks(tasks, done, branches, 'fini').map((t) => t.id)).toEqual(['3', '1'])
   })
 })

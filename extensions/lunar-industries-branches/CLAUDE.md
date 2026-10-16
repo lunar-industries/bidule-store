@@ -27,19 +27,21 @@ sont listées dans `contract.ts`.
 - **Le clavier** : un seul arrêt de Tab pour le tableau ; ↑ ↓ Début Fin changent de ligne, Entrée ouvre le tiroir,
   Échap le ferme et rend le focus au tableau, la touche Menu ou Maj+F10 ouvrent le menu de la ligne (le menu commun de
   `lunar-industries-common`, aussi au clic droit et au « ⋯ » du tiroir). Les raccourcis sont déclarés dans le manifeste.
-- **Le tiroir** (`Drawer`) : dessiné comme le panneau des branches sans tâche du Kanban, au bord droit de la fenêtre
-  sous la barre de titre (son en-tête, son corps qui défile, ses touches au pied), par-dessus le tableau : l'ouvrir ou
-  le fermer ne déplace rien. Un clic en dehors le ferme, sauf sur une ligne du tableau (qui l'ouvre à cette ligne),
-  dans un menu ou pendant une confirmation. Les flèches du tableau le font suivre la ligne choisie. Il montre la frise (étapes faites, en cours, à venir), trois cases
-  (revue, CI, origin), le champ Tâche (`ui/TaskPicker.tsx` : « Aucune tâche trouvée », « Aucun module de tâches actif »,
-  une tâche inconnue par le début de son identifiant), l'étape à faire (`NextStep` : pousser puis créer la revue
-  brouillon vers la « Branche cible », les jobs en échec d'une CI rouge et les relancer, sortir du brouillon, fusionner)
-  et les autres actions (voir la revue, le pipeline, l'issue, lancer un pipeline, les jobs manuels par le menu commun).
-  « Lecture de la forge… » pendant que les liens sont lus, l'erreur avec Réessayer s'ils ne le sont pas.
-- **Les écritures** sont toutes confirmées par une phrase complète (`ui/confirm.tsx`), l'attente montrée par `busy` du
+- **Le tiroir** (`Drawer`) : le panneau latéral commun (`SidePanel` de `lunar-industries-common`), par-dessus le
+  tableau : l'ouvrir ou le fermer ne déplace rien. Échap ou sa × rendent le focus au tableau, sur la ligne qui était
+  ouverte, sans le faire défiler. Un clic en dehors le ferme, sauf sur une ligne du tableau (qui l'ouvre à cette
+  ligne). Les flèches du tableau le font suivre la ligne choisie. Il montre la frise (étapes faites, en cours, à
+  venir), trois cases (revue, CI, origin), le champ Tâche (`TaskField` commun, qui cherche aussi dans le nom des
+  branches liées ; une tâche inconnue est dite par le début de son identifiant), l'étape à faire (`NextStep` : pousser
+  puis créer la revue brouillon vers la « Branche cible », les jobs en échec d'une CI rouge et les relancer, sortir du
+  brouillon, fusionner) et les autres actions (voir la revue, le pipeline, l'issue, lancer un pipeline, les jobs
+  manuels par le menu commun). « Lecture de la forge… » pendant que les liens sont lus, l'erreur avec Réessayer s'ils
+  ne le sont pas.
+- **Les écritures** sont toutes confirmées par une phrase complète (`confirm` commun), l'attente montrée par `busy` du
   SDK, puis le tableau relu.
-- **Les états** : « Lecture des dépôts… » au chargement ; une relecture qui échoue garde le tableau et met l'erreur
-  au-dessus ; une recherche sans résultat propose « Effacer la recherche ». Tant que l'état réel d'une revue n'est pas
+- **Les états** (`Loading`, `Alert`, `Empty` communs) : « Lecture des dépôts… » au chargement ; une relecture qui
+  échoue garde le tableau et met l'erreur au-dessus ; une recherche sans résultat propose « Effacer la recherche ».
+  Les tâches sont lues par `useTaskBoard` : une lecture qui échoue est dite dans le champ Tâche, avec Réessayer. Tant que l'état réel d'une revue n'est pas
   connu, la branche dit « Revue ouverte », pas « Prête à fusionner ».
 - **La fenêtre étroite** (moins de 1 000 px) : le tableau garde la branche (sa tâche dessous), l'état et l'action.
 - **La mascotte** dit d'abord « La CI de X est rouge », sa réplique taquine ensuite (`hintOf`).
@@ -54,14 +56,12 @@ Ce qui se calcule sans rien dessiner est dans `ui/steps.ts`, testé dans `tests/
 
 Toutes dans `ui/branches.css`, sous `lib-` :
 
-- La page : `lib-page` (`narrow`), `lib-main`, `lib-alert` (une lecture qui a échoué), `lib-none` (rien
-  à montrer), `lib-btn-sm`.
+- La page : `lib-page` (`narrow`), `lib-main`.
 - Le tableau : `lib-table-panel`, `lib-table`, `lib-sort`, `lib-group-row`, `lib-group-fold`, `lib-chevron`,
   `lib-group-name`, `lib-row` (`active`, `open`), `lib-col-dot`, `lib-dot` (`data-tone`), `lib-branch`, `lib-name`,
   `lib-sub`, `lib-col-task`, `lib-col-extra`, `lib-col-action`, `lib-state`, `lib-state-text` (`data-tone`),
   `lib-progress`, `lib-ci` (`data-ci`).
-- Le tiroir : `lib-drawer`, `lib-drawer-head`, `lib-drawer-body`, `lib-drawer-foot`, `lib-facts`, `lib-task`, `lib-picker`,
-  `lib-picker-list`, `lib-picker-item`, `lib-picker-note`, `lib-steps`, `lib-step` (`done`, `current`, `todo`),
+- Le contenu du tiroir : `lib-facts`, `lib-task`, `lib-steps`, `lib-step` (`done`, `current`, `todo`),
   `lib-step-track`, `lib-step-mark`, `lib-step-label`, `lib-next`, `lib-next-text`, `lib-next-actions`, `lib-target`,
   `lib-failed`, `lib-actions`.
 

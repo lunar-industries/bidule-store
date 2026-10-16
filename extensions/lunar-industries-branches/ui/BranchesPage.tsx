@@ -1,24 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
-import {
-  BannerTools,
-  busy,
-  errorMessage,
-  navigate,
-  react,
-  ToolFilter,
-  ToolSearch,
-  useHint,
-  useMascot,
-  useOn,
-  type Board,
-} from '@bidule/sdk'
+import { BannerTools, busy, errorMessage, navigate, react, ToolFilter, ToolSearch, useHint, useMascot, useOn, type Task } from '@bidule/sdk'
+import { confirm, type Ask } from '@bidule/ext-lunar-industries-common/ui/confirm'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
+import { SidePanel, type CloseReason } from '@bidule/ext-lunar-industries-common/ui/panel'
+import { Alert, Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
+import { TaskField, useTaskBoard, type TaskProblem } from '@bidule/ext-lunar-industries-common/ui/tasks'
 import type { Job, Links, Listing } from '../contract.ts'
-import { api, board as readBoard } from './api.ts'
-import { confirm, type Ask } from './confirm.tsx'
+import { api } from './api.ts'
 import { setOpened, useOpened } from './state.ts'
 import { countsOf, FILTERS, hintOf, relTime, reposOf, type Filter, type RepoView, type Row, type Sort } from './steps.ts'
-import { TaskPicker } from './TaskPicker.tsx'
 
 // Kept across visits while the app runs: the filter, the order, the repos folded.
 let keptFilter: Filter = 'current'
@@ -47,7 +38,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
  */
 export function BranchesPage() {
   const [listing, setListing] = useState<Listing | null>(null)
-  const [board, setBoard] = useState<Board | 'none' | null>(null)
+  const taskBoard = useTaskBoard()
+  const readTasks = taskBoard.retry
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilterState] = useState<Filter>(keptFilter)
   const [sort, setSortState] = useState<Sort>(keptSort)
@@ -69,13 +61,18 @@ export function BranchesPage() {
       },
       (err: unknown) => setError(errorMessage(err)),
     )
-    void readBoard().then(setBoard)
   }, [])
   useEffect(reload, [reload])
+  // The tasks read again with the branches, once they were read a first time (useTaskBoard does it).
+  const reloadAll = useCallback(() => {
+    reload()
+    readTasks()
+  }, [reload, readTasks])
   useOn('git.changed', reload)
   // The forges' reviews and CI read again, the tasks and the branches changed.
   useOn('objects.changed', ({ type }) => {
-    if (type === 'review' || type === 'pipeline' || type === 'task' || type === 'branch') reload()
+    if (type === 'task') reloadAll()
+    else if (type === 'review' || type === 'pipeline' || type === 'branch') reload()
   })
   // A repo's review target changed, here or in Claude's settings.
   useOn('lunar-industries-common.changed', reload)
@@ -94,11 +91,7 @@ export function BranchesPage() {
     setFolded(new Set(keptFolded))
   }
 
-  const tasks = board && board !== 'none' ? board.tasks : []
-  const done = useMemo(
-    () => new Set((board && board !== 'none' ? board.columns : []).filter((c) => c.group === 'done').map((c) => c.name)),
-    [board],
-  )
+  const tasks = useMemo(() => taskBoard.tasks ?? [], [taskBoard.tasks])
   const repos = useMemo(() => (listing ? reposOf(listing, tasks, filter, sort, query) : []), [listing, tasks, filter, sort, query])
   const visible = repos.flatMap((r) => (folded.has(r.path) ? [] : r.rows))
   const all = repos.flatMap((r) => r.rows)
@@ -130,7 +123,7 @@ export function BranchesPage() {
       {
         title: `Pousser ${r.name} ?`,
         text: `Les commits de ${r.name} sont envoyés sur origin, sans jamais forcer. La première fois, la branche y est créée et suivie.`,
-        confirm: 'Pousser',
+        action:'Pousser',
       },
       () => api.push(r),
       `${r.name} poussée`,
@@ -140,7 +133,7 @@ export function BranchesPage() {
       {
         title: `Créer la ${r.review} brouillon ?`,
         text: `Une ${r.review} brouillon de ${r.name} vers ${target} est ouverte sur ${r.forgeName}, intitulée « ${r.task?.title ?? r.name} ».`,
-        confirm: `Créer la ${r.review}`,
+        action:`Créer la ${r.review}`,
       },
       () => api.review(r, target),
       `${r.review} brouillon ouverte pour ${r.name}`,
@@ -150,7 +143,7 @@ export function BranchesPage() {
       {
         title: `Sortir la ${r.reviewLabel ?? r.review} du brouillon ?`,
         text: `La ${r.reviewLabel ?? r.review} de ${r.name} devient prête à être relue sur ${r.forgeName}.`,
-        confirm: 'Sortir du brouillon',
+        action:'Sortir du brouillon',
       },
       () => api.ready(r),
       `${r.reviewLabel ?? r.review} prête à être relue`,
@@ -160,7 +153,7 @@ export function BranchesPage() {
       {
         title: `Fusionner la ${r.reviewLabel ?? r.review} ?`,
         text: `La ${r.reviewLabel ?? r.review} de ${r.name} est fusionnée dans sa branche cible sur ${r.forgeName}, comme son bouton là-bas. Cela ne se défait pas depuis l’app.`,
-        confirm: 'Fusionner',
+        action:'Fusionner',
       },
       () => api.merge(r),
       `${r.reviewLabel ?? r.review} fusionnée`,
@@ -170,7 +163,7 @@ export function BranchesPage() {
       {
         title: `Lancer un pipeline sur ${r.name} ?`,
         text: `Un nouveau pipeline démarre sur ${r.forgeName} pour le dernier commit poussé de ${r.name}.`,
-        confirm: 'Lancer',
+        action:'Lancer',
       },
       () => api.pipeline(r),
       `Pipeline lancé sur ${r.name}`,
@@ -180,7 +173,7 @@ export function BranchesPage() {
       {
         title: 'Relancer les jobs en échec ?',
         text: `Les jobs en échec du dernier pipeline de ${r.name} redémarrent sur ${r.forgeName}.`,
-        confirm: 'Relancer',
+        action:'Relancer',
       },
       () => api.retry(r),
       `Jobs relancés sur ${r.name}`,
@@ -190,7 +183,7 @@ export function BranchesPage() {
       {
         title: `Lancer ${job.name} ?`,
         text: `Le job manuel ${job.stage ? `${job.stage} · ` : ''}${job.name} du pipeline de ${r.name} démarre sur ${r.forgeName}.`,
-        confirm: 'Lancer',
+        action:'Lancer',
       },
       () => api.play(r, job.id),
       `${job.name} lancé`,
@@ -223,17 +216,13 @@ export function BranchesPage() {
   const show = (r: Row, focusTask = false) => {
     setActive(r.key)
     setOpened(r.key)
-    if (focusTask) setTimeout(() => document.querySelector<HTMLInputElement>('.lib-drawer .lib-picker input')?.focus())
+    if (focusTask) setTimeout(() => document.querySelector<HTMLInputElement>('.lunar-panel .lunar-tasks input')?.focus())
   }
-  const dismiss = useCallback(() => setOpened(null), [])
-  const close = () => {
-    const key = opened
+  // Closed by Escape or its ×, the drawer gives the focus back to the table (without scrolling it), on the row that
+  // was open; closed by a click outside, the focus stays where that click put it.
+  const close = (how: CloseReason = 'key') => {
+    if (how !== 'outside' && opened) setActive(opened)
     setOpened(null)
-    // The focus goes back to the table, on the row that was open.
-    if (key) {
-      setActive(key)
-      table.current?.focus()
-    }
   }
   const act = (r: Row) => {
     const repo = repos.find((x) => x.path === r.repo)
@@ -306,16 +295,11 @@ export function BranchesPage() {
       <div className="page with-tools lib-page">
         {tools}
         {error ? (
-          <div className="row lib-alert" role="alert">
-            <span className="grow">Les dépôts n’ont pas pu être lus : {error}</span>
-            <button type="button" className="btn lib-btn-sm" onClick={reload}>
-              Réessayer
-            </button>
-          </div>
+          <Empty title="Les dépôts n’ont pas pu être lus." failed action={{ label: 'Réessayer', run: reloadAll }}>
+            {error}
+          </Empty>
         ) : (
-          <p className="muted" role="status">
-            Lecture des dépôts…
-          </p>
+          <Loading lines={6}>Lecture des dépôts…</Loading>
         )}
       </div>
     )
@@ -323,13 +307,9 @@ export function BranchesPage() {
     return (
       <div className="page with-tools lib-page">
         {tools}
-        <section className="empty lib-none">
-          <p>Je ne vois aucun dépôt.</p>
-          <p className="legend">Vérifie le dossier des dépôts dans les Réglages de git.</p>
-          <button type="button" className="btn" onClick={() => navigate('/reglages/git')}>
-            Aller aux Réglages
-          </button>
-        </section>
+        <Empty title="Je ne vois aucun dépôt." action={{ label: 'Aller aux Réglages', run: () => navigate('/reglages/git') }}>
+          Vérifie le dossier des dépôts dans les Réglages de git.
+        </Empty>
       </div>
     )
 
@@ -338,14 +318,7 @@ export function BranchesPage() {
       {tools}
       {menu}
       <div className="lib-main">
-        {error && (
-          <div className="row lib-alert" role="alert">
-            <span className="grow">Les branches n’ont pas pu être relues : {error} Voici la dernière lecture.</span>
-            <button type="button" className="btn lib-btn-sm" onClick={reload}>
-              Réessayer
-            </button>
-          </div>
-        )}
+        {error && <Alert retry={reloadAll}>Les branches n’ont pas pu être relues : {error} Voici la dernière lecture.</Alert>}
         {all.length ? (
           <section className="panel lib-table-panel">
             <table
@@ -386,8 +359,8 @@ export function BranchesPage() {
                     <tr className="lib-group-row">
                       <td colSpan={8}>
                         <button type="button" className="lib-group-fold" aria-expanded={!folded.has(repo.path)} onClick={() => fold(repo.path)}>
-                          <span className="lib-chevron" aria-hidden="true">
-                            ›
+                          <span className="lib-chevron">
+                            <Icon name="right" size={14} />
                           </span>
                           <span className="baloo lib-group-name">{repo.label}</span>
                           <span className="legend">
@@ -415,27 +388,18 @@ export function BranchesPage() {
             </table>
           </section>
         ) : (
-          <section className="empty lib-none">
-            {query.trim() ? (
-              <>
-                <p>Aucune branche ne correspond à « {query.trim()} ».</p>
-                <button type="button" className="btn" onClick={() => setQuery('')}>
-                  Effacer la recherche
-                </button>
-              </>
-            ) : filter === 'orphans' ? (
-              <p>Chaque branche a sa tâche. Coin !</p>
-            ) : (
-              <>
-                <p>Aucune branche en cours.</p>
-                {counts && counts.all > 0 && (
-                  <button type="button" className="btn" onClick={() => setFilter('all')}>
-                    Voir toutes les branches ({counts.all})
-                  </button>
-                )}
-              </>
-            )}
-          </section>
+          query.trim() ? (
+            <Empty title={`Aucune branche ne correspond à « ${query.trim()} ».`} action={{ label: 'Effacer la recherche', run: () => setQuery('') }}>
+              La recherche porte sur le nom, le dépôt et la tâche.
+            </Empty>
+          ) : filter === 'orphans' ? (
+            <Empty title="Chaque branche a sa tâche.">Coin !</Empty>
+          ) : (
+            <Empty
+              title="Aucune branche en cours."
+              action={counts && counts.all > 0 ? { label: `Voir toutes les branches (${counts.all})`, run: () => setFilter('all') } : undefined}
+            />
+          )
         )}
       </div>
 
@@ -444,14 +408,14 @@ export function BranchesPage() {
           key={openRow.key}
           row={openRow}
           repo={openRepo}
-          tasks={tasks}
-          done={done}
-          noSource={board === 'none'}
+          tasks={taskBoard.tasks}
+          done={taskBoard.done}
+          problem={taskBoard.problem}
+          retryTasks={readTasks}
           branches={listing.branches}
           busy={writing}
-          narrow={narrow}
           close={close}
-          dismiss={dismiss}
+          table={() => table.current}
           menu={(el) => openMenu(el, entriesFor(openRow), `Branche ${openRow.name}`)}
           jobsMenu={(el, entries) => openMenu(el, entries, 'Jobs manuels')}
           link={(id) => void link(openRow, id)}
@@ -550,7 +514,7 @@ function TableRow({
       <td className="lib-col-action">
         <button
           type="button"
-          className={writes && r.state.yours ? 'btn-cta lib-btn-sm' : 'btn lib-btn-sm'}
+          className={writes && r.state.yours ? 'btn-cta lunar-btn-sm' : 'btn lunar-btn-sm'}
           tabIndex={-1}
           disabled={busy && writes}
           onClick={(e) => {
@@ -570,12 +534,12 @@ function Drawer({
   repo,
   tasks,
   done,
-  noSource,
+  problem,
+  retryTasks,
   branches,
   busy,
-  narrow,
   close,
-  dismiss,
+  table,
   menu,
   jobsMenu,
   link,
@@ -590,15 +554,15 @@ function Drawer({
 }: {
   row: Row
   repo: RepoView
-  tasks: Board['tasks']
-  done: Set<string>
-  noSource: boolean
+  tasks: Task[] | null
+  done: (task: Task) => boolean
+  problem: TaskProblem | null
+  retryTasks: () => void
   branches: Listing['branches']
   busy: boolean
-  narrow: boolean
-  close: () => void
-  // Closed by a click outside it: the focus stays where that click put it.
-  dismiss: () => void
+  close: (how: CloseReason) => void
+  // Where the focus goes back when the drawer closes by Escape or its ×.
+  table: () => HTMLElement | null
   menu: (el: HTMLElement) => void
   jobsMenu: (el: HTMLElement, entries: MenuEntry[]) => void
   link: (taskId: string | null) => void
@@ -612,18 +576,6 @@ function Drawer({
   setTarget: (target: string) => void
 }) {
   // Where its review, pipeline and issue are, read on the forge (again after a change of the branch).
-  const box = useRef<HTMLElement>(null)
-  // Over the page: a click outside it closes it, except on a row of the table (which opens that row instead), in a
-  // menu, or while a dialog (a confirmation) is open.
-  useEffect(() => {
-    const down = (e: PointerEvent) => {
-      const at = e.target instanceof Element ? e.target : null
-      if (!at || box.current?.contains(at) || at.closest('.lib-row, [role="menu"], dialog') || document.querySelector('dialog[open]')) return
-      dismiss()
-    }
-    document.addEventListener('pointerdown', down, true)
-    return () => document.removeEventListener('pointerdown', down, true)
-  }, [dismiss])
   const [links, setLinks] = useState<Read>('loading')
   const [failed, setFailed] = useState<string[]>([])
   const linkKey = `${r.key}\u0000${r.reviewState}\u0000${r.ci}\u0000${r.headSha}\u0000${r.reviewDraft}`
@@ -667,39 +619,25 @@ function Drawer({
 
   const current = r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? `Tâche inconnue · ${r.taskId.slice(0, 6)}` : ''
   return (
-    // As the Kanban's panel of the branches without a task: at the window's right edge, its head, its body that
-    // scrolls, its keys at the foot.
-    <aside
-      ref={box}
-      className="lib-drawer"
-      aria-labelledby="lib-drawer-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !e.defaultPrevented) {
-          e.preventDefault()
-          close()
-        }
-      }}
+    // The common side panel, over the page: a click on a row of the table opens that row instead of closing it.
+    <SidePanel
+      title={r.name}
+      mono
+      subtitle={`${r.repoLabel} · dernier commit il y a ${relTime(r.lastCommitAt)}`}
+      actions={
+        <button type="button" className="icon-btn" aria-label={`Plus d’actions pour ${r.name}`} title="Plus d’actions" onClick={(e) => menu(e.currentTarget)}>
+          <Icon name="more" />
+        </button>
+      }
+      keys={[
+        ['↑ ↓', 'autre branche'],
+        ['Menu', 'actions'],
+        ['Échap', 'fermer'],
+      ]}
+      keepOpenOn=".lib-row"
+      returnFocus={table}
+      onClose={close}
     >
-      <header className="lib-drawer-head">
-        <div className="row">
-          <h2 id="lib-drawer-title" className="grow mono selectable">
-            {r.name}
-          </h2>
-          <button type="button" className="icon-btn" aria-label={`Plus d’actions pour ${r.name}`} title="Plus d’actions" onClick={(e) => menu(e.currentTarget)}>
-            ⋯
-          </button>
-          <button type="button" className="icon-btn" aria-label="Fermer (Échap)" title="Fermer (Échap)" onClick={close}>
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-        <p className="legend">
-          {r.repoLabel} · dernier commit il y a {relTime(r.lastCommitAt)}
-        </p>
-      </header>
-
-      <div className="lib-drawer-body">
         <ol className="lib-steps" aria-label="Étapes de la branche">
           {r.steps.map((st) => (
             <li key={st.id} className={`lib-step ${st.state}`} aria-current={st.state === 'current' ? 'step' : undefined}>
@@ -732,7 +670,16 @@ function Drawer({
         </dl>
 
         <div className="row lib-task">
-          <TaskPicker label="Tâche" tasks={tasks} done={done} branches={branches} current={current} noSource={noSource} picked={link} />
+          <TaskField
+            label="Tâche"
+            value={current}
+            tasks={tasks}
+            done={done}
+            problem={problem}
+            retry={retryTasks}
+            also={(t) => branches.filter((b) => b.taskId === t.id).map((b) => b.name).join(' ')}
+            onPick={(t) => link(t.id)}
+          />
           {r.taskId && (
             <button type="button" className="btn" onClick={() => link(null)}>
               Délier
@@ -760,46 +707,32 @@ function Drawer({
 
         <div className="row lib-actions">
           {read?.reviewUrl && (
-            <button type="button" className="btn lib-btn-sm" onClick={() => open(read.reviewUrl)}>
+            <button type="button" className="btn lunar-btn-sm" onClick={() => open(read.reviewUrl)}>
               Voir la {r.review}
             </button>
           )}
           {read?.pipelineUrl && (
-            <button type="button" className="btn lib-btn-sm" onClick={() => open(read.pipelineUrl)}>
+            <button type="button" className="btn lunar-btn-sm" onClick={() => open(read.pipelineUrl)}>
               Voir le pipeline
             </button>
           )}
           {read?.issueUrl && (
-            <button type="button" className="btn lib-btn-sm" onClick={() => open(read.issueUrl)}>
+            <button type="button" className="btn lunar-btn-sm" onClick={() => open(read.issueUrl)}>
               Voir l'issue{r.issueNumber ? ` #${r.issueNumber}` : ''}
             </button>
           )}
           {r.forge && (
-            <button type="button" className="btn lib-btn-sm" disabled={busy} onClick={run}>
+            <button type="button" className="btn lunar-btn-sm" disabled={busy} onClick={run}>
               Lancer un pipeline…
             </button>
           )}
           {read?.pipelineUrl && (
-            <button type="button" className="btn lib-btn-sm" aria-haspopup="menu" onClick={(e) => void showJobs(e.currentTarget)}>
-              Jobs manuels ▾
+            <button type="button" className="btn lunar-btn-sm" aria-haspopup="menu" onClick={(e) => void showJobs(e.currentTarget)}>
+              Jobs manuels <Icon name="down" size={14} />
             </button>
           )}
         </div>
-      </div>
-      {!narrow && (
-        <footer className="lib-drawer-foot legend">
-          <span>
-            <kbd>↑ ↓</kbd> autre branche
-          </span>
-          <span>
-            <kbd>Menu</kbd> actions
-          </span>
-          <span>
-            <kbd>Échap</kbd> fermer
-          </span>
-        </footer>
-      )}
-    </aside>
+    </SidePanel>
   )
 }
 
@@ -841,18 +774,11 @@ function NextStep({
   // The forge read for this branch: while it reads, and when it failed (with Réessayer).
   const forgeState =
     links === 'loading' ? (
-      <span className="legend" role="status">
-        Lecture de la forge…
-      </span>
+      <Loading>Lecture de la forge…</Loading>
     ) : 'error' in links ? (
-      <div className="row lib-alert" role="alert">
-        <span className="grow">
-          {r.forgeName} n’a pas pu être lu : {links.error}
-        </span>
-        <button type="button" className="btn lib-btn-sm" onClick={retryRead}>
-          Réessayer
-        </button>
-      </div>
+      <Alert retry={retryRead}>
+        {r.forgeName} n’a pas pu être lu : {links.error}
+      </Alert>
     ) : null
   const label = r.reviewLabel ?? r.review
   switch (r.step) {

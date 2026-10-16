@@ -94,4 +94,30 @@ describe('Menu commun', () => {
     expect(isMenuKey({ key: 'F10', shiftKey: true })).toBe(true)
     expect(isMenuKey({ key: 'F10', shiftKey: false })).toBe(false)
   })
+
+  it('holds a row of the module’s own, whose buttons the arrows reach like the items', () => {
+    const red = vi.fn()
+    render(
+      <Row
+        entries={[
+          { label: 'Renommer…', run: vi.fn() },
+          {
+            label: 'Couleur de l’onglet',
+            row: (
+              <button type="button" role="menuitemradio" aria-checked="false" tabIndex={-1} onClick={red}>
+                Rouge
+              </button>
+            ),
+          },
+          { label: 'Fermer l’onglet', run: vi.fn() },
+        ]}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '⋯' }))
+    expect(screen.getByRole('group', { name: 'Couleur de l’onglet' })).toBeDefined()
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(focused()).toBe('Rouge')
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(focused()).toBe('Fermer l’onglet')
+  })
 })

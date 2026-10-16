@@ -1,4 +1,3 @@
-import { readTasks, type Board } from '@bidule/sdk'
 import type { Job, Links, Listing } from '../contract.ts'
 
 // The module's routes (contract.ts lists them).
@@ -30,11 +29,4 @@ export const api = {
   ready: (b: B) => send('POST', 'branches/ready', { repo: b.repo, name: b.name }),
   merge: (b: B) => send('POST', 'branches/merge', { repo: b.repo, name: b.name }),
   target: (repo: string, target: string | null) => send('PUT', 'repos/target', { repo, target }),
-}
-
-// The user's tasks in the core (its `task` objects): those a branch is linked to; `none` without a provider of tasks;
-// null when they cannot be read.
-export async function board(): Promise<Board | 'none' | null> {
-  const b = await readTasks().catch(() => null)
-  return b && b.source === null ? 'none' : b
 }

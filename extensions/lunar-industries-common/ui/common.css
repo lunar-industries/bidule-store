@@ -1,0 +1,207 @@
+/* What the Lunar Industries modules share (the « Composants communs Lunar » maquette), built into each module's
+   style.css with the component that imports it. Every class under `lunar-`. */
+
+/* ---------- the side panel: over the page, at the window's right edge under the title bar */
+.lunar-panel {
+  position: fixed;
+  z-index: 30;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--card-line);
+  background: var(--banner);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+}
+.lunar-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 2px solid var(--card-line);
+}
+.lunar-panel-head .row {
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+.lunar-panel-title {
+  margin: 0;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: var(--fs-xl);
+  overflow-wrap: anywhere;
+}
+.lunar-panel-title.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.lunar-panel-head p {
+  margin: 0;
+}
+.lunar-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+.lunar-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-top: 2px solid var(--card-line);
+}
+.lunar-panel-foot kbd {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---------- the task field: its list under it, or in the flow (always open, in a dialog) */
+.lunar-tasks {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.lunar-tasks-list {
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.lunar-tasks.floating .lunar-tasks-list {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+}
+.lunar-tasks-item {
+  gap: var(--space-2);
+}
+.lunar-tasks-item.active {
+  background: var(--chip-hover);
+}
+.lunar-tasks-item.done .lunar-tasks-title {
+  color: var(--text-2);
+}
+.lunar-tasks-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--fs-sm);
+}
+.lunar-tasks-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: min(480px, 80vw);
+}
+.lunar-tasks-pick h2 {
+  margin: 0;
+}
+
+/* ---------- reading, failing, nothing to show */
+.lunar-alert {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bad-wash);
+  color: var(--bad-ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.lunar-alert .btn {
+  color: var(--text);
+}
+.lunar-btn-sm.btn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--fs-sm);
+  flex: none;
+}
+.lunar-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.lunar-loading-line {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--chip);
+}
+.lunar-loading-line:nth-child(3n + 2) {
+  width: 72%;
+}
+.lunar-loading-line:nth-child(3n) {
+  width: 56%;
+}
+.lunar-loading-line:nth-child(3n + 1) {
+  width: 64%;
+}
+.lunar-empty.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+.lunar-empty-title {
+  margin: 0;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: var(--fs-lg);
+  color: var(--text);
+}
+.lunar-empty p {
+  margin: 0;
+}
+.lunar-empty.failed p {
+  color: var(--bad-ink);
+}
+
+/* ---------- confirmations: the action of a write that loses something */
+.lunar-danger.btn {
+  border-color: var(--bad-ink);
+  color: var(--bad-ink);
+}
+
+/* ---------- the tags' tones, the same in every module */
+.tag.lunar-tone-ok {
+  background: color-mix(in srgb, var(--mint) 16%, transparent);
+  color: var(--mint);
+}
+.tag.lunar-tone-warn {
+  background: color-mix(in srgb, var(--butter) 18%, transparent);
+  color: color-mix(in srgb, var(--butter) 45%, var(--text));
+}
+.tag.lunar-tone-bad {
+  background: var(--bad-wash);
+  color: var(--bad-ink);
+}
+.tag.lunar-tone-info {
+  background: color-mix(in srgb, var(--blue) 16%, transparent);
+  color: var(--blue);
+}
+.tag.lunar-tone-neutral {
+  background: var(--chip);
+  color: var(--text-2);
+}
+.tag.lunar-tone-accent {
+  background: var(--coral);
+  color: var(--on-coral);
+}
+
+/* A narrow window: the panel's keys are for a keyboard beside a wide screen. */
+@media (max-width: 1000px) {
+  .lunar-panel-foot {
+    display: none;
+  }
+}

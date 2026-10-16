@@ -181,21 +181,6 @@ export function hintOf(listing: Listing, tease: string | null, now = Date.now())
 
 export const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
-/**
- * The tasks a search finds (the task picker): every word in the title, the reference or a branch's name; tasks not
- * done first, 8 at most.
- */
-export function findTasks(tasks: Task[], done: Set<string>, branches: ListedBranch[], query: string, max = 8): Task[] {
-  const words = fold(query).split(/\s+/).filter(Boolean)
-  const names = new Map<string, string[]>()
-  for (const b of branches) if (b.taskId) names.set(b.taskId, [...(names.get(b.taskId) ?? []), b.name])
-  const found = tasks.filter((t) => {
-    const text = fold(`${t.title} ${t.ref ?? ''} ${(names.get(t.id) ?? []).join(' ')}`)
-    return words.every((w) => text.includes(w))
-  })
-  return [...found.filter((t) => !done.has(t.status)), ...found.filter((t) => done.has(t.status))].slice(0, max)
-}
-
 // « 3 h »: the branch's last commit, short for the table.
 export function relTime(at: string | null, now = Date.now()): string {
   if (!at) return '—'

@@ -12,8 +12,9 @@ d'intégration, cibles des MR, nommage des branches). Les autres modules les dem
 ## Les composants d'interface (`ui/`)
 
 Le module n'a pas d'interface à lui (pas de `ui/index.tsx`). Son dossier `ui/` garde les composants que les modules
-partagent, importés par `@bidule/ext-lunar-industries-common/ui/menu` et `…/ui/list` (`exports` de son
-`package.json`). Vite les recopie dans le paquet de chaque module qui les importe, au moment de le construire
+partagent, dessinés d'après la maquette « Composants communs Lunar » (Claude Design), importés par
+`@bidule/ext-lunar-industries-common/ui/<nom>` (`exports` de son `package.json`). Leur CSS (`ui/common.css`, importé
+par chaque composant qui en a besoin) entre dans le `style.css` de chaque module qui les importe. Vite les recopie dans le paquet de chaque module qui les importe, au moment de le construire
 (`buildUi` de Bidule) : aucun module ne dépend de celui-ci à l'exécution, et ces fichiers ne sont pas dans son propre
 paquet. L'import par le nom du paquet marche de la même façon quand les modules sont liés dans un checkout de Bidule
 (`npm run store:link`) et quand la CI du store les y copie.
@@ -33,9 +34,49 @@ paquet. L'import par le nom du paquet marche de la même façon quand les module
   appellent `onMenu`. Une touche venue d'un bouton de la ligne reste à ce bouton. `nextTicks` (un clic sur une case,
   avec Maj pour une plage depuis la dernière case cochée) et `allTicks` (Ctrl+A) calculent les cases cochées, que le
   module range où il veut.
+- Le menu prend aussi une ligne à soi (`MenuRow` : `{ row, label }`, les couleurs d'un onglet), dont les boutons de
+  rôle `menuitemradio` ou `menuitemcheckbox` sont parcourus par les flèches comme les entrées, et s'ouvre au-dessus
+  d'un élément avec `{ above: true }` (un champ en bas de la page).
+- **`ui/panel.tsx`** : `SidePanel`, le panneau latéral, par-dessus la page au bord droit de la fenêtre, sous la barre
+  de titre : l'ouvrir ou le fermer ne déplace rien. Son en-tête (le titre, `mono` pour un nom de branche, les
+  `actions` avant la ×, le `subtitle`), son corps qui défile, ses `keys` au pied (cachées sous 1 000 px). Échap ou la
+  × le ferment et rendent le focus à ce qui l'avait à son ouverture (ou à `returnFocus`), sans faire défiler la page
+  jusqu'à lui (`preventScroll`). Un clic en dehors le ferme aussi, sauf dans un menu, dans un dialogue ou pendant
+  qu'un dialogue est ouvert, et sur ce que nomme `keepOpenOn` (les lignes d'un tableau, qui ouvrent leur propre
+  détail). `onClose` reçoit la manière : `key`, `button` ou `outside`.
+- **`ui/tasks.tsx`** : le choix d'une tâche. `findTasks` cherche chaque mot tapé dans le titre, la référence et
+  `also` (les branches de la tâche), sans tenir compte des accents ; d'abord les tâches qui partagent le plus de mots
+  avec `hint` (le nom d'une branche), puis celles qui ne sont pas terminées ; huit au plus. `useTaskBoard` lit les
+  tâches (null pendant la lecture) et dit `problem` : aucun module de tâches (`none`), ou la lecture a échoué
+  (`failed`), jamais confondus avec une liste vide. `TaskField` : avec `value`, il montre la tâche choisie et la remet
+  si on le quitte sans choisir ; sans, il se vide après chaque choix ; `inline` garde la liste ouverte dans le flux
+  (Échap appelle `onCancel`). `pickTask` ouvre la même liste dans un dialogue qui confirme. Les phrases sont les
+  mêmes partout : « Aucune tâche ne correspond à « … ». », « Aucun module de tâches actif… » avec Réglages ›
+  Extensions, « Les tâches n'ont pas pu être lues : … » avec Réessayer, « Lecture des tâches… ».
+- **`ui/states.tsx`** : `Alert` (une lecture qui a échoué, au-dessus de ce qui reste montré, avec Réessayer),
+  `Loading` (toujours annoncé aux lecteurs d'écran, `lines` dessine des lignes grises), `Empty` (rien à montrer : un
+  titre, une phrase, une action ; `failed` quand la première lecture a échoué).
+- **`ui/confirm.tsx`** : `confirm({ title, text, action, danger })` rend la réponse. Une écriture ordinaire a le
+  focus sur son action (Entrée confirme) ; avec `danger` (supprimer, abandonner des modifications, arrêter Claude en
+  plein travail), le focus est sur « Annuler » et l'action est en rouge.
+- **`ui/icons.tsx`** : `Icon`, les icônes communes (24 px de base, trait de 2, couleur du texte), décoratives sauf
+  avec `label`.
 
-Ses tests sont à côté (`ui/menu.test.tsx`, `ui/list.test.tsx`), lancés par le Vitest de Bidule quand les modules y
-sont liés.
+Ses tests sont à côté (`ui/*.test.tsx`), lancés par le Vitest de Bidule quand les modules y sont liés.
+
+## Classes CSS
+
+Toutes dans `ui/common.css`, sous `lunar-` :
+
+- Le panneau latéral : `lunar-panel`, `lunar-panel-head`, `lunar-panel-title` (`mono`), `lunar-panel-body`,
+  `lunar-panel-foot`.
+- Le choix d'une tâche : `lunar-tasks` (`floating`), `lunar-tasks-list`, `lunar-tasks-item` (`active`, `done`),
+  `lunar-tasks-title`, `lunar-tasks-note`, `lunar-tasks-pick`.
+- Lecture, échec, rien à montrer : `lunar-alert`, `lunar-btn-sm`, `lunar-loading`, `lunar-loading-line`,
+  `lunar-empty` (`failed`), `lunar-empty-title`.
+- La confirmation : `lunar-danger`.
+- Les teintes des étiquettes, sur `tag` : `lunar-tone-ok`, `lunar-tone-warn`, `lunar-tone-bad`, `lunar-tone-info`,
+  `lunar-tone-neutral`, `lunar-tone-accent`.
 
 ## Tests du serveur
 

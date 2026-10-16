@@ -1,6 +1,6 @@
 {
   "name": "@bidule/ext-lunar-industries-common",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Ce que les modules Lunar Industries partagent : les branches telles que le cœur les a (tâche, revue, CI), le lien d'une branche à une tâche fait à la main, et les réglages communs (branches d'intégration, cibles des MR, nommage des branches)",
   "type": "module",
@@ -8,7 +8,12 @@
     "./contract": "./contract.ts",
     "./server/*": "./server/*.ts",
     "./ui/menu": "./ui/menu.tsx",
-    "./ui/list": "./ui/list.ts"
+    "./ui/list": "./ui/list.ts",
+    "./ui/panel": "./ui/panel.tsx",
+    "./ui/tasks": "./ui/tasks.tsx",
+    "./ui/states": "./ui/states.tsx",
+    "./ui/confirm": "./ui/confirm.tsx",
+    "./ui/icons": "./ui/icons.tsx"
   },
   "bidule": {
     "storeOnly": true

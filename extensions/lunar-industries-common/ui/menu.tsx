@@ -28,18 +28,26 @@ export type MenuItem = {
   disabled?: boolean | string
   shortcut?: string
 }
-export type MenuEntry = MenuItem | 'separator' | null | false | undefined
+// A row of the module's own among the items (a tab's colours): its buttons with the role `menuitemradio` or
+// `menuitemcheckbox` are reached by the arrows like the items.
+export type MenuRow = { row: ReactNode; label: string }
+export type MenuEntry = MenuItem | MenuRow | 'separator' | null | false | undefined
+// Where a menu opens from an element: under it (above when there is no room below), or above it (a field at the
+// bottom of the page).
+export type MenuOptions = { above?: boolean }
 
 // Where a menu opens: at the pointer, or under an element (above it when there is no room below), and what gets the
 // focus back once it closes. `toggle`: opened from a button, which closes it when clicked again.
-type Place = { x: number; y: number; flipY: number; opener: HTMLElement | null; toggle: boolean }
+type Place = { x: number; y: number; flipY: number; opener: HTMLElement | null; toggle: boolean; above?: boolean }
 
 // The Menu key, or Shift+F10: they open the menu of what has the focus.
 export const isMenuKey = (e: { key: string; shiftKey: boolean }) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 const MARGIN = 8
 
-const isItem = (entry: MenuEntry): entry is MenuItem => typeof entry === 'object' && entry !== null
+const isItem = (entry: MenuEntry): entry is MenuItem => typeof entry === 'object' && entry !== null && 'run' in entry
+const isRow = (entry: MenuEntry): entry is MenuRow => typeof entry === 'object' && entry !== null && 'row' in entry
+const FOCUSABLE = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
 
 export function Menu({
   entries,
@@ -56,7 +64,7 @@ export function Menu({
   const [at, setAt] = useState({ left: place.x, top: place.y })
   // Separators only between items: none first, last, or twice in a row.
   const shown = entries
-    .filter((e): e is MenuItem | 'separator' => e === 'separator' || isItem(e))
+    .filter((e): e is MenuItem | MenuRow | 'separator' => e === 'separator' || isItem(e) || isRow(e))
     .filter((e, i, all) => e !== 'separator' || (i > 0 && i < all.length - 1 && all[i - 1] !== 'separator'))
 
   // Kept inside the window, measured once drawn: left of the pointer near the right edge, above it near the bottom.
@@ -66,11 +74,12 @@ export function Menu({
     let left = place.x
     let top = place.y
     if (left + rect.width > innerWidth - MARGIN) left = Math.max(MARGIN, innerWidth - rect.width - MARGIN)
-    if (top + rect.height > innerHeight - MARGIN) top = Math.max(MARGIN, place.flipY - rect.height)
+    const roomAbove = place.flipY - rect.height >= MARGIN
+    if ((place.above && roomAbove) || top + rect.height > innerHeight - MARGIN) top = Math.max(MARGIN, place.flipY - rect.height)
     setAt({ left, top })
   }, [place])
 
-  const items = () => [...(box.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  const items = () => [...(box.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])]
   useEffect(() => {
     items()[0]?.focus()
   }, [])
@@ -160,6 +169,10 @@ export function Menu({
       {shown.map((entry, i) =>
         entry === 'separator' ? (
           <hr key={`sep-${i}`} className="menu-sep" />
+        ) : isRow(entry) ? (
+          <div key={`${i}-${entry.label}`} role="group" aria-label={entry.label}>
+            {entry.row}
+          </div>
         ) : (
           <button
             key={`${i}-${entry.label}`}
@@ -184,21 +197,21 @@ export function Menu({
 /**
  * A menu to open from a row or a button: `[menu, open]`, where `menu` goes anywhere in the component (it draws in the
  * page's body) and `open` takes what opens it: a right click (at the pointer), a key (the Menu key or Shift+F10, under
- * the element that has the focus) or an element (a « ⋯ » button, under it). Opening it again from the same button
- * closes it.
+ * the element that has the focus) or an element (a « ⋯ » button, under it, or above it with `above`). Opening it
+ * again from the same button closes it.
  */
 export function useMenu(): [
   ReactNode,
-  (source: MouseEvent | KeyboardEvent | HTMLElement, entries: MenuEntry[], label: string) => void,
+  (source: MouseEvent | KeyboardEvent | HTMLElement, entries: MenuEntry[], label: string, options?: MenuOptions) => void,
 ] {
   const [open, setOpen] = useState<{ entries: MenuEntry[]; label: string; place: Place } | null>(null)
   const close = useCallback(() => setOpen(null), [])
-  const show = (source: MouseEvent | KeyboardEvent | HTMLElement, entries: MenuEntry[], label: string) => {
+  const show = (source: MouseEvent | KeyboardEvent | HTMLElement, entries: MenuEntry[], label: string, options: MenuOptions = {}) => {
     let place: Place
     if (source instanceof HTMLElement) {
       if (open?.place.opener === source) return setOpen(null)
       const rect = source.getBoundingClientRect()
-      place = { x: rect.left, y: rect.bottom + 4, flipY: rect.top - 4, opener: source, toggle: true }
+      place = { x: rect.left, y: rect.bottom + 4, flipY: rect.top - 4, opener: source, toggle: true, above: options.above }
     } else {
       source.preventDefault()
       source.stopPropagation()
