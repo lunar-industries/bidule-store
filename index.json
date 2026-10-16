@@ -100,6 +100,38 @@
               "signature": "N+soTadnaclSM3VWYz/Cr3H96H30gvlKik1pKQ5TWmRsD11uTVpC6G+TXyA0qSubMmbXml/JDtYm62uozHu+Bw=="
             }
           }
+        },
+        "0.7.0": {
+          "engine": "^0.3.1",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [
+            "shell"
+          ],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "win32-x64": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-claude-0.7.0/lunar-industries-claude-0.7.0-win32-x64.tgz",
+              "size": 118883781,
+              "sha256": "889eb8018c7f9fe69cfff339d0b1c3b03d5151a27a890b5189a5a795e96013a3",
+              "signature": "cWUlL0az7qcYaEYaavM5Zf/MnVRHbfQPqkYIdfh+I5P2LsREQKMJZYnvpLaZmAONw63r17sWmW/Z5Ee4Wo4SCw=="
+            },
+            "linux-x64": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-claude-0.7.0/lunar-industries-claude-0.7.0-linux-x64.tgz",
+              "size": 116004806,
+              "sha256": "d38631f190edbedb86366063bce1fe944459daccf55793f91b7304cda5287411",
+              "signature": "tt7Ndas6pmSB3/YsID7jLblvcE4PlU8znrHC8rGdtyI+Mk7tfZYlQogAz9eg6kTeSf73+Xlc4mVczf6xBAeXCQ=="
+            },
+            "darwin-arm64": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-claude-0.7.0/lunar-industries-claude-0.7.0-darwin-arm64.tgz",
+              "size": 106169336,
+              "sha256": "ababde46e3543976fe999f335ae5fa9b8d066bc93fb6a99afff9bac05cd143b8",
+              "signature": "6Gr8AkSr188D0wx2UdkaqRye2+PmYBOzNFt+jecDk+xDhVG0nqf9NptusiYEmTDDWvvbaemuvOEtC06EqvdsDg=="
+            }
+          }
         }
       }
     },
