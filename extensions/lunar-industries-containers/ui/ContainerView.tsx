@@ -5,7 +5,8 @@ import type { ContainerDetail, ContainerHealth } from '../contract.ts'
 import { act, containerEntries, copy, openTerminal } from './actions.tsx'
 import { api, message } from './api.ts'
 import { fmtBytes, fmtPercent, isFailed, isUp, portLabel, portsOf, portUrl, sinceOf, stateOf, titleOf, usageRowOf, when, type Tone } from './format.ts'
-import { Icon } from './Icon.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
+import { Alert, Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
 import { LogsPanel, useLogs } from './Logs.tsx'
 import { backToList, type Target } from './route.ts'
 import { EnvironmentTab, FilesTab, ResourcesTab, type Samples } from './Tabs.tsx'
@@ -98,26 +99,29 @@ export function ContainerView({ target }: { target: Target }) {
       <div className="page">
         <Crumbs project={null} />
         {error ? (
-          <div className="empty">
-            <p>
-              {name} n’a pas pu être lu : {error}. Il a peut-être été supprimé, ou son moteur ne répond pas.
-            </p>
-            <p className="row lic-empty-actions">
-              <button type="button" className="btn" onClick={() => void reload()}>
-                Réessayer
-              </button>
-              <button type="button" className="btn" onClick={backToList}>
-                Retour aux conteneurs
-              </button>
-            </p>
-          </div>
+          <Empty
+            title={`${name} n’a pas pu être lu.`}
+            failed
+            action={
+              <div className="row lic-empty-actions">
+                <button type="button" className="btn" onClick={() => void reload()}>
+                  Réessayer
+                </button>
+                <button type="button" className="btn" onClick={backToList}>
+                  Retour aux conteneurs
+                </button>
+              </div>
+            }
+          >
+            {error}. Il a peut-être été supprimé, ou son moteur ne répond pas.
+          </Empty>
         ) : (
-          <p className="muted lic-loading">Lecture de {name}…</p>
+          <Loading>Lecture de {name}…</Loading>
         )}
       </div>
     )
   }
-  return <Fiche c={c} gone={error} />
+  return <Fiche c={c} gone={error} reload={() => void reload()} />
 }
 
 // Where the view is: the list, then the project.
@@ -139,7 +143,8 @@ function Crumbs({ project }: { project: string | null }) {
   )
 }
 
-function Fiche({ c, gone }: { c: ContainerDetail; gone: string | null }) {
+// `gone`: why it could not be read again (what is shown is the last reading); `reload` reads it again.
+function Fiche({ c, gone, reload }: { c: ContainerDetail; gone: string | null; reload: () => void }) {
   const [tab, setTab] = useState<Tab>('logs')
   const [working, setWorking] = useState(false)
   const [menu, openMenu] = useMenu()
@@ -366,7 +371,11 @@ function Fiche({ c, gone }: { c: ContainerDetail; gone: string | null }) {
           </button>
         </span>
       </header>
-      {gone && <div className="lic-error" role="alert">{c.name} n’a pas pu être relu : {gone}</div>}
+      {gone && (
+        <Alert retry={reload}>
+          {c.name} n’a pas pu être relu : {gone} Voici la dernière lecture.
+        </Alert>
+      )}
 
       <div className={`lic-fiche-body${narrow ? ' narrow' : ''}`}>
         {narrow && (

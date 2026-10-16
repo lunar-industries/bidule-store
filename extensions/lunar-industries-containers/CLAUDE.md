@@ -59,6 +59,9 @@ garde lui-même que les conteneurs cochés (`server/selection.ts`, `selection.js
 - **Les informations** : ports (ouvrir, copier), santé, redémarrage, commande, image, volumes, réseau, variables,
   identifiant, création, puis le processeur et la mémoire du moment. Dans une fenêtre étroite, elles passent
   au-dessus des journaux, repliées sur une ligne.
+- **Les composants communs** (`lunar-industries-common`) : les icônes, les lectures (`Loading`), les échecs (`Alert`,
+  avec Réessayer, au-dessus de la dernière lecture), les listes vides (`Empty`) et la confirmation de suppression
+  (`confirm`, avec `danger` : le focus sur « Annuler », l'action en rouge).
 
 ## La partie de fond (`ui/index.tsx`)
 
@@ -71,13 +74,13 @@ Ce qui se calcule sans rien dessiner est dans `ui/format.ts`, testé dans `ui/fo
 
 Toutes dans `ui/containers.css`, sous `lic-` :
 
-- Communes : `lic-error`, `lic-loading`, `lic-danger`, `lic-start`, les tons `lic-tone-ok`, `lic-tone-warn`,
+- Communes : `lic-start`, les tons `lic-tone-ok`, `lic-tone-warn`,
   `lic-tone-bad`, `lic-tone-off` (qui posent `--lic-tone` et `--lic-dot`), `lic-strong`, `lic-health`, `lic-pill`,
   `lic-dot`, `lic-port` (`live`).
 - La liste : `lic-list`, `lic-list-head`, `lic-ticked`, `lic-totals`, `lic-columns`, `lic-actions-title`,
   `lic-groups`, `lic-group`, `lic-group-head`, `lic-fold`, `lic-group-name`, `lic-group-actions`, `lic-row`
   (`ticked`), `lic-name-cell`, `lic-names`, `lic-name`, `lic-ports`, `lic-cpu`, `lic-memory`, `lic-state`,
-  `lic-state-label`, `lic-usage-narrow`, `lic-actions`, `lic-act-wide`, `lic-empty-state`, `lic-empty-actions`.
+  `lic-state-label`, `lic-usage-narrow`, `lic-actions`, `lic-act-wide`, `lic-empty-actions`.
 - La fiche : `lic-fiche`, `lic-fiche-head`, `lic-crumbs-head`, `lic-back`, `lic-fiche-name`, `lic-fiche-sub`,
   `lic-fiche-actions`, `lic-fiche-body` (`narrow`), `lic-fiche-main`, `lic-tabs`, `lic-toolbar`, `lic-tab-body`,
   `lic-tab-note`, `lic-check`, `lic-fiche-info`, `lic-info`, `lic-info-ports`, `lic-info-port`, `lic-info-id`,

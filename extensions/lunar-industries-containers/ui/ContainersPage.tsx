@@ -25,7 +25,8 @@ import {
   titleOf,
   usageRowOf,
 } from './format.ts'
-import { Icon } from './Icon.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
+import { Alert, Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
 import { comeBack, leave, openContainer, useTarget, type Target } from './route.ts'
 import { reloadContainers, useContainers } from './store.ts'
 import { useUsage } from './usage.ts'
@@ -436,32 +437,31 @@ function ContainerList() {
   const empty = () => {
     if (q) {
       return (
-        <div className="lic-empty-state">
-          <p>Aucun conteneur ne correspond à « {query.trim()} ».</p>
-          <button type="button" className="btn" onClick={() => setQuery('')}>
-            Effacer la recherche
-          </button>
-        </div>
+        <Empty title={`Aucun conteneur ne correspond à « ${query.trim()} ».`} action={{ label: 'Effacer la recherche', run: () => setQuery('') }}>
+          La recherche porte sur le nom, l’image, le projet et les ports.
+        </Empty>
       )
     }
-    if (!all.length) return <div className="lic-empty-state"><p>Aucun conteneur sur {list?.engines.map((e) => e.name).join(' ni ')}.</p></div>
+    if (!all.length) return <Empty title={`Aucun conteneur sur ${list?.engines.map((e) => e.name).join(' ni ')}.`} />
     const projects = [...new Set(all.map((c) => c.project).filter((p): p is string => Boolean(p)))].slice(0, 3)
     return (
-      <div className="lic-empty-state">
-        <p>
-          Rien ne tourne : {all.length} conteneur{all.length > 1 ? 's sont arrêtés' : ' est arrêté'}.
-        </p>
-        <div className="row lic-empty-actions">
-          <button type="button" className="btn" onClick={() => setFilter('all')}>
-            Afficher tous les conteneurs
-          </button>
-          {projects.map((p) => (
-            <button key={p} type="button" className="btn" onClick={() => void actMany(all.filter((c) => c.project === p), 'start')}>
-              Démarrer {p}
+      <Empty
+        title="Rien ne tourne."
+        action={
+          <div className="row lic-empty-actions">
+            <button type="button" className="btn" onClick={() => setFilter('all')}>
+              Afficher tous les conteneurs
             </button>
-          ))}
-        </div>
-      </div>
+            {projects.map((p) => (
+              <button key={p} type="button" className="btn" onClick={() => void actMany(all.filter((c) => c.project === p), 'start')}>
+                Démarrer {p}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        {all.length} conteneur{all.length > 1 ? 's sont arrêtés' : ' est arrêté'}.
+      </Empty>
     )
   }
 
@@ -477,24 +477,22 @@ function ContainerList() {
       </BannerTools>
 
       {error && (
-        <div className="lic-error" role="alert">
-          Impossible de lire les conteneurs : {error}
-          <button type="button" className="btn" onClick={() => void reloadContainers()}>
-            Réessayer
-          </button>
-        </div>
+        <Alert retry={() => void reloadContainers()}>
+          Les conteneurs n’ont pas pu être lus : {error}
+          {list ? ' Voici la dernière lecture.' : ''}
+        </Alert>
       )}
-      {!list && !error && <div className="muted lic-loading">Lecture des conteneurs…</div>}
+      {!list && !error && <Loading lines={5}>Lecture des conteneurs…</Loading>}
       {list && !list.engines.length && (
-        <div className="empty">Ni Docker ni Podman trouvés : installe l’un des deux, la page le trouvera d’elle-même.</div>
+        <Empty title="Ni Docker ni Podman trouvés.">Installe l’un des deux : la page le trouvera d’elle-même.</Empty>
       )}
 
       {list && list.engines.length > 0 && (
         <>
           {list.errors.map((e) => (
-            <div key={e.engine} className="lic-error" role="alert">
+            <Alert key={e.engine} retry={() => void reloadContainers()}>
               {e.engine} ne répond pas : {e.message}
-            </div>
+            </Alert>
           ))}
           <section className="panel lic-list" aria-label="Conteneurs">
             <header className="lic-list-head">

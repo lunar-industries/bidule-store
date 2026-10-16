@@ -3,7 +3,7 @@ import type { ContainerDetail, ContainerFile } from '../contract.ts'
 import { copy } from './actions.tsx'
 import { api, message } from './api.ts'
 import { chartPoints, chartTop, fmtBytes, fmtPercent, isSecretName } from './format.ts'
-import { Icon } from './Icon.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 
 // The view's tabs other than the logs: what it used since the view opened, its environment, its files.
 

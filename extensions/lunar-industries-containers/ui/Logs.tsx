@@ -4,7 +4,7 @@ import type { ContainerDetail, LogsEvent } from '../contract.ts'
 import { copy, openTerminal } from './actions.tsx'
 import { api, message } from './api.ts'
 import { fold, followLogs, highlight, logsText, NO_LOGS, parseLine, type LogCursor, type LogLevel, type LogLine } from './format.ts'
-import { Icon } from './Icon.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 
 // The logs kept on the view: the oldest go as new ones come.
 const KEPT_LINES = 2000

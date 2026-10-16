@@ -1,28 +1,7 @@
 /* Conteneurs (Lunar Industries), drawn after the maquette « Conteneurs Lunar »: `lic-` classes, never the official
    extension's `ctr-`, so that both can be installed. Colours are the theme's tokens. */
 
-/* ---------- shared */
-.lic-error {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--bad-wash);
-  color: var(--bad-ink);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-}
-.lic-loading {
-  font-size: var(--fs-md);
-  font-weight: 600;
-}
-.lic-danger {
-  color: var(--bad-ink);
-}
-.btn.lic-danger:hover {
-  background: var(--bad-wash);
-}
+/* ---------- shared (the alerts, the readings, the empty states and the confirmation are lunar-industries-common's) */
 .lic-start:not(:disabled) {
   color: var(--ok-ink);
 }
@@ -258,20 +237,7 @@
   justify-content: flex-end;
   gap: 2px;
 }
-/* Nothing in view: why, and what to do. */
-.lic-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-6);
-  color: var(--text-2);
-  font-weight: 600;
-  text-align: center;
-}
-.lic-empty-state p {
-  margin: 0;
-}
+/* Nothing in view: the common Empty box, its actions in a row. */
 .lic-empty-actions {
   gap: var(--space-2);
   flex-wrap: wrap;

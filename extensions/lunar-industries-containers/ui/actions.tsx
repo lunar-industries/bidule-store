@@ -1,4 +1,5 @@
-import { busy, execute, Modal, openDialog, react, toast } from '@bidule/sdk'
+import { busy, execute, react, toast } from '@bidule/sdk'
+import { confirm } from '@bidule/ext-lunar-industries-common/ui/confirm'
 import type { MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import type {} from '@bidule/ext-terminal/contract'
 import type { ContainerAction, ContainerRow } from '../contract.ts'
@@ -68,35 +69,19 @@ export function copy(text: string, done: string): Promise<void> {
   )
 }
 
-// Removing asks first, however many: it cannot be undone, and a running container is stopped to go.
+// Removing asks first, however many (the common confirmation, the focus on « Annuler »): it cannot be undone, and a
+// running container is stopped to go.
 export function confirmRemove(targets: ContainerRow[]): Promise<boolean> {
   const [first] = targets
   if (!first) return Promise.resolve(false)
-  return new Promise((resolve) => {
-    openDialog((close) => {
-      const done = (ok: boolean) => {
-        close()
-        resolve(ok)
-      }
-      return (
-        <Modal label="Supprimer des conteneurs" onClose={() => done(false)}>
-          <h2>{targets.length > 1 ? `Supprimer ${targets.length} conteneurs ?` : `Supprimer ${first.name} ?`}</h2>
-          <p>
-            {targets.some(isUp) ? (targets.length > 1 ? 'Ceux qui sont en marche seront arrêtés d’abord. ' : 'Il sera arrêté d’abord. ') : ''}
-            {targets.length > 1 ? 'Leurs volumes sont conservés.' : 'Ses volumes sont conservés.'}
-          </p>
-          <div className="row">
-            <span className="grow" />
-            <button type="button" className="btn" onClick={() => done(false)}>
-              Annuler
-            </button>
-            <button type="button" className="btn lic-danger" onClick={() => done(true)}>
-              Supprimer
-            </button>
-          </div>
-        </Modal>
-      )
-    })
+  const many = targets.length > 1
+  return confirm({
+    title: many ? `Supprimer ${targets.length} conteneurs ?` : `Supprimer ${first.name} ?`,
+    text:
+      (targets.some(isUp) ? (many ? 'Ceux qui sont en marche seront arrêtés d’abord. ' : 'Il sera arrêté d’abord. ') : '') +
+      (many ? 'Leurs volumes sont conservés.' : 'Ses volumes sont conservés.'),
+    action: 'Supprimer',
+    danger: true,
   })
 }
 
