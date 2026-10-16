@@ -3,24 +3,42 @@ import { on, setPageCount, type ExtensionUi } from '@bidule/sdk'
 import '../contract.ts'
 import { api } from './api.ts'
 import { BranchesPage } from './BranchesPage.tsx'
-import { orphansOf } from './steps.ts'
+import { openBranch, PATH } from './state.ts'
+import { branchKey, orphansOf, turnedRed } from './steps.ts'
 import './branches.css'
 
-const PATH = '/lunar-industries/branches'
-
-// Always there: the tab counts the recent branches without a task, again whenever git reads the repos.
+/**
+ * Always there: the tab counts the recent branches without a task, read again whenever git reads the repos, a link
+ * changes (a task, a branch) or a forge reads a review or a CI. A CI that turns red is told by the system while the
+ * window is not in front, once per pipeline; a click opens its branch.
+ */
 function Background() {
   useEffect(() => {
-    const count = () =>
+    const seen = new Map<string, string>()
+    const read = () =>
       void api.list().then(
-        (l) => setPageCount(PATH, orphansOf(l.branches).length),
+        (l) => {
+          setPageCount(PATH, orphansOf(l.branches).length)
+          const red = turnedRed(seen, l.branches)
+          if (!red.length || document.hasFocus() || typeof Notification === 'undefined') return
+          for (const b of red) {
+            const n = new Notification(`La CI de ${b.name} est rouge`, {
+              body: `${b.repoLabel} · le pipeline de son dernier commit a échoué. Clique pour ouvrir la branche.`,
+              tag: `lunar-industries-branches:${branchKey(b)}:${b.headSha ?? ''}`,
+            })
+            n.onclick = () => {
+              window.focus()
+              openBranch(branchKey(b))
+            }
+          }
+        },
         () => undefined,
       )
-    count()
+    read()
     const offs = [
-      on('git.changed', count),
+      on('git.changed', read),
       on('objects.changed', ({ type }) => {
-        if (type === 'review' || type === 'pipeline') count()
+        if (type === 'review' || type === 'pipeline' || type === 'task' || type === 'branch') read()
       }),
     ]
     return () => offs.forEach((off) => off())

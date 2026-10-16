@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { findTasks, hintOf, orphansOf, reposOf, rowOf, statusOf, stepOf } from '../ui/steps.ts'
+import { actionOf, countsOf, findTasks, hintOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf, turnedRed } from '../ui/steps.ts'
 import { listed, task } from './fakes.ts'
 
 describe('a branch’s step', () => {
@@ -13,14 +13,34 @@ describe('a branch’s step', () => {
     expect(stepOf(listed({ name: 'a', taskId: 't', reviewState: 'merged' }))).toBe('done')
   })
 
-  test('what the list says of it', () => {
-    const say = (b: ReturnType<typeof listed>) => statusOf(b, stepOf(b), 'MR')
-    expect(say(listed({ name: 'a' }))).toBe('Sans tâche')
-    expect(say(listed({ name: 'a', taskId: 't', forge: null }))).toBe('Liée, sans forge')
-    expect(say(listed({ name: 'a', taskId: 't' }))).toBe('À proposer')
-    expect(say(listed({ name: 'a', taskId: 't', reviewNumber: 3, reviewState: 'closed' }))).toBe('MR fermée')
-    expect(say(listed({ name: 'a', taskId: 't', reviewNumber: 3, reviewState: 'open', ci: 'pending' }))).toBe('En revue, CI en cours')
-    expect(say(listed({ name: 'a', taskId: 't', reviewNumber: 3, reviewState: 'open', ci: 'ok' }))).toBe('Prête à fusionner')
+  test('what the table says of it, and whether it waits for the user', () => {
+    const say = (b: ReturnType<typeof listed>) => stateOf(b, stepOf(b), 'MR')
+    const open = { taskId: 't', reviewNumber: 3, reviewState: 'open' as const }
+    expect(say(listed({ name: 'a' }))).toEqual({ text: 'Sans tâche', tone: 'warn', yours: true })
+    expect(say(listed({ name: 'a', taskId: 't', forge: null })).text).toBe('Liée, sans forge')
+    expect(say(listed({ name: 'a', taskId: 't', pushed: false })).text).toBe('À pousser')
+    expect(say(listed({ name: 'a', taskId: 't' })).text).toBe('À proposer')
+    expect(say(listed({ name: 'a', ...open, reviewState: 'closed' })).text).toBe('MR fermée')
+    expect(say(listed({ name: 'a', ...open, ci: 'fail' }))).toEqual({ text: 'CI rouge', tone: 'bad', yours: true })
+    expect(say(listed({ name: 'a', ...open, ci: 'pending' }))).toEqual({ text: 'CI en cours', tone: 'info', yours: false })
+    expect(say(listed({ name: 'a', ...open, ci: 'ok', reviewDraft: true })).text).toBe('MR en brouillon')
+    expect(say(listed({ name: 'a', ...open, ci: 'ok', reviewDraft: false })).text).toBe('Prête à fusionner')
+    // Its draft not read yet: never « ready to merge ».
+    expect(say(listed({ name: 'a', ...open, ci: 'ok', reviewDraft: null })).text).toBe('Revue ouverte')
+  })
+
+  test('the one thing to do now', () => {
+    const act = (b: ReturnType<typeof listed>) => actionOf(b, stepOf(b), 'MR').kind
+    const open = { taskId: 't', reviewNumber: 3, reviewState: 'open' as const }
+    expect(act(listed({ name: 'a' }))).toBe('link')
+    expect(act(listed({ name: 'a', taskId: 't', pushed: false }))).toBe('push')
+    expect(act(listed({ name: 'a', taskId: 't' }))).toBe('review')
+    expect(act(listed({ name: 'a', taskId: 't', forge: null }))).toBe('open')
+    expect(act(listed({ name: 'a', ...open, ci: 'fail' }))).toBe('retry')
+    expect(act(listed({ name: 'a', ...open, ci: 'pending' }))).toBe('open')
+    expect(act(listed({ name: 'a', ...open, ci: 'ok', reviewDraft: true }))).toBe('ready')
+    expect(act(listed({ name: 'a', ...open, ci: 'ok', reviewDraft: false }))).toBe('merge')
+    expect(act(listed({ name: 'a', ...open, ci: 'ok', reviewDraft: null }))).toBe('open')
   })
 
   test('the steps reached, and the review named after its forge', () => {
@@ -28,17 +48,18 @@ describe('a branch’s step', () => {
     expect(r.progress).toEqual([true, true, false, false])
     expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'current', 'todo'])
     expect(r.reviewLabel).toBe('PR #3')
+    expect(r.forgeName).toBe('GitHub')
     expect(r.task?.title).toBe('T')
     expect(rowOf(listed({ name: 'b', reviewNumber: 4 }), []).reviewLabel).toBe('MR !4')
   })
 })
 
-describe('the list', () => {
+describe('the table', () => {
   const listing = {
     branches: [
-      listed({ name: 'old', reviewState: 'merged' }),
+      listed({ name: 'old', reviewState: 'merged', taskId: 't' }),
       listed({ name: 'new' }),
-      listed({ name: 'x', repo: '/r/lib', repoLabel: 'lib' }),
+      listed({ name: 'x', repo: '/r/lib', repoLabel: 'lib', taskId: 't' }),
     ],
     repos: [
       { path: '/r/app', label: 'app', forge: 'gitlab' as const, targets: ['main', 'develop'], reviewTarget: null },
@@ -48,25 +69,56 @@ describe('the list', () => {
     defaultTarget: 'develop',
   }
 
-  test('by repo, merged branches hidden unless asked, then last; the settings’ target when the repo has it', () => {
-    const repos = reposOf(listing, [], false)
+  test('by repo, as the filter says; the settings’ target when the repo has it', () => {
+    const repos = reposOf(listing, [], 'current')
     expect(repos.map((r) => r.path)).toEqual(['/r/app', '/r/lib', '/r/empty'])
     expect(repos[0].rows.map((r) => r.name)).toEqual(['new'])
-    expect(repos[0].merged).toBe(1)
     expect(repos[0].target).toBe('develop')
     expect(repos[1].target).toBe('main')
     expect(repos[2].rows).toEqual([])
-    expect(reposOf(listing, [], true)[0].rows.map((r) => r.name)).toEqual(['new', 'old'])
+    expect(reposOf(listing, [], 'orphans').flatMap((r) => r.rows.map((x) => x.name))).toEqual(['new'])
+    expect(reposOf(listing, [], 'all')[0].rows.map((r) => r.name).sort()).toEqual(['new', 'old'])
+    expect(countsOf(listing.branches)).toEqual({ current: 2, orphans: 1, all: 3 })
   })
 
-  test('the recent branches without a task, and what the mascot says', () => {
+  test('a search in the name, the repo, the task', () => {
+    const tasks = [task('t', 'Écran de connexion', { ref: 'TSK-4' })]
+    const names = (q: string) => reposOf(listing, tasks, 'all', 'name', q).flatMap((r) => r.rows.map((x) => x.name))
+    expect(names('ecran')).toEqual(['old', 'x'])
+    expect(names('lib')).toEqual(['x'])
+    expect(names('tsk-4 lib')).toEqual(['x'])
+  })
+
+  test('what waits for the user first: a red CI, then the rest of their moves, then what the forge is doing', () => {
+    const open = { taskId: 't', reviewNumber: 3, reviewState: 'open' as const }
+    const rows = [
+      listed({ name: 'pending', ...open, ci: 'pending' }),
+      listed({ name: 'ready', ...open, ci: 'ok', reviewDraft: false }),
+      listed({ name: 'orphan' }),
+      listed({ name: 'red', ...open, ci: 'fail' }),
+    ].map((b) => rowOf(b, []))
+    expect(sortRows(rows, 'state').map((r) => r.name)).toEqual(['red', 'orphan', 'ready', 'pending'])
+    expect(sortRows(rows, 'name').map((r) => r.name)).toEqual(['orphan', 'pending', 'ready', 'red'])
+  })
+
+  test('the recent branches without a task, and what the mascot says: a red CI plainly, its teasing words after', () => {
     const now = Date.now()
     const stale = listed({ name: 's', lastCommitAt: new Date(now - 20 * 864e5).toISOString() })
-    expect(orphansOf([...listing.branches, stale], now).map((b) => b.name)).toEqual(['new', 'x'])
-    expect(hintOf(listing, null, now).line).toBe('2 branches récentes sans tâche. On les rattache ?')
+    expect(orphansOf([...listing.branches, stale], now).map((b) => b.name)).toEqual(['new'])
+    expect(hintOf(listing, null, now).line).toBe('1 branche récente sans tâche. On les rattache ?')
     const red = { ...listing, branches: [listed({ name: 'b', ci: 'fail' })] }
-    expect(hintOf(red, 'Coin ! Ta CI saigne.', now)).toEqual({ mode: 'panic', line: 'Coin ! Ta CI saigne. (b)' })
+    expect(hintOf(red, 'Coin ! Ta CI saigne.', now)).toEqual({ mode: 'panic', line: 'La CI de b est rouge. Coin ! Ta CI saigne.' })
     expect(hintOf({ ...listing, branches: [] }, null, now).line).toMatch(/aucune branche/)
+  })
+
+  test('a CI turned red is told once per pipeline; the first reading only remembers', () => {
+    const seen = new Map<string, string>()
+    const red = (sha: string) => listed({ name: 'a', taskId: 't', reviewNumber: 3, reviewState: 'open', ci: 'fail', headSha: sha })
+    expect(turnedRed(seen, [red('1')])).toEqual([])
+    expect(turnedRed(seen, [red('1')])).toEqual([])
+    expect(turnedRed(seen, [listed({ name: 'a', ci: 'pending', headSha: '2' })])).toEqual([])
+    expect(turnedRed(seen, [red('2')]).map((b) => b.name)).toEqual(['a'])
+    expect(turnedRed(seen, [red('2')])).toEqual([])
   })
 
   test('a task is found by its title, its ID or a branch, those not done first', () => {

@@ -12,5 +12,8 @@ export default function routes(router: Router) {
   router.post('branches/retry', [branches, 'retry']).as('retry')
   router.post('branches/jobs/:id/play', [branches, 'play']).as('play')
   router.post('branches/review', [branches, 'review']).as('review')
+  router.post('branches/push', [branches, 'push']).as('push')
+  router.post('branches/ready', [branches, 'ready']).as('ready')
+  router.post('branches/merge', [branches, 'merge']).as('merge')
   router.put('repos/target', [branches, 'target']).as('target')
 }

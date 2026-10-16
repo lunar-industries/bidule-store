@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-branches",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "title": "Branches",
   "engine": "^0.3.0",
   "activation": [
@@ -41,6 +41,33 @@
         "order": 10
       }
     ],
-    "background": true
+    "background": true,
+    "shortcuts": [
+      {
+        "keys": "↑ ↓",
+        "title": "Passer d’une branche à l’autre",
+        "where": "dans le tableau des branches"
+      },
+      {
+        "keys": "Entrée",
+        "title": "Ouvrir le détail de la branche",
+        "where": "dans le tableau des branches"
+      },
+      {
+        "keys": "Échap",
+        "title": "Fermer le détail",
+        "where": "dans le tableau ou le détail d’une branche"
+      },
+      {
+        "keys": "Menu",
+        "title": "Menu de la branche (aussi Maj+F10)",
+        "where": "dans le tableau des branches"
+      },
+      {
+        "keys": "/",
+        "title": "Chercher une branche",
+        "where": "sur la page Branches"
+      }
+    ]
   }
 }

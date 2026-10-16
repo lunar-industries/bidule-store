@@ -2,7 +2,8 @@ import type { Task } from '@bidule/sdk'
 import type { ForgeKind, ListedBranch, Listing } from '../contract.ts'
 
 // Taken from quack-board (Simon's pages/branches/branches.ts): where a branch stands among its four steps (linked to
-// a task, under review, CI, merged), what the list says of it, and the list itself, by repo.
+// a task, under review, CI, merged), what the table says of it and the one thing to do now, and the table itself, by
+// repo.
 
 export type Step = 'task' | 'review' | 'ci' | 'merge' | 'done'
 export const STEPS: { id: Exclude<Step, 'done'>; label: string }[] = [
@@ -15,6 +16,7 @@ export type StepState = 'done' | 'current' | 'todo'
 
 // How a forge names a review: a merge request elsewhere than on GitHub.
 export const REVIEW: Partial<Record<ForgeKind, string>> = { gitlab: 'MR', github: 'PR' }
+export const FORGE: Partial<Record<ForgeKind, string>> = { gitlab: 'GitLab', github: 'GitHub' }
 
 export function stepOf(b: ListedBranch): Step {
   if (!b.taskId) return 'task'
@@ -24,20 +26,44 @@ export function stepOf(b: ListedBranch): Step {
   return 'merge'
 }
 
-// What the list says under a branch's name.
-export function statusOf(b: ListedBranch, step: Step, review: string): string {
-  if (step === 'task') return 'Sans tâche'
-  if (step === 'done') return 'Fusionnée'
-  if (!b.forge) return 'Liée, sans forge'
-  if (step === 'review') return b.reviewState === 'closed' ? `${review} fermée` : 'À proposer'
-  if (b.ci === 'fail') return 'En revue, CI en échec'
-  if (b.ci === 'pending') return 'En revue, CI en cours'
-  return 'Prête à fusionner'
+// How a state reads: its tone (its colour), and whether it waits for the user (the row's dot, the sort's first rows).
+export type Tone = 'bad' | 'warn' | 'ok' | 'info' | 'neutral'
+export type State = { text: string; tone: Tone; yours: boolean }
+
+/**
+ * What the table says of a branch, in words. A review whose real state is not read yet (no draft known) is « Revue
+ * ouverte », never « Prête à fusionner ».
+ */
+export function stateOf(b: ListedBranch, step: Step, review: string): State {
+  if (step === 'task') return { text: 'Sans tâche', tone: 'warn', yours: true }
+  if (step === 'done') return { text: 'Fusionnée', tone: 'neutral', yours: false }
+  if (!b.forge) return { text: 'Liée, sans forge', tone: 'neutral', yours: false }
+  if (step === 'review') {
+    if (b.reviewState === 'closed') return { text: `${review} fermée`, tone: 'bad', yours: true }
+    return b.pushed ? { text: 'À proposer', tone: 'warn', yours: true } : { text: 'À pousser', tone: 'warn', yours: true }
+  }
+  if (b.ci === 'fail') return { text: 'CI rouge', tone: 'bad', yours: true }
+  if (b.ci === 'pending') return { text: 'CI en cours', tone: 'info', yours: false }
+  if (b.reviewDraft === true) return { text: `${review} en brouillon`, tone: 'warn', yours: true }
+  if (b.reviewDraft === false) return { text: 'Prête à fusionner', tone: 'ok', yours: true }
+  return { text: 'Revue ouverte', tone: 'neutral', yours: false }
+}
+
+// The one thing to do now, the table's last column: a write (confirmed first), or the drawer opened.
+export type ActionKind = 'link' | 'push' | 'review' | 'retry' | 'ready' | 'merge' | 'open'
+export function actionOf(b: ListedBranch, step: Step, review: string): { kind: ActionKind; label: string } {
+  if (step === 'task') return { kind: 'link', label: 'Lier…' }
+  if (step === 'review' && b.forge && b.reviewState !== 'closed')
+    return b.pushed ? { kind: 'review', label: `Créer la ${review}…` } : { kind: 'push', label: 'Pousser…' }
+  if (step === 'ci' && b.ci === 'fail') return { kind: 'retry', label: 'Relancer…' }
+  if (step === 'merge' && b.reviewDraft === true) return { kind: 'ready', label: 'Sortir du brouillon…' }
+  if (step === 'merge' && b.reviewDraft === false) return { kind: 'merge', label: 'Fusionner…' }
+  return { kind: 'open', label: 'Voir' }
 }
 
 export const branchKey = (b: { repo: string; name: string }) => `${b.repo}\u0000${b.name}`
 
-// A branch with what the list and the detail show.
+// A branch with what the table and the drawer show.
 export function rowOf(b: ListedBranch, tasks: Task[]) {
   const review = (b.forge && REVIEW[b.forge]) || 'MR'
   const step = stepOf(b)
@@ -49,21 +75,54 @@ export function rowOf(b: ListedBranch, tasks: Task[]) {
     task: tasks.find((t) => t.id === b.taskId) ?? null,
     review,
     reviewLabel: b.reviewNumber ? `${review} ${b.forge === 'gitlab' ? '!' : '#'}${b.reviewNumber}` : null,
+    forgeName: (b.forge && FORGE[b.forge]) || 'la forge',
     step,
-    status: statusOf(b, step, review),
-    // The list's progress bar: the steps done so far.
+    state: stateOf(b, step, review),
+    action: actionOf(b, step, review),
+    // The table's progress bar: the steps done so far.
     progress: STEPS.map((_, i) => i < reached),
     steps: STEPS.map((s, i) => ({ ...s, state: stateAt(i) })),
   }
 }
 export type Row = ReturnType<typeof rowOf>
 
+// What the table shows: the branches being worked on (not merged), those without a task, or all of them.
+export type Filter = 'current' | 'orphans' | 'all'
+export const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'current', label: 'En cours' },
+  { key: 'orphans', label: 'Sans tâche' },
+  { key: 'all', label: 'Toutes' },
+]
+const shownBy = (filter: Filter) => (b: ListedBranch) =>
+  filter === 'all' ? true : filter === 'orphans' ? !b.taskId && b.reviewState !== 'merged' : b.reviewState !== 'merged'
+export const countsOf = (branches: ListedBranch[]): Record<Filter, number> => ({
+  current: branches.filter(shownBy('current')).length,
+  orphans: branches.filter(shownBy('orphans')).length,
+  all: branches.length,
+})
+
+// The table's order: what waits for the user first (a red CI, a closed review), then the rest by name or by commit.
+export type Sort = 'state' | 'name' | 'commit'
+const TONES: Tone[] = ['bad', 'warn', 'ok', 'info', 'neutral']
+const rank = (r: Row) => (r.step === 'done' ? TONES.length : TONES.indexOf(r.state.tone) - (r.state.yours ? 0.5 : 0))
+export function sortRows(rows: Row[], sort: Sort): Row[] {
+  const byCommit = (a: Row, b: Row) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? '')
+  return [...rows].sort((a, b) =>
+    sort === 'name' ? a.name.localeCompare(b.name, 'fr') : sort === 'commit' ? byCommit(a, b) : rank(a) - rank(b) || byCommit(a, b)
+  )
+}
+
 /**
- * The repos as the list shows them: the branches newest first (the server's order), the merged ones last and only
- * when asked; the repos without a working branch too. A repo without a target of its own takes the settings' one when
- * it has that branch.
+ * The repos as the table shows them: the branches the filter keeps and the search finds (in the name, the repo, the
+ * task's title or reference), in the sort's order; a repo without a target of its own takes the settings' one when it
+ * has that branch.
  */
-export function reposOf(listing: Listing, tasks: Task[], showMerged: boolean) {
+export function reposOf(listing: Listing, tasks: Task[], filter: Filter, sort: Sort = 'state', query = '') {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  const found = (r: Row) => {
+    const text = fold(`${r.name} ${r.repoLabel} ${r.task?.title ?? ''} ${r.task?.ref ?? ''}`)
+    return words.every((w) => text.includes(w))
+  }
   const byRepo = new Map<string, ListedBranch[]>()
   for (const b of listing.branches) byRepo.set(b.repo, [...(byRepo.get(b.repo) ?? []), b])
   const known = new Map(listing.repos.map((r) => [r.path, r]))
@@ -73,17 +132,15 @@ export function reposOf(listing: Listing, tasks: Task[], showMerged: boolean) {
     const targets = repo?.targets ?? []
     const fallback = listing.defaultTarget
     const inherited = fallback && targets.includes(fallback) ? fallback : null
-    const shown = showMerged ? branches : branches.filter((b) => b.reviewState !== 'merged')
+    const rows = sortRows(branches.filter(shownBy(filter)).map((b) => rowOf(b, tasks)).filter(found), sort)
     return {
       path,
       label: repo?.label ?? branches[0]?.repoLabel ?? path,
       target: repo?.reviewTarget ?? inherited,
       targets,
       count: branches.length,
-      merged: branches.filter((b) => b.reviewState === 'merged').length,
-      rows: [...shown]
-        .sort((a, b) => Number(a.reviewState === 'merged') - Number(b.reviewState === 'merged'))
-        .map((b) => rowOf(b, tasks)),
+      yours: rows.filter((r) => r.state.yours).length,
+      rows,
     }
   })
 }
@@ -96,10 +153,26 @@ export const isRecent = (at: string | null, now = Date.now()) =>
 export const orphansOf = (branches: ListedBranch[], now = Date.now()) =>
   branches.filter((b) => !b.taskId && b.reviewState !== 'merged' && isRecent(b.lastCommitAt, now))
 
-// What the mascot says on the page: a red CI first (in the mascot's own teasing words), then the branches to link.
+/**
+ * The branches whose CI turned red since the last reading, each red pipeline once (by its commit): what the
+ * background tells by a notification. The first reading (`seen` empty) only remembers. `seen` is brought up to date.
+ */
+export function turnedRed(seen: Map<string, string>, branches: ListedBranch[]): ListedBranch[] {
+  const first = !seen.size
+  const red: ListedBranch[] = []
+  for (const b of branches) {
+    const key = branchKey(b)
+    const now = `${b.ci ?? 'none'}\u0000${b.headSha ?? ''}`
+    if (!first && b.ci === 'fail' && b.reviewState !== 'merged' && seen.get(key) !== now) red.push(b)
+    seen.set(key, now)
+  }
+  return red
+}
+
+// What the mascot says on the page: a red CI first, plainly, its own teasing words after; then the branches to link.
 export function hintOf(listing: Listing, tease: string | null, now = Date.now()): { line: string; mode: 'listen' | 'panic' } {
   const failing = listing.branches.find((b) => b.ci === 'fail' && b.reviewState !== 'merged')
-  if (failing) return { mode: 'panic', line: tease ? `${tease} (${failing.name})` : `La CI de ${failing.name} est rouge ! On regarde ?` }
+  if (failing) return { mode: 'panic', line: tease ? `La CI de ${failing.name} est rouge. ${tease}` : `La CI de ${failing.name} est rouge. On regarde ?` }
   if (!listing.branches.length) return { mode: 'listen', line: 'Je ne vois aucune branche. Vérifie le dossier des dépôts dans les Réglages.' }
   const n = orphansOf(listing.branches, now).length
   if (n) return { mode: 'listen', line: `${n} branche${n > 1 ? 's' : ''} récente${n > 1 ? 's' : ''} sans tâche. On les rattache ?` }
@@ -123,12 +196,12 @@ export function findTasks(tasks: Task[], done: Set<string>, branches: ListedBran
   return [...found.filter((t) => !done.has(t.status)), ...found.filter((t) => done.has(t.status))].slice(0, max)
 }
 
-// « il y a 3 h »: the branch's last commit.
+// « 3 h »: the branch's last commit, short for the table.
 export function relTime(at: string | null, now = Date.now()): string {
   if (!at) return '—'
   const minutes = Math.round((now - new Date(at).getTime()) / 60_000)
-  if (minutes < 60) return `il y a ${Math.max(1, minutes)} min`
-  if (minutes < 24 * 60) return `il y a ${Math.round(minutes / 60)} h`
+  if (minutes < 60) return `${Math.max(1, minutes)} min`
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} h`
   const days = Math.round(minutes / 1440)
-  return days < 30 ? `il y a ${days} j` : new Date(at).toLocaleDateString('fr-FR')
+  return days < 30 ? `${days} j` : new Date(at).toLocaleDateString('fr-FR')
 }

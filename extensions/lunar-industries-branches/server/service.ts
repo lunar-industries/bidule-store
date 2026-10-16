@@ -15,10 +15,13 @@ export interface Shared {
 }
 
 export interface BranchesDeps {
-  // The core's objects the page reads itself: the repos (git's), a branch's task, the client on a repo's forge
-  // (`review.forge`), and that forge reading a branch again after a write there (`review.refresh`).
+  // The core's objects the page reads itself: the repos (git's), the branches (pushed or not) and their reviews (a
+  // draft or not), a branch's task, the client on a repo's forge (`review.forge`), and that forge reading a branch
+  // again after a write there (`review.refresh`).
   objects: Pick<ObjectsContext, 'list' | 'get' | 'first'>
   shared: Shared
+  // git's push of a branch to origin (its action `git.push`): how it went, in git's words.
+  git: { push(repo: string, branch: string): Promise<{ ok: boolean; message: string }> }
 }
 
 // A forge's refusal (ForgeFailure: an Error with the HTTP status), as the page shows it.
@@ -50,6 +53,17 @@ export class BranchesService {
   async list(): Promise<Listing> {
     const { objects, shared } = this.deps
     const [repos, { branches: all }, s] = await Promise.all([objects.list('repository'), shared.branches({}), shared.settings()])
+    // What lunar-industries-common does not say: pushed or not (git's), its review a draft or not (the forge's).
+    const [cores, reviews] = await Promise.all([
+      all.length ? objects.list('branch', { ids: all.map((b) => b.id) }) : [],
+      objects.list('review').catch(() => []),
+    ])
+    const core = new Map(cores.map((b) => [b.id, b]))
+    const draft = new Map<string, { number: number; draft: boolean }>()
+    for (const r of reviews) {
+      const seen = draft.get(r.branchId)
+      if (!seen || r.number > seen.number) draft.set(r.branchId, r)
+    }
     const forges = new Map(
       await Promise.all(repos.map(async (r) => [r.id, (await this.#forgeOf(r.id).catch(() => null))?.kind ?? null] as const))
     )
@@ -79,7 +93,10 @@ export class BranchesService {
           headSha: b.headSha,
           reviewNumber: b.reviewNumber,
           reviewState: b.reviewState,
+          reviewDraft: b.reviewNumber === null ? null : (draft.get(b.id)?.draft ?? null),
           ci: b.ci,
+          pushed: core.get(b.id)?.pushed ?? false,
+          ahead: core.get(b.id)?.ahead ?? 0,
           forge: forges.get(b.repositoryId) ?? null,
           issueNumber: issueOf(s.template, b.name),
         })
@@ -177,6 +194,38 @@ export class BranchesService {
       const description = reviewDescription(issueNumber, task?.url ?? null)
       await client.createReview({ source: name, target: into, title: task?.title ?? name, description, draft: true })
     })
+  }
+
+  // The branch's latest review on the forge, which a write about it needs: none is said.
+  async #review(client: ForgeClient, name: string) {
+    const review = await client.review(name).catch((err: unknown) => Promise.reject(refused(err)))
+    if (!review || review.state !== 'open') throw new BranchesError(`${name} n'a pas de revue ouverte`)
+    return review
+  }
+
+  // Its review out of draft: ready to be read (nothing to do when it already is).
+  async ready(repo: string, name: string): Promise<void> {
+    const { b, client } = await this.#branch(repo, name)
+    const review = await this.#review(client, name)
+    if (!review.draft) return
+    await this.#act(b, () => client.markReady(review.number))
+  }
+
+  // Its review merged on the forge, as its button there does; a draft is refused (neither forge merges one).
+  async merge(repo: string, name: string): Promise<void> {
+    const { b, client } = await this.#branch(repo, name)
+    const review = await this.#review(client, name)
+    if (review.draft) throw new BranchesError("La revue est encore en brouillon : sors-la du brouillon d'abord")
+    await this.#act(b, () => client.mergeReview(review.number))
+  }
+
+  // The branch to origin through git (never forced, its upstream set the first time); a push origin refuses says git's
+  // words. git announces the change, and the forges read the branch again from it.
+  async push(repo: string, name: string): Promise<void> {
+    const [b] = (await this.deps.shared.branches({ repo, name })).branches
+    if (!b) throw new BranchesError('Branche inconnue', 404)
+    const done = await this.deps.git.push(repo, name)
+    if (!done.ok) throw new BranchesError(done.message || `${name} n'a pas pu être poussée`)
   }
 
   // Where the repo's reviews go by default; null to fall back on the shared target. lunar-industries-common refuses a

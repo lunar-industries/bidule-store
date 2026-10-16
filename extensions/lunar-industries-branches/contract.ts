@@ -13,6 +13,9 @@
 //   POST branches/retry                { repo, name } → { ok }
 //   POST branches/jobs/:id/play        { repo, name } → { ok }
 //   POST branches/review               { repo, name, target } → { ok }
+//   POST branches/push                 { repo, name } → { ok } (to origin, never forced)
+//   POST branches/ready                { repo, name } → { ok } (its review out of draft)
+//   POST branches/merge                { repo, name } → { ok } (its review merged on the forge)
 //   PUT  repos/target                  { repo, target | null } → { ok }
 import type {} from '@bidule/ext-git/contract'
 import type {} from '@bidule/ext-lunar-industries-common/contract'
@@ -35,7 +38,12 @@ export type ListedBranch = {
   headSha: string | null
   reviewNumber: number | null
   reviewState: ReviewState | null
+  // Its latest review still a draft (null without a review): the forge merges none.
+  reviewDraft: boolean | null
   ci: Ci | null
+  // On origin at the same commit as here; its commits ahead of the repo's default branch.
+  pushed: boolean
+  ahead: number
   forge: ForgeKind | null
   issueNumber: number | null
 }

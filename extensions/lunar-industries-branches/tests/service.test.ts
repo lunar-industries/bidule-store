@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { BranchesError } from '../server/errors.ts'
-import { branch, fakeForge, fakeWorld, service, task } from './fakes.ts'
+import { branch, fakeForge, fakeGit, fakeWorld, service, task } from './fakes.ts'
 
 const app = '/r/app'
 const all = () => [
@@ -155,5 +155,63 @@ describe('the task and the target', () => {
     await s.review(app, 'tsk-7-paiement', null)
     expect(forge.reviews.map((r) => r.target)).toEqual(['main', 'develop'])
     await expect(s.setTarget('/elsewhere', 'main')).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('pushing, out of draft, merging', () => {
+  test('each branch says whether it is on origin, its commits ahead, and whether its review is a draft', async () => {
+    const { world } = fakeWorld(
+      [
+        branch({ name: 'a', pushed: false, ahead: 3 }),
+        branch({ name: 'b', reviewNumber: 4, reviewState: 'open', reviewDraft: true }),
+        branch({ name: 'c', reviewNumber: 5, reviewState: 'open', reviewDraft: false }),
+      ],
+      null
+    )
+    const l = await service(world).s.list()
+    expect(l.branches.map((b) => [b.name, b.pushed, b.ahead, b.reviewDraft])).toEqual([
+      ['a', false, 3, null],
+      ['b', true, 1, true],
+      ['c', true, 1, false],
+    ])
+  })
+
+  test('a branch pushed through git; what origin refuses says git’s words; an unknown branch said', async () => {
+    const { world } = fakeWorld(all(), null)
+    const ok = fakeGit()
+    await service(world, { git: ok.git }).s.push(app, 'tsk-7-paiement')
+    expect(ok.pushes).toEqual([`${app} tsk-7-paiement`])
+    const refusing = fakeGit('! [rejected] tsk-7-paiement -> tsk-7-paiement (non-fast-forward)')
+    await expect(service(world, { git: refusing.git }).s.push(app, 'tsk-7-paiement')).rejects.toThrow(/non-fast-forward/)
+    await expect(service(world).s.push(app, 'nope')).rejects.toMatchObject({ status: 404 })
+  })
+
+  test('a draft review made ready, then merged; the forge reads the branch again after each', async () => {
+    let draft = true
+    const calls: string[] = []
+    const forge = fakeForge({
+      review: async () => ({ number: 12, state: 'open', draft, url: 'u', description: '' }),
+      markReady: async (n) => {
+        calls.push(`ready ${n}`)
+        draft = false
+      },
+      mergeReview: async (n) => void calls.push(`merge ${n}`),
+    })
+    const { world, refreshed } = fakeWorld(all(), forge.client)
+    const { s } = service(world)
+    await expect(s.merge(app, 'tsk-7-paiement')).rejects.toThrow(/brouillon/)
+    await s.ready(app, 'tsk-7-paiement')
+    // Already out of draft: nothing more is asked.
+    await s.ready(app, 'tsk-7-paiement')
+    await s.merge(app, 'tsk-7-paiement')
+    expect(calls).toEqual(['ready 12', 'merge 12'])
+    expect(refreshed).toHaveLength(2)
+  })
+
+  test('without an open review, nothing is written', async () => {
+    const forge = fakeForge({ review: async () => null })
+    const { world } = fakeWorld(all(), forge.client)
+    await expect(service(world).s.ready(app, 'tsk-7-paiement')).rejects.toThrow(/pas de revue ouverte/)
+    await expect(service(world).s.merge(app, 'tsk-7-paiement')).rejects.toThrow(/pas de revue ouverte/)
   })
 })

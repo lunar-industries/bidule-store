@@ -21,7 +21,10 @@ export function branch(fields: Partial<Spec> & { name: string }): Spec {
     headSha: 'abc',
     reviewNumber: null,
     reviewState: null,
+    reviewDraft: null,
     ci: null,
+    pushed: true,
+    ahead: 1,
     ...fields,
   }
 }
@@ -149,19 +152,43 @@ function objectsOf({ branches, forge, refreshed }: World, tasks: Task[]): Branch
     remotePath: 'team/app',
     defaultBranch: branches.find((b) => b.repo === path && b.isDefault)?.name ?? null,
   }))
-  const stored: Partial<Record<StoredType, { id: string }[]>> = { repository, task: tasks }
+  // git's side of each branch (pushed, commits ahead), and the forges' reviews (a draft or not).
+  const branch = branches.map((b) => ({ id: branchId(b), pushed: b.pushed, ahead: b.ahead }))
+  const review = branches.flatMap((b) =>
+    b.reviewNumber === null ? [] : [{ id: `review:${b.name}`, branchId: branchId(b), number: b.reviewNumber, draft: b.reviewDraft ?? false }]
+  )
+  const stored: Partial<Record<StoredType, { id: string }[]>> = { repository, task: tasks, branch, review }
   const objects = {
-    list: async (type: StoredType, filter: { where?: Record<string, unknown> } = {}) =>
-      (stored[type] ?? []).filter((o) => Object.entries(filter.where ?? {}).every(([k, v]) => Reflect.get(o, k) === v)),
+    list: async (type: StoredType, filter: { where?: Record<string, unknown>; ids?: string[] } = {}) =>
+      (stored[type] ?? []).filter(
+        (o) => (!filter.ids || filter.ids.includes(o.id)) && Object.entries(filter.where ?? {}).every(([k, v]) => Reflect.get(o, k) === v)
+      ),
     get: async (type: StoredType, id: string) => (stored[type] ?? []).find((o) => o.id === id) ?? null,
     first: async (action: string, args: unknown) => (action === 'review.refresh' ? (refreshed.push(args), true) : forge),
   }
   return objects as unknown as BranchesDeps['objects']
 }
 
-export function service(world: World, { tasks = [], settings = {} }: { tasks?: Task[]; settings?: Partial<SharedSettings> } = {}) {
+// git's push: each one said (`repo name`); `refuse` makes origin refuse it, in git's words.
+export function fakeGit(refuse: string | null = null) {
+  const pushes: string[] = []
+  return {
+    pushes,
+    git: {
+      push: async (repo: string, name: string) => {
+        pushes.push(`${repo} ${name}`)
+        return refuse ? { ok: false, message: refuse } : { ok: true, message: 'poussée' }
+      },
+    },
+  }
+}
+
+export function service(
+  world: World,
+  { tasks = [], settings = {}, git = fakeGit().git }: { tasks?: Task[]; settings?: Partial<SharedSettings>; git?: BranchesDeps['git'] } = {}
+) {
   const shared = { ...SETTINGS, ...settings }
   const links: string[] = []
-  const s = new BranchesService({ objects: objectsOf(world, tasks), shared: sharedOf(world, tasks, shared, links) })
+  const s = new BranchesService({ objects: objectsOf(world, tasks), shared: sharedOf(world, tasks, shared, links), git })
   return { s, shared, links }
 }

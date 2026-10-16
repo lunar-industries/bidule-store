@@ -1,123 +1,310 @@
-/* Branches (Lunar Industries, taken from quack-board, Simon's pages/branches/branches.css): the list on the left,
-   the chosen branch on the right. */
-.lib-branches {
+/* Branches (Lunar Industries, taken from quack-board, Simon's pages/branches; the « Branches Lunar » maquette, piste C):
+   one table of every branch, grouped by repo, and the drawer of the one chosen. Every class under `lib-`. */
+
+:where([class*='theme-']) {
+  --lib-warn-ink: color-mix(in srgb, var(--butter) 45%, var(--text));
+  --lib-bad-bg: color-mix(in srgb, var(--bad-ink) 10%, var(--card));
+}
+
+/* The table, and beside it the drawer (sticky while the table scrolls): with it open, the table hides its review, CI
+   and commit columns, which the drawer says. */
+.page.lib-page {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
 }
-@media (max-width: 900px) {
-  .lib-branches {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.page.lib-page.with-drawer {
+  grid-template-columns: minmax(0, 1fr) 440px;
+}
+.lib-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.btn.lib-btn-sm,
+.btn-cta.lib-btn-sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--fs-sm);
+}
+/* A reading that failed, with Réessayer: above what was read before, if anything. */
+.lib-alert {
+  margin: 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--lib-bad-bg);
+  color: var(--bad-ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.lib-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+.lib-none p {
+  margin: 0;
 }
 
-/* ---------- the list: a panel like every page's blocks */
-.lib-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+/* ---------- the table */
+.panel.lib-table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+.lib-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
   outline: none;
 }
-.lib-list:focus-visible {
+/* The table's focus ring on its frame: on the table itself, a collapsed table draws it along every row. */
+.panel.lib-table-panel:has(.lib-table:focus-visible) {
   outline: 2px solid var(--ring);
-  outline-offset: 4px;
-  border-radius: var(--radius-sm);
+  outline-offset: 2px;
 }
-.lib-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+.lib-table th {
+  padding: var(--space-3) var(--space-2);
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
 }
-.lib-group-name {
-  padding: 0 var(--space-3) var(--space-1);
-  font-weight: 600;
-  color: var(--text-off);
+.lib-table td {
+  padding: var(--space-2);
+  vertical-align: middle;
 }
-.lib-option {
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+.lib-table :is(th, td):first-child {
+  padding-left: var(--space-4);
+}
+.lib-table :is(th, td):last-child {
+  padding-right: var(--space-4);
+}
+/* A column's head that sorts: its text as a button, the order said by an arrow and `aria-sort`. */
+.lib-sort {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
   cursor: pointer;
 }
-.lib-option:hover {
-  background: var(--chip-hover);
+.lib-sort[aria-pressed='true'] {
+  color: var(--text);
 }
-.lib-option[aria-selected='true'] {
+/* A repo's head: folds its branches, says how many wait for the user. */
+.lib-group-row td {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-top: 2px solid var(--card-line);
+  background: var(--card-done);
+}
+.lib-group-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.lib-chevron {
+  color: var(--text-2);
+  transition: transform 0.12s ease;
+}
+.lib-group-fold[aria-expanded='true'] .lib-chevron {
+  transform: rotate(90deg);
+}
+.lib-group-name {
+  font-size: var(--fs-md);
+  font-weight: 800;
+}
+/* A branch: the row the keyboard is on, the one whose drawer is open (a bar on its left and a filled background). */
+.lib-row {
+  border-top: 1px solid var(--card-done-line);
+  cursor: pointer;
+}
+.lib-row:hover {
   background: var(--chip);
 }
-.lib-name {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  overflow-wrap: anywhere;
+.lib-row.active {
+  box-shadow: inset 2px 0 0 var(--ring);
 }
-.lib-status {
+.lib-row.open {
+  background: var(--chip-hover);
+  box-shadow: inset 3px 0 0 var(--text);
+}
+.lib-col-dot {
+  width: 12px;
+}
+.lib-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+}
+.lib-dot[data-tone='bad'] {
+  background: var(--bad-dot);
+}
+.lib-dot[data-tone='warn'] {
+  background: var(--butter);
+}
+.lib-dot[data-tone='ok'] {
+  background: var(--mint);
+}
+.lib-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lib-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* The task under the branch's name: only when the Tâche column is not there (a narrow window). */
+.lib-sub {
+  display: none;
+}
+.lib-col-task {
+  max-width: 260px;
+}
+.lib-col-task .ellipsis {
+  display: block;
+}
+.lib-col-action {
+  text-align: right;
+  white-space: nowrap;
+}
+.lib-state {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--fs-sm);
-  font-weight: 600;
+  white-space: nowrap;
+}
+.lib-state-text {
+  font-weight: 700;
   color: var(--text-2);
 }
-/* A branch without a task: the one state that asks for something. */
-.lib-to-do {
-  color: var(--accent-text);
+.lib-state-text[data-tone='bad'] {
+  color: var(--bad-ink);
+  font-weight: 800;
+}
+.lib-state-text[data-tone='warn'] {
+  color: var(--lib-warn-ink);
+}
+.lib-state-text[data-tone='ok'] {
+  color: var(--ok-ink);
+}
+.lib-state-text[data-tone='info'] {
+  color: var(--text);
 }
 /* The steps done so far, four short segments (a drawing: its sizes are its own). */
 .lib-progress {
   flex: none;
-  width: 56px;
   display: flex;
-  gap: var(--space-1);
+  gap: 3px;
 }
 .lib-progress > span {
-  flex: 1;
-  height: 3px;
+  width: 12px;
+  height: 4px;
   border-radius: var(--radius-pill);
   background: var(--card-hover);
 }
 .lib-progress > .done {
-  background: var(--text-2);
+  background: var(--mint);
 }
-.lib-none {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--fs-sm);
+.lib-ci {
+  font-weight: 800;
+  color: var(--text-2);
 }
-.lib-merged {
-  align-self: flex-start;
-  margin-left: var(--space-3);
+.lib-ci[data-ci='fail'] {
+  color: var(--bad-ink);
+}
+.lib-ci[data-ci='ok'] {
+  color: var(--ok-ink);
+}
+.lib-page.with-drawer .lib-col-extra {
+  display: none;
 }
 
-/* ---------- the detail: a panel too, stuck in view while the list scrolls */
-.lib-detail {
+/* ---------- the drawer: stuck in view while the table scrolls */
+.panel.lib-drawer {
   position: sticky;
   top: var(--space-4);
+  max-height: calc(100vh - 2 * var(--space-6));
+  overflow-y: auto;
   gap: var(--space-4);
+  border-color: var(--card-hover);
 }
-.lib-head {
-  display: flex;
-  flex-direction: column;
+.lib-back {
+  align-self: flex-start;
+}
+.lib-drawer-head {
+  align-items: flex-start;
   gap: var(--space-2);
 }
-.lib-title {
+.lib-drawer-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.lib-drawer-title h2 {
   margin: 0;
-  font-size: var(--fs-xl);
-  font-weight: 500;
-  line-height: 1.4;
+  font-size: var(--fs-lg);
+  font-weight: 600;
   overflow-wrap: anywhere;
+}
+/* Where it is with its review, its CI and origin, in three small boxes. */
+.lib-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.lib-facts > div {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--card-done);
+}
+.lib-facts dt {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.lib-facts dd {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.lib-facts dd[data-warn='true'] {
+  color: var(--lib-warn-ink);
 }
 
 /* The task field and, once linked, « Délier » on its line, level with the field. */
 .lib-task {
-  display: flex;
   align-items: flex-end;
   gap: var(--space-2);
 }
 .lib-picker {
   position: relative;
   flex: 1;
+  min-width: 0;
+}
+.lib-picker .field {
+  width: 100%;
 }
 .lib-picker-list {
   position: absolute;
@@ -132,15 +319,23 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  justify-content: space-between;
   cursor: pointer;
 }
-.lib-picker-item[aria-selected='true'] {
-  background: var(--chip);
+.lib-picker-list .menu-item.active {
+  background: var(--chip-hover);
+}
+/* Nothing to pick: why, in the list's place. */
+.lib-picker-note {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
 }
 
-/* Four steps on a thin line across the whole width: a filled dot when done, a ring for the current one, a grey dot
-   to come. The last one sits at the right edge, its label under its dot. */
+/* Four steps on a thin line across the whole width: a filled dot when done, a ring for the current one, a hollow one
+   to come, its label still legible. The last one sits at the right edge, its label under its dot. */
 .lib-steps {
   margin: 0;
   padding: 0;
@@ -164,55 +359,51 @@
 .lib-step:not(:last-child) .lib-step-track::after {
   content: '';
   flex: 1;
-  height: 2px;
-  background: var(--card-line);
+  height: 3px;
+  margin: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--card-hover);
 }
 .lib-step.done:not(:last-child) .lib-step-track::after {
-  background: var(--text-2);
+  background: var(--mint);
 }
 .lib-step:last-child .lib-step-track {
   align-self: stretch;
 }
-.lib-step:last-child .lib-step-track::before {
-  content: '';
-  flex: 1;
-  height: 2px;
-  background: var(--card-line);
-}
-.lib-step:last-child:is(.current, .done) .lib-step-track::before {
-  background: var(--text-2);
-}
 .lib-step-mark {
   flex: none;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   box-sizing: border-box;
   border-radius: var(--radius-pill);
-  background: var(--card-line);
+  border: 2px solid var(--text-off);
 }
 .lib-step.done .lib-step-mark {
-  background: var(--text-2);
+  border-color: var(--mint);
+  background: var(--mint);
 }
 .lib-step.current .lib-step-mark {
-  border: 2px solid var(--text);
-  background: transparent;
+  border: 3px solid var(--coral);
 }
 .lib-step-label {
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.lib-step.current .lib-step-label {
+  font-weight: 800;
 }
 .lib-step.todo .lib-step-label {
-  color: var(--text-off);
+  color: var(--text-2);
 }
 
 /* What to do now: a softer block, one main action. */
 .lib-next {
   padding: var(--space-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--chip);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 .lib-next-text {
   display: flex;
@@ -221,23 +412,57 @@
 }
 .lib-next-text h3 {
   margin: 0;
-  font-size: var(--fs-xl);
-  font-weight: 700;
+  font-size: var(--fs-lg);
+  font-weight: 800;
 }
 .lib-next-actions {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
+  align-items: flex-end;
+  gap: var(--space-2);
 }
 .lib-target {
   width: 200px;
 }
+/* A red CI: the jobs that failed. */
+.lib-failed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--fs-sm);
+  color: var(--bad-ink);
+}
+.lib-failed li::before {
+  content: '✗ ';
+  font-weight: 800;
+}
 
 /* The other actions, buttons in their usual outline. */
 .lib-actions {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: var(--space-2);
+}
+
+/* A narrow window: the table keeps the branch (its task under it), the state and the action; the drawer takes the
+   whole page, with its way back. */
+@media (max-width: 1000px) {
+  .lib-col-extra,
+  .lib-col-task {
+    display: none;
+  }
+  .lib-sub {
+    display: block;
+  }
+  .page.lib-page.with-drawer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lib-page.with-drawer .lib-main {
+    display: none;
+  }
+  .panel.lib-drawer {
+    position: static;
+    max-height: none;
+  }
 }

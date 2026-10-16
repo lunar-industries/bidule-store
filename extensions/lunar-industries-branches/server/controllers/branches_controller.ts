@@ -59,6 +59,24 @@ export default class BranchesController {
     return ok
   }
 
+  async push({ request }: HttpContext) {
+    const { repo, name } = await request.validateUsing(branchValidator)
+    await service.push(repo, name)
+    return ok
+  }
+
+  async ready({ request }: HttpContext) {
+    const { repo, name } = await request.validateUsing(branchValidator)
+    await service.ready(repo, name)
+    return ok
+  }
+
+  async merge({ request }: HttpContext) {
+    const { repo, name } = await request.validateUsing(branchValidator)
+    await service.merge(repo, name)
+    return ok
+  }
+
   async target({ request }: HttpContext) {
     const { repo, target } = await request.validateUsing(targetValidator)
     await service.setTarget(repo, target)

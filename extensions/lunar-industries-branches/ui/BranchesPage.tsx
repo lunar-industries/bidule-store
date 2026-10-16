@@ -1,100 +1,200 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { navigate, react, useHint, useMascot, useOn, type Board } from '@bidule/sdk'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
+import {
+  BannerTools,
+  busy,
+  errorMessage,
+  navigate,
+  react,
+  ToolFilter,
+  ToolSearch,
+  useHint,
+  useMascot,
+  useOn,
+  type Board,
+} from '@bidule/sdk'
+import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import type { Job, Links, Listing } from '../contract.ts'
-import { api, board as readBoard, errorMessage } from './api.ts'
+import { api, board as readBoard } from './api.ts'
 import { confirm, type Ask } from './confirm.tsx'
-import { hintOf, relTime, reposOf, type RepoView, type Row } from './steps.ts'
+import { setOpened, useOpened } from './state.ts'
+import { countsOf, FILTERS, hintOf, relTime, reposOf, type Filter, type RepoView, type Row, type Sort } from './steps.ts'
 import { TaskPicker } from './TaskPicker.tsx'
 
-// Kept across visits while the app runs (Simon's KeptSignal): the merged branches shown, the branch picked last.
-let keptShowMerged = false
-let keptPicked: string | null = null
+// Kept across visits while the app runs: the filter, the order, the repos folded.
+let keptFilter: Filter = 'current'
+let keptSort: Sort = 'state'
+const keptFolded = new Set<string>()
 
-type Jobs = 'loading' | { error: string } | Job[]
-type Menu = { x: number; y: number } & ({ kind: 'copy'; name: string } | { kind: 'jobs'; row: Row })
+type Read = 'loading' | { error: string } | Links
+const open = (url: string | null) => url && window.open(url, '_blank', 'noopener')
 
-const open = (url: string | null) => url && window.open(url, '_blank', 'noreferrer')
+// Under this width the table keeps its essential columns and the drawer takes the whole page.
+const NARROW = '(max-width: 1000px)'
+const subscribeNarrow = (changed: () => void) => {
+  const query = matchMedia(NARROW)
+  query.addEventListener('change', changed)
+  return () => query.removeEventListener('change', changed)
+}
+const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches)
+
+const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`
 
 /**
- * Taken from quack-board (Simon's pages/branches): the branches by repo on the left, each with the step it is at;
- * the one chosen on the right, with its task, its steps, the one thing to do now and the forge's other actions. Every
- * write on the forge is confirmed first.
+ * Taken from quack-board (Simon's pages/branches), as the « Branches Lunar » maquette draws it (piste C): every branch
+ * of the user's repos in one table, grouped by repo, with the step it is at in words and the one thing to do now in its
+ * last column; the drawer of the branch chosen says its situation, its task, its steps and every action. Every write on
+ * the forge or on origin is confirmed first, in full sentences.
  */
 export function BranchesPage() {
   const [listing, setListing] = useState<Listing | null>(null)
-  const [board, setBoard] = useState<Board | null>(null)
+  const [board, setBoard] = useState<Board | 'none' | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showMerged, setShowMerged] = useState(keptShowMerged)
-  const [picked, setPicked] = useState<string | null>(keptPicked)
-  const [links, setLinks] = useState<Links | null>(null)
-  const [jobs, setJobs] = useState<Jobs>('loading')
-  const [busy, setBusy] = useState(false)
-  const [menu, setMenu] = useState<Menu | null>(null)
+  const [filter, setFilterState] = useState<Filter>(keptFilter)
+  const [sort, setSortState] = useState<Sort>(keptSort)
+  const [query, setQuery] = useState('')
+  const [folded, setFolded] = useState<Set<string>>(() => new Set(keptFolded))
+  const [active, setActive] = useState<string | null>(null)
+  const [writing, setWriting] = useState(false)
+  const opened = useOpened()
+  const narrow = useNarrow()
+  const [menu, openMenu] = useMenu()
   const { mascot } = useMascot()
+  const table = useRef<HTMLTableElement>(null)
 
-  const reload = () => {
+  const reload = useCallback(() => {
     api.list().then(
       (l) => {
         setListing(l)
         setError(null)
       },
-      (err) => setError(errorMessage(err)),
+      (err: unknown) => setError(errorMessage(err)),
     )
     void readBoard().then(setBoard)
-  }
-  useEffect(reload, [])
+  }, [])
+  useEffect(reload, [reload])
   useOn('git.changed', reload)
-  // The forges' reviews and CI read again, the tasks changed.
+  // The forges' reviews and CI read again, the tasks and the branches changed.
   useOn('objects.changed', ({ type }) => {
-    if (type === 'review' || type === 'pipeline' || type === 'task') reload()
+    if (type === 'review' || type === 'pipeline' || type === 'task' || type === 'branch') reload()
   })
   // A repo's review target changed, here or in Claude's settings.
   useOn('lunar-industries-common.changed', reload)
 
-  const tasks = board?.tasks ?? []
-  const done = useMemo(() => new Set((board?.columns ?? []).filter((c) => c.group === 'done').map((c) => c.name)), [board])
-  const repos = useMemo(() => (listing ? reposOf(listing, tasks, showMerged) : []), [listing, tasks, showMerged])
-  const rows = repos.flatMap((r) => r.rows)
-  const merged = repos.reduce((n, r) => n + r.merged, 0)
-  // The branch shown: the one picked, while it is still listed, else the first one.
-  const selectedKey = picked && rows.some((r) => r.key === picked) ? picked : (rows[0]?.key ?? null)
-  const selected = (() => {
-    for (const repo of repos) {
-      const row = repo.rows.find((r) => r.key === selectedKey)
-      if (row) return { row, repo }
-    }
-    return null
-  })()
+  const setFilter = (f: Filter) => {
+    keptFilter = f
+    setFilterState(f)
+  }
+  const setSort = (s: Sort) => {
+    keptSort = s
+    setSortState(s)
+  }
+  const fold = (path: string) => {
+    if (keptFolded.has(path)) keptFolded.delete(path)
+    else keptFolded.add(path)
+    setFolded(new Set(keptFolded))
+  }
+
+  const tasks = board && board !== 'none' ? board.tasks : []
+  const done = useMemo(
+    () => new Set((board && board !== 'none' ? board.columns : []).filter((c) => c.group === 'done').map((c) => c.name)),
+    [board],
+  )
+  const repos = useMemo(() => (listing ? reposOf(listing, tasks, filter, sort, query) : []), [listing, tasks, filter, sort, query])
+  const visible = repos.flatMap((r) => (folded.has(r.path) ? [] : r.rows))
+  const all = repos.flatMap((r) => r.rows)
+  const counts = listing ? countsOf(listing.branches) : null
+  const openRow = all.find((r) => r.key === opened) ?? null
+  const openRepo = openRow ? (repos.find((r) => r.path === openRow.repo) ?? null) : null
+  const activeKey = active && visible.some((r) => r.key === active) ? active : (openRow?.key ?? visible[0]?.key ?? null)
 
   const hint = listing ? hintOf(listing, mascot?.lines.tease ?? null) : null
-  useHint(hint?.line ?? null, hint?.mode ?? 'listen')
+  useHint(error && !listing ? 'Je n’arrive pas à lire tes dépôts.' : (hint?.line ?? null), hint?.mode ?? 'listen')
 
-  const pick = (key: string) => {
-    setPicked(key)
-    keptPicked = key
-  }
-  const toggleMerged = () => {
-    setShowMerged(!showMerged)
-    keptShowMerged = !showMerged
-  }
+  // ---------- writes: each confirmed, the wait shown, the table read again
 
-  // Where its review, pipeline and issue are, read on the forge for the branch shown (and again after a change).
-  const row = selected?.row ?? null
-  const linkKey = row ? `${row.key}\u0000${row.reviewState}\u0000${row.ci}\u0000${row.headSha}` : null
-  useEffect(() => {
-    setLinks(null)
-    if (!row?.forge) return
-    let live = true
-    api.links(row).then(
-      (l) => live && setLinks(l),
-      () => undefined,
-    )
-    return () => {
-      live = false
+  const write = async (ask: Ask, call: () => Promise<unknown>, doneText: string) => {
+    if (!(await confirm(ask))) return
+    setWriting(true)
+    try {
+      await busy(call())
+      react('quack', doneText, doneText)
+      reload()
+    } catch (err) {
+      react('panic', errorMessage(err), errorMessage(err))
+    } finally {
+      setWriting(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkKey])
-
+  }
+  const push = (r: Row) =>
+    write(
+      {
+        title: `Pousser ${r.name} ?`,
+        text: `Les commits de ${r.name} sont envoyés sur origin, sans jamais forcer. La première fois, la branche y est créée et suivie.`,
+        confirm: 'Pousser',
+      },
+      () => api.push(r),
+      `${r.name} poussée`,
+    )
+  const createReview = (r: Row, target: string) =>
+    write(
+      {
+        title: `Créer la ${r.review} brouillon ?`,
+        text: `Une ${r.review} brouillon de ${r.name} vers ${target} est ouverte sur ${r.forgeName}, intitulée « ${r.task?.title ?? r.name} ».`,
+        confirm: `Créer la ${r.review}`,
+      },
+      () => api.review(r, target),
+      `${r.review} brouillon ouverte pour ${r.name}`,
+    )
+  const ready = (r: Row) =>
+    write(
+      {
+        title: `Sortir la ${r.reviewLabel ?? r.review} du brouillon ?`,
+        text: `La ${r.reviewLabel ?? r.review} de ${r.name} devient prête à être relue sur ${r.forgeName}.`,
+        confirm: 'Sortir du brouillon',
+      },
+      () => api.ready(r),
+      `${r.reviewLabel ?? r.review} prête à être relue`,
+    )
+  const merge = (r: Row) =>
+    write(
+      {
+        title: `Fusionner la ${r.reviewLabel ?? r.review} ?`,
+        text: `La ${r.reviewLabel ?? r.review} de ${r.name} est fusionnée dans sa branche cible sur ${r.forgeName}, comme son bouton là-bas. Cela ne se défait pas depuis l’app.`,
+        confirm: 'Fusionner',
+      },
+      () => api.merge(r),
+      `${r.reviewLabel ?? r.review} fusionnée`,
+    )
+  const runPipeline = (r: Row) =>
+    write(
+      {
+        title: `Lancer un pipeline sur ${r.name} ?`,
+        text: `Un nouveau pipeline démarre sur ${r.forgeName} pour le dernier commit poussé de ${r.name}.`,
+        confirm: 'Lancer',
+      },
+      () => api.pipeline(r),
+      `Pipeline lancé sur ${r.name}`,
+    )
+  const retry = (r: Row) =>
+    write(
+      {
+        title: 'Relancer les jobs en échec ?',
+        text: `Les jobs en échec du dernier pipeline de ${r.name} redémarrent sur ${r.forgeName}.`,
+        confirm: 'Relancer',
+      },
+      () => api.retry(r),
+      `Jobs relancés sur ${r.name}`,
+    )
+  const play = (r: Row, job: Job) =>
+    write(
+      {
+        title: `Lancer ${job.name} ?`,
+        text: `Le job manuel ${job.stage ? `${job.stage} · ` : ''}${job.name} du pipeline de ${r.name} démarre sur ${r.forgeName}.`,
+        confirm: 'Lancer',
+      },
+      () => api.play(r, job.id),
+      `${job.name} lancé`,
+    )
   const link = async (r: Row, taskId: string | null) => {
     try {
       await api.link(r, taskId)
@@ -105,41 +205,6 @@ export function BranchesPage() {
       react('panic', errorMessage(err), errorMessage(err))
     }
   }
-
-  // Every write on the forge is confirmed first, then the list read again.
-  const write = async (ask: Ask, call: () => Promise<unknown>, doneText: string) => {
-    if (!(await confirm(ask))) return
-    setBusy(true)
-    try {
-      await call()
-      react('quack', doneText, doneText)
-      reload()
-    } catch (err) {
-      react('panic', errorMessage(err), errorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-  const run = (r: Row) =>
-    write({ title: 'Lancer un pipeline ?', text: `Sur ${r.name}.`, confirm: 'Lancer' }, () => api.pipeline(r), `Pipeline lancé sur ${r.name}`)
-  const retry = (r: Row) =>
-    write(
-      { title: 'Relancer les jobs en échec ?', text: `Du pipeline de ${r.name}.`, confirm: 'Relancer' },
-      () => api.retry(r),
-      `Pipeline relancé sur ${r.name}`,
-    )
-  const play = (r: Row, job: Job) =>
-    write(
-      { title: `Lancer ${job.name} ?`, text: `Job manuel du pipeline de ${r.name}.`, confirm: 'Lancer' },
-      () => api.play(r, job.id),
-      `${job.name} lancé`,
-    )
-  const review = (r: Row, target: string) =>
-    write(
-      { title: `Ouvrir une ${r.review} brouillon ?`, text: `De ${r.name} vers ${target}.`, confirm: 'Ouvrir' },
-      () => api.review(r, target),
-      `${r.review} ouverte pour ${r.name}`,
-    )
   // The repo's target: kept for its next reviews.
   const setTarget = async (repo: string, target: string) => {
     try {
@@ -148,211 +213,475 @@ export function BranchesPage() {
       react('panic', errorMessage(err), errorMessage(err))
     }
   }
-
   const copy = async (name: string) => {
-    setMenu(null)
     await navigator.clipboard.writeText(name)
     react('quack', `${name} copié`, `${name} copié`)
   }
 
-  const showJobs = (r: Row, anchor: HTMLElement) => {
-    const box = anchor.getBoundingClientRect()
-    setJobs('loading')
-    api.jobs(r).then(
-      ({ jobs: all }) => setJobs(all.filter((j) => j.manual)),
-      (err) => setJobs({ error: errorMessage(err) }),
-    )
-    setMenu({ x: box.left, y: box.bottom + 4, kind: 'jobs', row: r })
+  // ---------- the drawer, and the row's action
+
+  const show = (r: Row, focusTask = false) => {
+    setActive(r.key)
+    setOpened(r.key)
+    if (focusTask) setTimeout(() => document.querySelector<HTMLInputElement>('.lib-drawer .lib-picker input')?.focus())
+  }
+  const close = () => {
+    const key = opened
+    setOpened(null)
+    // The focus goes back to the table, on the row that was open.
+    if (key) {
+      setActive(key)
+      table.current?.focus()
+    }
+  }
+  const act = (r: Row) => {
+    const repo = repos.find((x) => x.path === r.repo)
+    switch (r.action.kind) {
+      case 'link':
+        return show(r, true)
+      case 'push':
+        return void push(r)
+      case 'review':
+        return repo?.target ? void createReview(r, repo.target) : show(r)
+      case 'retry':
+        return void retry(r)
+      case 'ready':
+        return void ready(r)
+      case 'merge':
+        return void merge(r)
+      default:
+        return show(r)
+    }
+  }
+  const entriesFor = (r: Row): MenuEntry[] => [
+    { label: 'Ouvrir le détail', run: () => show(r), shortcut: 'Entrée' },
+    { label: 'Copier le nom', run: () => copy(r.name) },
+    !r.taskId && { label: 'Lier à une tâche…', run: () => show(r, true) },
+    r.forge ? { label: 'Lancer un pipeline…', run: () => runPipeline(r) } : null,
+  ]
+
+  // The table's keys: one stop for Tab; the arrows go from row to row, Enter opens the drawer, the Menu key the row's
+  // menu, Escape closes the drawer.
+  const onTableKey = (e: KeyboardEvent<HTMLTableElement>) => {
+    const at = visible.findIndex((r) => r.key === activeKey)
+    const row = visible[at]
+    // The Menu key: the row's menu, under the row (not under the whole table).
+    const rowEl = row ? document.getElementById(rowId(row.key)) : null
+    if (isMenuKey(e) && row && rowEl) {
+      e.preventDefault()
+      return openMenu(rowEl, entriesFor(row), `Branche ${row.name}`)
+    }
+    const to = e.key === 'ArrowDown' ? at + 1 : e.key === 'ArrowUp' ? at - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? visible.length - 1 : null
+    if (to !== null && visible.length) {
+      e.preventDefault()
+      const next = visible[Math.max(0, Math.min(visible.length - 1, to))]
+      setActive(next.key)
+      document.getElementById(rowId(next.key))?.scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'Enter' && row) {
+      e.preventDefault()
+      show(row)
+    } else if (e.key === 'Escape' && opened) {
+      e.preventDefault()
+      close()
+    }
   }
 
-  // The list's arrows: the next or previous branch, shown on the right.
-  const onListKey = (e: KeyboardEvent) => {
-    const at = rows.findIndex((r) => r.key === selectedKey)
-    const to = e.key === 'ArrowDown' ? at + 1 : e.key === 'ArrowUp' ? at - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : null
-    if (to === null || !rows.length) return
-    e.preventDefault()
-    const next = rows[Math.max(0, Math.min(rows.length - 1, to))]
-    pick(next.key)
-    document.getElementById(optionId(next.key))?.scrollIntoView({ block: 'nearest' })
-  }
+  const tools = (
+    <BannerTools>
+      <ToolSearch label="Chercher une branche" placeholder="Branche, dépôt, tâche…" value={query} onChange={setQuery} />
+      <ToolFilter
+        label="Branches affichées"
+        options={FILTERS.map((f) => ({ ...f, count: counts?.[f.key] }))}
+        value={filter}
+        onChange={setFilter}
+      />
+    </BannerTools>
+  )
 
-  if (error)
+  if (!listing)
     return (
-      <div className="page">
-        <section className="panel empty">
-          <p>{error}</p>
-          <p className="legend">La page Branches ne peut pas charger tes dépôts.</p>
-          <div>
-            <button type="button" className="btn" onClick={reload}>
+      <div className="page with-tools lib-page">
+        {tools}
+        {error ? (
+          <div className="row lib-alert" role="alert">
+            <span className="grow">Les dépôts n’ont pas pu être lus : {error}</span>
+            <button type="button" className="btn lib-btn-sm" onClick={reload}>
               Réessayer
             </button>
           </div>
-        </section>
-      </div>
-    )
-  if (!listing) return <div className="page" />
-  if (!repos.length)
-    return (
-      <div className="page">
-        <section className="panel empty">
-          <p>Je ne vois aucune branche.</p>
-          <p className="legend">Vérifie le dossier des dépôts dans les Réglages.</p>
-          <div>
-            <button type="button" className="btn" onClick={() => navigate('/reglages/git')}>
-              Aller aux Réglages
-            </button>
-          </div>
-        </section>
-      </div>
-    )
-
-  return (
-    <div className="page">
-      <div className="lib-branches">
-        <nav className="panel lib-nav" aria-label="Branches">
-          <div
-            className="lib-list"
-            role="listbox"
-            tabIndex={0}
-            aria-label="Branches"
-            aria-activedescendant={selectedKey ? optionId(selectedKey) : undefined}
-            onKeyDown={onListKey}
-          >
-            {repos.map((repo) => (
-              <div key={repo.path} className="lib-group" role="group" aria-label={repo.label}>
-                <span className="legend lib-group-name" aria-hidden="true">
-                  {repo.label}
-                </span>
-                {repo.rows.map((b) => (
-                  <div
-                    key={b.key}
-                    id={optionId(b.key)}
-                    role="option"
-                    aria-selected={b.key === selectedKey}
-                    className="lib-option"
-                    onClick={() => pick(b.key)}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      setMenu({ x: e.clientX, y: e.clientY, kind: 'copy', name: b.name })
-                    }}
-                  >
-                    <span className="mono lib-name">{b.name}</span>
-                    <span className="lib-status">
-                      <span className="lib-progress" aria-hidden="true">
-                        {b.progress.map((d, i) => (
-                          <span key={i} className={d ? 'done' : undefined} />
-                        ))}
-                      </span>
-                      <span className={b.step === 'task' ? 'lib-to-do' : undefined}>{b.status}</span>
-                    </span>
-                  </div>
-                ))}
-                {!repo.rows.length && (
-                  <span className="muted lib-none">{repo.count ? 'Seulement des branches fusionnées.' : 'Aucune branche de travail.'}</span>
-                )}
-              </div>
-            ))}
-          </div>
-          {merged > 0 && (
-            <button type="button" className="chip-btn lib-merged" aria-expanded={showMerged} onClick={toggleMerged}>
-              {showMerged ? 'Masquer' : 'Voir'} les fusionnées ({merged})
-            </button>
-          )}
-        </nav>
-
-        {selected && (
-          <Detail
-            row={selected.row}
-            repo={selected.repo}
-            links={links}
-            busy={busy}
-            tasks={tasks}
-            done={done}
-            branches={listing.branches}
-            link={(id) => void link(selected.row, id)}
-            run={() => void run(selected.row)}
-            retry={() => void retry(selected.row)}
-            review={(t) => void review(selected.row, t)}
-            setTarget={(t) => void setTarget(selected.repo.path, t)}
-            showJobs={(el) => showJobs(selected.row, el)}
-          />
+        ) : (
+          <p className="muted" role="status">
+            Lecture des dépôts…
+          </p>
         )}
       </div>
-      {menu && (
-        <Floating x={menu.x} y={menu.y} close={() => setMenu(null)}>
-          {menu.kind === 'copy' ? (
-            <button type="button" role="menuitem" className="menu-item" onClick={() => void copy(menu.name)}>
-              Copier le nom
+    )
+  if (!listing.repos.length && !listing.branches.length)
+    return (
+      <div className="page with-tools lib-page">
+        {tools}
+        <section className="empty lib-none">
+          <p>Je ne vois aucun dépôt.</p>
+          <p className="legend">Vérifie le dossier des dépôts dans les Réglages de git.</p>
+          <button type="button" className="btn" onClick={() => navigate('/reglages/git')}>
+            Aller aux Réglages
+          </button>
+        </section>
+      </div>
+    )
+
+  const drawerOpen = Boolean(openRow && openRepo)
+  return (
+    <div className={`page with-tools lib-page${drawerOpen ? ' with-drawer' : ''}${narrow ? ' narrow' : ''}`}>
+      {tools}
+      {menu}
+      <div className="lib-main">
+        {error && (
+          <div className="row lib-alert" role="alert">
+            <span className="grow">Les branches n’ont pas pu être relues : {error} Voici la dernière lecture.</span>
+            <button type="button" className="btn lib-btn-sm" onClick={reload}>
+              Réessayer
             </button>
-          ) : (
-            <JobsList
-              row={menu.row}
-              jobs={jobs}
-              play={(j) => {
-                setMenu(null)
-                void play(menu.row, j)
-              }}
-            />
-          )}
-        </Floating>
+          </div>
+        )}
+        {all.length ? (
+          <section className="panel lib-table-panel">
+            <table
+              ref={table}
+              className="lib-table"
+              role="grid"
+              aria-label="Branches"
+              tabIndex={0}
+              aria-activedescendant={activeKey ? rowId(activeKey) : undefined}
+              onKeyDown={onTableKey}
+            >
+              <thead>
+                <tr>
+                  <th scope="col" className="lib-col-dot">
+                    <span className="sr-only">Attend quelque chose de toi</span>
+                  </th>
+                  <SortHead label="Branche" by="name" sort={sort} setSort={setSort} />
+                  <th scope="col" className="lib-col-task">
+                    Tâche
+                  </th>
+                  <SortHead label="État" by="state" sort={sort} setSort={setSort} />
+                  <th scope="col" className="lib-col-extra">
+                    Revue
+                  </th>
+                  <th scope="col" className="lib-col-extra">
+                    CI
+                  </th>
+                  <SortHead label="Commit" by="commit" sort={sort} setSort={setSort} extra />
+                  <th scope="col" className="lib-col-action">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              {repos
+                .filter((repo) => repo.rows.length)
+                .map((repo) => (
+                  <tbody key={repo.path}>
+                    <tr className="lib-group-row">
+                      <td colSpan={8}>
+                        <button type="button" className="lib-group-fold" aria-expanded={!folded.has(repo.path)} onClick={() => fold(repo.path)}>
+                          <span className="lib-chevron" aria-hidden="true">
+                            ›
+                          </span>
+                          <span className="baloo lib-group-name">{repo.label}</span>
+                          <span className="legend">
+                            {plural(repo.rows.length, 'branche')}
+                            {repo.yours ? ` · ${repo.yours} attend${repo.yours > 1 ? 'ent' : ''} quelque chose de toi` : ''}
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                    {!folded.has(repo.path) &&
+                      repo.rows.map((r) => (
+                        <TableRow
+                          key={r.key}
+                          row={r}
+                          active={r.key === activeKey}
+                          open={r.key === opened}
+                          busy={writing}
+                          show={() => show(r)}
+                          act={() => act(r)}
+                          menu={(e) => openMenu(e, entriesFor(r), `Branche ${r.name}`)}
+                        />
+                      ))}
+                  </tbody>
+                ))}
+            </table>
+          </section>
+        ) : (
+          <section className="empty lib-none">
+            {query.trim() ? (
+              <>
+                <p>Aucune branche ne correspond à « {query.trim()} ».</p>
+                <button type="button" className="btn" onClick={() => setQuery('')}>
+                  Effacer la recherche
+                </button>
+              </>
+            ) : filter === 'orphans' ? (
+              <p>Chaque branche a sa tâche. Coin !</p>
+            ) : (
+              <>
+                <p>Aucune branche en cours.</p>
+                {counts && counts.all > 0 && (
+                  <button type="button" className="btn" onClick={() => setFilter('all')}>
+                    Voir toutes les branches ({counts.all})
+                  </button>
+                )}
+              </>
+            )}
+          </section>
+        )}
+      </div>
+
+      {openRow && openRepo && (
+        <Drawer
+          key={openRow.key}
+          row={openRow}
+          repo={openRepo}
+          tasks={tasks}
+          done={done}
+          noSource={board === 'none'}
+          branches={listing.branches}
+          busy={writing}
+          narrow={narrow}
+          close={close}
+          menu={(el) => openMenu(el, entriesFor(openRow), `Branche ${openRow.name}`)}
+          jobsMenu={(el, entries) => openMenu(el, entries, 'Jobs manuels')}
+          link={(id) => void link(openRow, id)}
+          push={() => void push(openRow)}
+          createReview={(t) => void createReview(openRow, t)}
+          ready={() => void ready(openRow)}
+          merge={() => void merge(openRow)}
+          run={() => void runPipeline(openRow)}
+          retry={() => void retry(openRow)}
+          play={(job) => void play(openRow, job)}
+          setTarget={(t) => void setTarget(openRepo.path, t)}
+        />
       )}
     </div>
   )
 }
 
-const optionId = (key: string) => `lib-${key.replace(/[^\w-]/g, '_')}`
+const rowId = (key: string) => `lib-${key.replace(/[^\w-]/g, '_')}`
 
-function Detail({
+function SortHead({ label, by, sort, setSort, extra }: { label: string; by: Sort; sort: Sort; setSort: (s: Sort) => void; extra?: boolean }) {
+  const on = sort === by
+  return (
+    <th scope="col" className={extra ? 'lib-col-extra' : undefined} aria-sort={on ? (by === 'commit' ? 'descending' : 'ascending') : 'none'}>
+      <button type="button" className="lib-sort" aria-pressed={on} title={`Trier par ${label.toLowerCase()}`} onClick={() => setSort(by)}>
+        {label}
+        {on && <span aria-hidden="true">{by === 'commit' ? ' ↓' : ' ↑'}</span>}
+      </button>
+    </th>
+  )
+}
+
+function TableRow({
+  row: r,
+  active,
+  open,
+  busy,
+  show,
+  act,
+  menu,
+}: {
+  row: Row
+  active: boolean
+  open: boolean
+  busy: boolean
+  show: () => void
+  act: () => void
+  menu: (e: MouseEvent) => void
+}) {
+  const writes = r.action.kind !== 'open' && r.action.kind !== 'link'
+  return (
+    <tr
+      id={rowId(r.key)}
+      role="row"
+      aria-selected={open}
+      className={`lib-row${active ? ' active' : ''}${open ? ' open' : ''}`}
+      data-tone={r.state.tone}
+      onClick={show}
+      onContextMenu={menu}
+    >
+      <td className="lib-col-dot">{r.state.yours && <span className="dot lib-dot" data-tone={r.state.tone} />}</td>
+      <td>
+        <span className="lib-branch">
+          <span className="mono lib-name">{r.name}</span>
+          <span className="legend lib-sub">{r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? 'Tâche inconnue' : 'aucune tâche'}</span>
+        </span>
+      </td>
+      <td className="lib-col-task">
+        {r.task ? (
+          <span className="ellipsis">
+            {r.task.ref && <span className="card-id">{r.task.ref} </span>}
+            {r.task.title}
+          </span>
+        ) : (
+          <span className="muted">{r.taskId ? `Tâche inconnue · ${r.taskId.slice(0, 6)}` : 'aucune'}</span>
+        )}
+      </td>
+      <td>
+        <span className="lib-state">
+          <span className="lib-progress" aria-hidden="true">
+            {r.progress.map((d, i) => (
+              <span key={i} className={d ? 'done' : undefined} />
+            ))}
+          </span>
+          <span className="lib-state-text" data-tone={r.state.tone}>
+            {r.state.text}
+          </span>
+        </span>
+      </td>
+      <td className="lib-col-extra muted">{r.reviewLabel ? `${r.reviewLabel}${r.reviewDraft ? ' · brouillon' : ''}` : '—'}</td>
+      <td className="lib-col-extra">
+        <span className="lib-ci" data-ci={r.ci ?? 'none'}>
+          {r.ci === 'fail' ? 'rouge' : r.ci === 'ok' ? 'verte' : r.ci === 'pending' ? 'en cours' : '—'}
+        </span>
+      </td>
+      <td className="lib-col-extra muted">{relTime(r.lastCommitAt)}</td>
+      <td className="lib-col-action">
+        <button
+          type="button"
+          className={writes && r.state.yours ? 'btn-cta lib-btn-sm' : 'btn lib-btn-sm'}
+          tabIndex={-1}
+          disabled={busy && writes}
+          onClick={(e) => {
+            e.stopPropagation()
+            act()
+          }}
+        >
+          {r.action.label}
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function Drawer({
   row: r,
   repo,
-  links,
-  busy,
   tasks,
   done,
+  noSource,
   branches,
+  busy,
+  narrow,
+  close,
+  menu,
+  jobsMenu,
   link,
+  push,
+  createReview,
+  ready,
+  merge,
   run,
   retry,
-  review,
+  play,
   setTarget,
-  showJobs,
 }: {
   row: Row
   repo: RepoView
-  links: Links | null
-  busy: boolean
   tasks: Board['tasks']
   done: Set<string>
+  noSource: boolean
   branches: Listing['branches']
+  busy: boolean
+  narrow: boolean
+  close: () => void
+  menu: (el: HTMLElement) => void
+  jobsMenu: (el: HTMLElement, entries: MenuEntry[]) => void
   link: (taskId: string | null) => void
+  push: () => void
+  createReview: (target: string) => void
+  ready: () => void
+  merge: () => void
   run: () => void
   retry: () => void
-  review: (target: string) => void
+  play: (job: Job) => void
   setTarget: (target: string) => void
-  showJobs: (anchor: HTMLElement) => void
 }) {
-  const reviewUrl = links?.reviewUrl ?? null
-  const pipelineUrl = links?.pipelineUrl ?? null
-  return (
-    <section className="panel lib-detail" aria-labelledby="lib-title">
-      <header className="lib-head">
-        <h2 id="lib-title" className="mono lib-title selectable">
-          {r.name}
-        </h2>
-        <span className="legend">
-          {repo.label} · {relTime(r.lastCommitAt)}
-        </span>
-      </header>
+  // Where its review, pipeline and issue are, read on the forge (again after a change of the branch).
+  const [links, setLinks] = useState<Read>('loading')
+  const [failed, setFailed] = useState<string[]>([])
+  const linkKey = `${r.key}\u0000${r.reviewState}\u0000${r.ci}\u0000${r.headSha}\u0000${r.reviewDraft}`
+  const readLinks = useCallback(() => {
+    if (!r.forge) return setLinks({ reviewUrl: null, pipelineUrl: null, issueUrl: null })
+    setLinks('loading')
+    api.links(r).then(setLinks, (err: unknown) => setLinks({ error: errorMessage(err) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkKey])
+  useEffect(readLinks, [readLinks])
+  // A red CI: the jobs that failed, named.
+  useEffect(() => {
+    setFailed([])
+    if (r.ci !== 'fail' || !r.forge) return
+    let live = true
+    api.jobs(r).then(
+      ({ jobs }) => live && setFailed(jobs.filter((j) => /fail/i.test(j.status)).map((j) => (j.stage ? `${j.stage} · ${j.name}` : j.name))),
+      () => undefined,
+    )
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkKey])
 
-      {/* Always there and always the same: the task it goes with, changed by typing another one, or removed. */}
-      <div className="lib-task">
-        <TaskPicker label="Tâche" tasks={tasks} done={done} branches={branches} current={r.task?.title ?? ''} picked={link} />
-        {r.taskId && (
-          <button type="button" className="btn" onClick={() => link(null)}>
-            Délier
+  const read = links !== 'loading' && !('error' in links) ? links : null
+  const showJobs = async (el: HTMLElement) => {
+    try {
+      const { jobs } = await api.jobs(r)
+      const manual = jobs.filter((j) => j.manual)
+      jobsMenu(
+        el,
+        manual.length
+          ? manual.map((j) => ({ label: `${j.stage ? `${j.stage} · ` : ''}${j.name}…`, run: () => play(j) }))
+          : [{ label: `Aucun job manuel sur le pipeline de ${r.name}`, run: () => undefined, disabled: true }],
+      )
+    } catch (err) {
+      react('panic', errorMessage(err), errorMessage(err))
+    }
+  }
+
+  const current = r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? `Tâche inconnue · ${r.taskId.slice(0, 6)}` : ''
+  return (
+    <aside
+      className="panel lib-drawer"
+      aria-labelledby="lib-drawer-title"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !e.defaultPrevented) {
+          e.preventDefault()
+          close()
+        }
+      }}
+    >
+      {narrow && (
+        <button type="button" className="btn lib-btn-sm lib-back" onClick={close}>
+          ‹ Toutes les branches
+        </button>
+      )}
+      <header className="row lib-drawer-head">
+        <div className="grow lib-drawer-title">
+          <h2 id="lib-drawer-title" className="mono selectable">
+            {r.name}
+          </h2>
+          <span className="legend">
+            {r.repoLabel} · dernier commit il y a {relTime(r.lastCommitAt)}
+          </span>
+        </div>
+        <button type="button" className="icon-btn" aria-label={`Plus d’actions pour ${r.name}`} title="Plus d’actions" onClick={(e) => menu(e.currentTarget)}>
+          ⋯
+        </button>
+        {!narrow && (
+          <button type="button" className="icon-btn" aria-label="Fermer le détail (Échap)" title="Fermer (Échap)" onClick={close}>
+            ×
           </button>
         )}
-      </div>
+      </header>
 
       <ol className="lib-steps" aria-label="Étapes de la branche">
         {r.steps.map((st) => (
@@ -368,109 +697,177 @@ function Detail({
         ))}
       </ol>
 
-      {/* The one thing to do now, and its main action. */}
-      <section className="lib-next" aria-labelledby="lib-next-title">
-        <NextStep row={r} repo={repo} reviewUrl={reviewUrl} pipelineUrl={pipelineUrl} busy={busy} retry={retry} review={review} setTarget={setTarget} />
-      </section>
+      <dl className="lib-facts">
+        <div>
+          <dt>Revue</dt>
+          <dd>{r.reviewLabel ? `${r.reviewLabel}${r.reviewState === 'closed' ? ' fermée' : r.reviewDraft ? ', brouillon' : ''}` : 'aucune'}</dd>
+        </div>
+        <div>
+          <dt>CI</dt>
+          <dd className="lib-ci" data-ci={r.ci ?? 'none'}>
+            {r.ci === 'fail' ? 'rouge' : r.ci === 'ok' ? 'verte' : r.ci === 'pending' ? 'en cours' : 'pas encore'}
+          </dd>
+        </div>
+        <div>
+          <dt>Origin</dt>
+          <dd data-warn={!r.pushed}>{r.pushed ? 'à jour' : 'à pousser'}</dd>
+        </div>
+      </dl>
 
-      <div className="lib-actions">
-        {reviewUrl && r.step === 'ci' && (
-          <button type="button" className="btn" onClick={() => open(reviewUrl)}>
-            Ouvrir la {r.review}
-          </button>
-        )}
-        {links?.issueUrl && (
-          <button type="button" className="btn" onClick={() => open(links.issueUrl)}>
-            Ouvrir l'issue
-          </button>
-        )}
-        {pipelineUrl && r.step !== 'ci' && (
-          <button type="button" className="btn" onClick={() => open(pipelineUrl)}>
-            Ouvrir le pipeline
-          </button>
-        )}
-        {r.forge && (
-          <button type="button" className="btn" disabled={busy} onClick={run}>
-            Lancer un pipeline
-          </button>
-        )}
-        {pipelineUrl && (
-          <button type="button" className="btn" aria-haspopup="menu" onClick={(e) => showJobs(e.currentTarget)}>
-            Jobs manuels
+      <div className="row lib-task">
+        <TaskPicker label="Tâche" tasks={tasks} done={done} branches={branches} current={current} noSource={noSource} picked={link} />
+        {r.taskId && (
+          <button type="button" className="btn" onClick={() => link(null)}>
+            Délier
           </button>
         )}
       </div>
-    </section>
+
+      {/* The one thing to do now, and its main action. */}
+      <section className="lib-next" aria-labelledby="lib-next-title">
+        <NextStep
+          row={r}
+          repo={repo}
+          links={links}
+          failed={failed}
+          busy={busy}
+          retryRead={readLinks}
+          push={push}
+          createReview={createReview}
+          ready={ready}
+          merge={merge}
+          retry={retry}
+          setTarget={setTarget}
+        />
+      </section>
+
+      <div className="row lib-actions">
+        {read?.reviewUrl && (
+          <button type="button" className="btn lib-btn-sm" onClick={() => open(read.reviewUrl)}>
+            Voir la {r.review}
+          </button>
+        )}
+        {read?.pipelineUrl && (
+          <button type="button" className="btn lib-btn-sm" onClick={() => open(read.pipelineUrl)}>
+            Voir le pipeline
+          </button>
+        )}
+        {read?.issueUrl && (
+          <button type="button" className="btn lib-btn-sm" onClick={() => open(read.issueUrl)}>
+            Voir l'issue{r.issueNumber ? ` #${r.issueNumber}` : ''}
+          </button>
+        )}
+        {r.forge && (
+          <button type="button" className="btn lib-btn-sm" disabled={busy} onClick={run}>
+            Lancer un pipeline…
+          </button>
+        )}
+        {read?.pipelineUrl && (
+          <button type="button" className="btn lib-btn-sm" aria-haspopup="menu" onClick={(e) => void showJobs(e.currentTarget)}>
+            Jobs manuels ▾
+          </button>
+        )}
+      </div>
+    </aside>
   )
 }
 
 function NextStep({
   row: r,
   repo,
-  reviewUrl,
-  pipelineUrl,
+  links,
+  failed,
   busy,
+  retryRead,
+  push,
+  createReview,
+  ready,
+  merge,
   retry,
-  review,
   setTarget,
 }: {
   row: Row
   repo: RepoView
-  reviewUrl: string | null
-  pipelineUrl: string | null
+  links: Read
+  failed: string[]
   busy: boolean
+  retryRead: () => void
+  push: () => void
+  createReview: (target: string) => void
+  ready: () => void
+  merge: () => void
   retry: () => void
-  review: (target: string) => void
   setTarget: (target: string) => void
 }) {
-  const text = (title: string, legend: string) => (
+  const title = (text: string, legend?: string) => (
     <div className="lib-next-text">
-      <h3 id="lib-next-title">{title}</h3>
-      <span className="legend">{legend}</span>
+      <h3 id="lib-next-title" className="baloo">
+        {text}
+      </h3>
+      {legend && <span className="legend">{legend}</span>}
     </div>
   )
-  const openReview = (cta = false) => (
-    <div className="lib-next-actions">
-      <button type="button" className={cta ? 'btn-cta' : 'btn'} disabled={!reviewUrl} onClick={() => open(reviewUrl)}>
-        Ouvrir la {r.review}
-      </button>
-    </div>
-  )
+  // The forge read for this branch: while it reads, and when it failed (with Réessayer).
+  const forgeState =
+    links === 'loading' ? (
+      <span className="legend" role="status">
+        Lecture de la forge…
+      </span>
+    ) : 'error' in links ? (
+      <div className="row lib-alert" role="alert">
+        <span className="grow">
+          {r.forgeName} n’a pas pu être lu : {links.error}
+        </span>
+        <button type="button" className="btn lib-btn-sm" onClick={retryRead}>
+          Réessayer
+        </button>
+      </div>
+    ) : null
+  const label = r.reviewLabel ?? r.review
   switch (r.step) {
     case 'task':
-      return text('Lier à une tâche', 'Choisis-la dans le champ Tâche ci-dessus : son temps comptera pour elle dans Temps.')
-    case 'review':
-      if (!r.forge) return text("Revue hors de l'app", "Ce dépôt n'est ni sur GitHub ni sur GitLab (ou sa forge n'a pas de jeton) : pas de revue ni de CI ici.")
-      if (r.reviewState === 'closed')
-        return (
-          <>
-            {text(`${r.reviewLabel ?? r.review} fermée sans fusion`, 'Rouvre-la sur la forge pour reprendre la revue.')}
-            {openReview()}
-          </>
-        )
+      return title('Lier à une tâche', 'Choisis-la dans le champ Tâche : son temps comptera pour elle dans Temps.')
+    case 'review': {
+      if (!r.forge) return title('Revue hors de l’app', 'Ce dépôt n’est ni sur GitHub ni sur GitLab (ou sa forge n’a pas de jeton) : pas de revue ni de CI ici.')
+      if (r.reviewState === 'closed') return title(`${label} fermée sans fusion`, 'Rouvre-la sur la forge pour reprendre la revue.')
       return (
         <>
-          {text(`Ouvrir une ${r.review} brouillon`, 'Vers la branche choisie, retenue pour ce dépôt.')}
-          <div className="lib-next-actions">
+          {title(
+            r.pushed ? `Créer la ${r.review} brouillon` : `Pousser, puis ouvrir la ${r.review}`,
+            r.pushed
+              ? 'Vers la branche cible, retenue pour ce dépôt.'
+              : `La branche n’est pas encore sur origin au même commit, et la ${r.review} a besoin d’elle sur la forge.`,
+          )}
+          {!r.pushed && (
+            <div className="row lib-next-actions">
+              <button type="button" className="btn-cta" disabled={busy} onClick={push}>
+                Pousser la branche…
+              </button>
+            </div>
+          )}
+          <div className="row lib-next-actions">
             {repo.targets.length ? (
               <>
-                <span className="legend">vers</span>
-                <select
-                  className="lib-target"
-                  aria-label={`Branche cible de la ${r.review}`}
-                  value={repo.target ?? ''}
-                  onChange={(e) => setTarget(e.target.value)}
-                >
-                  <option value="">à choisir</option>
-                  {repo.targets.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
+                <label className="field lib-target">
+                  Branche cible
+                  <select value={repo.target ?? ''} onChange={(e) => setTarget(e.target.value)}>
+                    <option value="">à choisir</option>
+                    {repo.targets.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <span className="grow" />
-                <button type="button" className="btn-cta" disabled={!repo.target || busy} onClick={() => repo.target && review(repo.target)}>
-                  Ouvrir la {r.review}
+                <button
+                  type="button"
+                  className={r.pushed ? 'btn-cta' : 'btn'}
+                  disabled={!repo.target || !r.pushed || busy}
+                  title={!r.pushed ? 'Pousse d’abord la branche' : !repo.target ? 'Choisis la branche cible' : undefined}
+                  onClick={() => repo.target && createReview(repo.target)}
+                >
+                  Créer la {r.review} brouillon…
                 </button>
               </>
             ) : (
@@ -479,75 +876,63 @@ function NextStep({
           </div>
         </>
       )
+    }
     case 'ci':
       return (
         <>
-          {text(
-            r.ci === 'fail' ? 'Pipeline en échec' : 'Pipeline en cours',
-            r.ci === 'fail' ? `La ${r.review} attend une CI qui passe.` : 'La page suit son avancement.',
+          {title(
+            r.ci === 'fail' ? `La CI de la ${label} est rouge` : 'Pipeline en cours',
+            r.ci === 'fail' ? `La ${label} attend une CI qui passe.` : 'La page suit son avancement.',
           )}
-          <div className="lib-next-actions">
-            <button type="button" className="btn" disabled={!pipelineUrl} onClick={() => open(pipelineUrl)}>
-              Ouvrir le pipeline
-            </button>
-            {r.ci === 'fail' && (
+          {failed.length > 0 && (
+            <ul className="lib-failed" aria-label="Jobs en échec">
+              {failed.map((j) => (
+                <li key={j} className="mono">
+                  {j}
+                </li>
+              ))}
+            </ul>
+          )}
+          {forgeState}
+          {r.ci === 'fail' && (
+            <div className="row lib-next-actions">
               <button type="button" className="btn-cta" disabled={busy} onClick={retry}>
-                Relancer les jobs en échec
+                Relancer les jobs en échec…
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )
     case 'merge':
+      if (r.reviewDraft === true)
+        return (
+          <>
+            {title(`Sortir la ${label} du brouillon`, `La CI passe. Une ${r.review} en brouillon ne se fusionne pas : sors-la du brouillon pour qu’elle soit relue.`)}
+            <div className="row lib-next-actions">
+              <button type="button" className="btn-cta" disabled={busy} onClick={ready}>
+                Sortir du brouillon…
+              </button>
+            </div>
+          </>
+        )
+      if (r.reviewDraft === false)
+        return (
+          <>
+            {title(`Fusionner la ${label}`, `Relue et CI verte : elle va dans sa branche cible sur ${r.forgeName}.`)}
+            <div className="row lib-next-actions">
+              <button type="button" className="btn-cta" disabled={busy} onClick={merge}>
+                Fusionner la {r.review}…
+              </button>
+            </div>
+          </>
+        )
       return (
         <>
-          {text('Prête à fusionner', `${r.reviewLabel ?? r.review} : la fusion se fait sur la forge.`)}
-          {openReview(true)}
+          {title('Revue ouverte', `${label} : son état n’est pas encore lu.`)}
+          {forgeState}
         </>
       )
     default:
-      return (
-        <>
-          {text('Fusionnée', `${r.reviewLabel ?? r.review} est fusionnée.`)}
-          {openReview()}
-        </>
-      )
+      return title('Fusionnée', `${label} est fusionnée.`)
   }
-}
-
-function JobsList({ row: r, jobs, play }: { row: Row; jobs: Jobs; play: (job: Job) => void }) {
-  if (jobs === 'loading') return <span className="menu-item muted">Lecture des jobs…</span>
-  if (!Array.isArray(jobs)) return <span className="menu-item muted">{jobs.error}</span>
-  if (!jobs.length) return <span className="menu-item muted">Aucun job manuel sur le pipeline de {r.name}</span>
-  return (
-    <>
-      {jobs.map((j) => (
-        <button key={j.id} type="button" role="menuitem" className="menu-item" onClick={() => play(j)}>
-          {j.stage ? `${j.stage} · ` : ''}
-          {j.name}
-        </button>
-      ))}
-    </>
-  )
-}
-
-// A menu where it was asked (right click, a button), kept inside the window; a click elsewhere or Escape closes it.
-function Floating({ x, y, close, children }: { x: number; y: number; close: () => void; children: ReactNode }) {
-  const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    box.current?.querySelector<HTMLElement>('button')?.focus()
-    const away = (e: Event) => e.target instanceof Node && !box.current?.contains(e.target) && close()
-    const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && close()
-    addEventListener('mousedown', away)
-    addEventListener('keydown', esc)
-    return () => {
-      removeEventListener('mousedown', away)
-      removeEventListener('keydown', esc)
-    }
-  }, [close])
-  return (
-    <div ref={box} className="menu floating" role="menu" style={{ left: Math.min(x, innerWidth - 280), top: Math.min(y, innerHeight - 200) }}>
-      {children}
-    </div>
-  )
 }

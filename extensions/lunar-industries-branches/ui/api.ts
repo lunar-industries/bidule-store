@@ -26,14 +26,15 @@ export const api = {
   retry: (b: B) => send('POST', 'branches/retry', { repo: b.repo, name: b.name }),
   play: (b: B, job: number) => send('POST', `branches/jobs/${job}/play`, { repo: b.repo, name: b.name }),
   review: (b: B, target: string) => send('POST', 'branches/review', { repo: b.repo, name: b.name, target }),
+  push: (b: B) => send('POST', 'branches/push', { repo: b.repo, name: b.name }),
+  ready: (b: B) => send('POST', 'branches/ready', { repo: b.repo, name: b.name }),
+  merge: (b: B) => send('POST', 'branches/merge', { repo: b.repo, name: b.name }),
   target: (repo: string, target: string | null) => send('PUT', 'repos/target', { repo, target }),
 }
 
-// The user's tasks in the core (its `task` objects): those a branch is linked to; null without a provider of tasks,
-// or when they cannot be read.
-export async function board(): Promise<Board | null> {
+// The user's tasks in the core (its `task` objects): those a branch is linked to; `none` without a provider of tasks;
+// null when they cannot be read.
+export async function board(): Promise<Board | 'none' | null> {
   const b = await readTasks().catch(() => null)
-  return b && b.source !== null ? b : null
+  return b && b.source === null ? 'none' : b
 }
-
-export const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err))
