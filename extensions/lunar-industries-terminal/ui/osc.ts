@@ -62,6 +62,28 @@ export class OscReader {
   }
 }
 
+/**
+ * A desktop notification a program sends its terminal (Claude Code waiting for an answer, with its setting
+ * `preferredNotifChannel` on `iterm2`, `ghostty` or `kitty`): its text, or null for any other sequence.
+ * - OSC 9 (iTerm2): `9;text`; its numbered commands (`9;4;…` a progress, `9;9;…` a folder) are not notifications;
+ * - OSC 777 (Ghostty, urxvt): `777;notify;title;body`;
+ * - OSC 99 (Kitty): `99;metadata;text`.
+ */
+export function notificationOf({ code, data }: Osc): string | null {
+  if (code === 9) return data && !/^\d+(;|$)/.test(data) ? data : null
+  if (code === 777) {
+    const [kind, title = '', ...body] = data.split(';')
+    if (kind !== 'notify') return null
+    return [title, body.join(';')].filter(Boolean).join(' — ') || 'Notification'
+  }
+  if (code === 99) {
+    const semi = data.indexOf(';')
+    const text = semi < 0 ? '' : data.slice(semi + 1)
+    return text || 'Notification'
+  }
+  return null
+}
+
 // `133;D;0` → { code: 133, data: 'D;0' }; `7;file://…` → { code: 7, data: 'file://…' }; null without a numeric code.
 function parse(body: string): Osc | null {
   const semi = body.indexOf(';')

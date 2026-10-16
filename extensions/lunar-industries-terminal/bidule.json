@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-terminal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "title": "Terminal",
   "engine": "^0.3.1",
   "permissions": [

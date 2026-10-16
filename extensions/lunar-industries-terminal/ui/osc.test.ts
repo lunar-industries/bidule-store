@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OSC_MAX, OscReader } from './osc.ts'
+import { notificationOf, OSC_MAX, OscReader } from './osc.ts'
 
 const ESC = '\x1b'
 const BEL = '\x07'
@@ -44,5 +44,18 @@ describe('Terminal (Lunar Industries) · OSC in the output', () => {
     const reader = new OscReader()
     expect(reader.read(`${ESC}]52;c;${'x'.repeat(OSC_MAX)}`)).toEqual([])
     expect(reader.read(`${BEL}${ESC}]133;A${BEL}`)).toEqual([{ code: 133, data: 'A' }])
+  })
+
+  it('a desktop notification, from iTerm2’s, Ghostty’s or Kitty’s sequence, and nothing else', () => {
+    const [iterm] = new OscReader().read(`${ESC}]9;Claude needs your permission${BEL}`)
+    expect(notificationOf(iterm)).toBe('Claude needs your permission')
+    expect(notificationOf({ code: 9, data: '4;1;50' })).toBeNull()
+    expect(notificationOf({ code: 9, data: '9;/home/simon' })).toBeNull()
+    expect(notificationOf({ code: 777, data: 'notify;Claude Code;Claude is waiting for your input' })).toBe(
+      'Claude Code — Claude is waiting for your input',
+    )
+    expect(notificationOf({ code: 777, data: 'preexec' })).toBeNull()
+    expect(notificationOf({ code: 99, data: 'i=1:d=0;Claude is waiting' })).toBe('Claude is waiting')
+    expect(notificationOf({ code: 133, data: 'A' })).toBeNull()
   })
 })

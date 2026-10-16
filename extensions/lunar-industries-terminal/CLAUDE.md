@@ -94,8 +94,14 @@ existe, même caché (le navigateur la suspend quand la fenêtre est cachée).
   qui ne peut pas se charger le dit (`Empty` commun, avec Réglages › Rôles) et « + », « Scripts » et la loupe
   disparaissent ; la ligne « Relancer » d'un shell arrêté, sous laquelle la mascotte ne descend pas en mode focus.
 - **Les scripts** : une palette sans script dit pourquoi (« Aucun script dans … », « Aucun dépôt connu »).
-- **Un terminal qui attend ta réponse** (la marque `waiting` qu'une extension pose, Claude Code qui demande) se voit
-  depuis les autres pages : la partie de fond (`ui/index.tsx`) met leur nombre sur l'onglet Terminal du bandeau.
+- **Un terminal qui attend ta réponse** se voit depuis les autres pages : la partie de fond (`ui/index.tsx`) met leur
+  nombre sur l'onglet Terminal du bandeau, et l'onglet du terminal a son point jaune. Deux sources : la marque
+  `waiting` qu'une extension pose sur le dossier d'un onglet (`terminal.mark`, les sessions que l'app a lancées), et la
+  notification qu'un programme envoie à son terminal (`notificationOf` de `ui/osc.ts` : OSC 9 d'iTerm2, OSC 777 de
+  Ghostty, OSC 99 de Kitty), reçue pendant que tu regardes ailleurs. Claude Code n'en envoie que si son réglage
+  `preferredNotifChannel` le demande (`iterm2`, `ghostty` ou `kitty` ; « auto » n'envoie rien, le terminal se disant
+  `TERM_PROGRAM=Bidule`). La marque d'une notification part quand tu reviens à l'onglet ou y tapes quelque chose ; la
+  fenêtre au second plan, le système la dit aussi.
 - **Le mode focus** : les règles que le cœur donne à ses onglets de terminal valent pour `lterm-tabs`, `lterm-tab` et
   `lterm-switch`.
 

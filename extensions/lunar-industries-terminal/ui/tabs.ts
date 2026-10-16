@@ -9,7 +9,7 @@ import { CommandTracker, commandLineOf, folderOf, LONG_COMMAND_MS, noticeOf, typ
 import { keySequence, pageScroll } from './keys.ts'
 import { findFileLines, findReviews, findTaskRefs, findUrls } from './links.ts'
 import { moved, type TabColor } from './order.ts'
-import { OscReader } from './osc.ts'
+import { notificationOf, OscReader } from './osc.ts'
 import { PAGE } from './page.ts'
 import { dropText, type ShellKind } from './paths.ts'
 import { clampRatio, otherPane, ratioAt, ratioByKey, splitAction, type SplitDirection } from './split.ts'
@@ -370,7 +370,14 @@ export class TerminalTabs {
       pane.title = t.trim() || pane.fallbackTitle
       this.#changed()
     })
-    pane.term.onData((data) => pane.pty !== null && bridge()?.write(pane.pty, data))
+    pane.term.onData((data) => {
+      if (pane.pty !== null) bridge()?.write(pane.pty, data)
+      // Typed in: the answer it waited for, given.
+      if (tab.notice?.state === 'waiting') {
+        tab.notice = null
+        this.#changed()
+      }
+    })
     pane.term.onResize(({ cols, rows }) => pane.pty !== null && bridge()?.resize(pane.pty, cols, rows))
     // A click or the keyboard in a pane gives it the focus: what acts on the tab acts on it.
     pane.box.addEventListener('focusin', () => this.focusPane(tab.panes.indexOf(pane), tab, false))
@@ -734,6 +741,8 @@ export class TerminalTabs {
   // A tab's mark: the one of the folder it works in (what an extension says, Claude Code waiting…), else a command
   // of its own that ended out of sight.
   markOf(tab: TerminalTab): { state: TerminalMark; label: string | null } | null {
+    // A program of the tab waiting for the user comes first: it is what the user has to do.
+    if (tab.notice?.state === 'waiting') return tab.notice
     return (tab.folder ? this.#marks.get(tab.folder) : undefined) ?? tab.notice
   }
 
@@ -757,11 +766,15 @@ export class TerminalTabs {
 
   /**
    * What a pane's shell says through its integration, read in its output before the terminal draws it (ghostty-web
-   * has no hook for them): the marks around each command (OSC 133, 633;E) and its folder (OSC 7).
+   * has no hook for them): the marks around each command (OSC 133, 633;E), its folder (OSC 7), and a desktop
+   * notification a program sends (Claude Code waiting for an answer: OSC 9, 777 or 99).
    */
   #read(pane: TerminalPane, data: string): void {
-    for (const { code, data: body } of pane.osc.read(data)) {
-      if (code === 133) {
+    for (const osc of pane.osc.read(data)) {
+      const { code, data: body } = osc
+      const note = notificationOf(osc)
+      if (note) this.#notified(pane, note)
+      else if (code === 133) {
         const done = pane.commands.mark(body, Date.now())
         if (done) this.#ended(pane, done)
       } else if (code === 633) {
@@ -828,6 +841,28 @@ export class TerminalTabs {
     const url = res?.ok ? ((await res.json()) as { url: string | null }).url : null
     if (url) window.open(url, '_blank')
     else react('panic', 'Je ne trouve pas cette revue : le dépôt de cet onglet n’a pas de forge connue.', 'Revue introuvable')
+  }
+
+  /**
+   * A program asks for the user (Claude Code waits for an answer) while they look elsewhere (another tab, page, or the
+   * window away): the tab is marked « attend ta réponse » (counted on the Terminal's tab of the banner) until they come
+   * back to it or type in it, and the system says it while the window is away.
+   */
+  #notified(pane: TerminalPane, text: string): void {
+    const tab = pane.tab
+    const seen = this.active === tab && this.#host !== null && document.hasFocus() && !document.hidden
+    if (seen) return
+    tab.notice = { state: 'waiting', label: text }
+    this.#changed()
+    if (document.hasFocus() || typeof Notification === 'undefined' || Notification.permission === 'denied') return
+    const n = new Notification(tab.heading, { body: text, tag: `lterm-wait-${tab.key}` })
+    n.onclick = () => {
+      window.focus()
+      navigate(PAGE)
+      if (!this.tabs.includes(tab)) return
+      this.select(tab)
+      this.focusPane(tab.panes.indexOf(pane), tab)
+    }
   }
 
   // A command that ended: told when it took long and the user was elsewhere (another tab, page, or the window away).

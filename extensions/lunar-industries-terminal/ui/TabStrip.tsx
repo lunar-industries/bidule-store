@@ -337,6 +337,8 @@ const MARK_LABELS: Record<TerminalMark, string> = {
 
 // What a session in the tab's folder is doing, put there by another extension (Claude Code waits…): a dot.
 function TabMark({ tab }: { tab: TerminalTab }) {
+  // The tab changes in place (its mark): drawn again with the strip, never kept from before.
+  'use no memo'
   const mark = terminals.markOf(tab)
   if (!mark) return null
   const label = mark.label ?? MARK_LABELS[mark.state]
