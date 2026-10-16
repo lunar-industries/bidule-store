@@ -1104,9 +1104,10 @@ export function TempsPage() {
                           ))}
                         <div className="row lit-line-actions">
                           {r.url && (
-                            <a className="btn" href={r.url} target="_blank" rel="noreferrer">
+                            // A button, as the design system draws `btn`: a link would lose its height and be underlined.
+                            <button type="button" className="btn" onClick={() => r.url && window.open(r.url, '_blank', 'noopener')}>
                               Ouvrir dans le Time Log
-                            </a>
+                            </button>
                           )}
                           {editable && (
                             <button type="button" className="btn" onClick={() => remove(r.index)}>
