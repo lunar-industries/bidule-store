@@ -402,6 +402,22 @@
               "signature": "TRjALZUrNFdQD9vulA1h5/gbmDDm5MiL6ZNFhztCu85pMMRkp9LqQk1uAexoFp+5trfBoWUCWS30Wwe+aH91Cw=="
             }
           }
+        },
+        "0.1.7": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-common-0.1.7/lunar-industries-common-0.1.7.tgz",
+              "size": 5577,
+              "sha256": "87d74da08c2b1fc97cf16c688a8ea5782d0245b87e269c6a5b8ec97086a76313",
+              "signature": "qQGL1k0JnNaOCzO90YlmIzpgG6Z7dXwx2WezL+ikHq+TCjHSrJN0NhF8A8vc5gG6EHAqU3KmQknDEQRl4O7zAQ=="
+            }
+          }
         }
       }
     },
