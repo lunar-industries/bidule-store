@@ -196,6 +196,24 @@
               "signature": "f3Tra1MDTxkPkYUE7hIQzYxFXJHH6H7fEouU4ZihcUwTxuEauxqQEqu6t9sPCaG71jOJyCabR2OKZAPtMQ+xAw=="
             }
           }
+        },
+        "0.6.2": {
+          "engine": "^0.3.0",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-branches-0.6.2/lunar-industries-branches-0.6.2.tgz",
+              "size": 24409,
+              "sha256": "7f8db147d08dc008736c7682f3665b9ae4d93661f93ac87b6ab4dcb11a8a821f",
+              "signature": "ZZ3HR1yfZVJnGTnpVt9N34CmDPkufAawAo3L8F7ExUgNgxFCmnypI8ogdCddUCRtJOW/1vNblGM2UuNg0yaIBg=="
+            }
+          }
         }
       }
     },
