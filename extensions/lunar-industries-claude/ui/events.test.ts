@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '../contract.ts'
-import { diffLines, itemsOf, merge, notifyKinds, pendingOf, relTime, tokens, toolsSummary } from './events.ts'
+import { diffLines, itemsOf, merge, notifyKinds, pendingOf, relTime, tokens, toolLabel, toolsSummary } from './events.ts'
 import { effortOptions, effortsOf, modelOptions, summaryOf } from './models.ts'
 
 const text = (seq: number): SessionEvent => ({ seq, kind: 'text', text: `ligne ${seq}` })
@@ -86,5 +86,13 @@ describe('Claude (Lunar Industries)', () => {
     expect(tokens(950)).toBe('950')
     expect(tokens(12_400)).toBe('12 k')
     expect(tokens(3_250_000)).toBe('3,3 M')
+  })
+
+  it('names the tools in words, never by their raw name', () => {
+    expect(['Read', 'Bash', 'Grep'].map(toolLabel)).toEqual(['Lire', 'Commande', 'Chercher'])
+    expect(toolLabel('mcp__workspace__read_task')).toBe('Bidule · lire la tâche')
+    expect(toolLabel('mcp__workspace__new_tool')).toBe('Bidule · new tool')
+    expect(toolLabel('mcp__chrome_devtools__take_screenshot')).toBe('chrome devtools · take screenshot')
+    expect(toolLabel('SomethingNew')).toBe('SomethingNew')
   })
 })

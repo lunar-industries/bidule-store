@@ -48,10 +48,12 @@ export type ToolChange = { file: string; before: string; after: string }
 
 // What a decision card asks: a tool's permission, a plan to validate, or Claude's questions.
 export type Ask = 'tool' | 'plan' | 'question'
+// An option's `preview`: what Claude shows to compare the options (code, a mockup in text), null without one. Claude
+// Code always adds a free answer (« Autre ») to the options.
 export type Question = {
   question: string
   header: string
-  options: { label: string; description: string }[]
+  options: { label: string; description: string; preview: string | null }[]
   multiSelect: boolean
 }
 
@@ -182,8 +184,15 @@ export type StartBody = {
 } & Attachments
 
 // The user's answer to a card: allow or refuse; `always` keeps the proposed rule for the session; `answers` answers
-// Claude's questions (question → label chosen); `message` is the instruction given with a refusal.
-export type Decision = { allow: boolean; always?: boolean; answers?: Record<string, string>; message?: string }
+// Claude's questions (question → labels chosen, joined by « , », or the user's own text); `notes`, what the user adds
+// to an answer (question → text); `message` is the instruction given with a refusal.
+export type Decision = {
+  allow: boolean
+  always?: boolean
+  answers?: Record<string, string>
+  notes?: Record<string, string>
+  message?: string
+}
 
 // A repo's own settings for the sessions and their tools (Réglages; empty: the module's, see the settings).
 export type RepoOverrides = {

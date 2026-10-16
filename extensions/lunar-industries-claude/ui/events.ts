@@ -86,13 +86,73 @@ export function diffLines(before: string, after: string): { sign: '-' | '+'; tex
   return [...lines(before, '-'), ...lines(after, '+')]
 }
 
+// Claude Code's own tools, and the app's (its MCP server « workspace », server/tools.ts), as the page names them.
+const TOOLS: Record<string, string> = {
+  Read: 'Lire',
+  Edit: 'Modifier',
+  MultiEdit: 'Modifier',
+  Write: 'Écrire',
+  NotebookEdit: 'Modifier un notebook',
+  Bash: 'Commande',
+  BashOutput: 'Sortie d’une commande',
+  KillShell: 'Arrêter une commande',
+  KillBash: 'Arrêter une commande',
+  Grep: 'Chercher',
+  Glob: 'Trouver des fichiers',
+  LS: 'Lister un dossier',
+  WebFetch: 'Lire une page web',
+  WebSearch: 'Chercher sur le web',
+  Task: 'Sous-agent',
+  Agent: 'Sous-agent',
+  TodoWrite: 'Liste de tâches',
+  ExitPlanMode: 'Plan',
+  AskUserQuestion: 'Question',
+  Skill: 'Skill',
+  ToolSearch: 'Chercher un outil',
+}
+const APP_TOOLS: Record<string, string> = {
+  list_repos: 'lister les dépôts',
+  read_task: 'lire la tâche',
+  set_task_status: 'changer le statut de la tâche',
+  comment_task: 'commenter la tâche',
+  start_task: 'démarrer la tâche',
+  worktree_add: 'créer un worktree',
+  worktree_list: 'lister les worktrees',
+  worktree_remove: 'retirer un worktree',
+  slot_acquire: 'prendre le créneau exécutable',
+  slot_release: 'rendre le créneau exécutable',
+  slot_status: 'état du créneau exécutable',
+  slot_checkout: 'changer de branche dans le créneau',
+  branch_state: 'état de la branche',
+  create_review: 'ouvrir une revue',
+  wait_pipeline: 'attendre le pipeline',
+  play_job: 'lancer un job',
+  merge_branch: 'fusionner une branche',
+  push_branch: 'pousser la branche',
+  merge_review: 'fusionner la revue',
+  workspace_settings: 'lire les réglages',
+}
+const words = (name: string) => name.replace(/[_-]+/g, ' ').trim()
+
+/**
+ * A tool's name as the page shows it: Claude Code's in French, the app's as « Bidule · … », another MCP server's
+ * as « server · tool » (`mcp__server__tool`), never the raw name.
+ */
+export function toolLabel(name: string): string {
+  const mcp = /^mcp__(.+?)__(.+)$/.exec(name)
+  if (!mcp) return TOOLS[name] ?? name
+  const [, server = '', tool = ''] = mcp
+  if (server === 'workspace') return `Bidule · ${APP_TOOLS[tool] ?? words(tool)}`
+  return `${words(server)} · ${words(tool)}`
+}
+
 // What a card says Claude wants to do, in words.
 export function cardTitle(card: Permission): string {
   if (card.name === 'Bash') return 'Claude veut lancer une commande'
   if (card.name === 'Edit' || card.name === 'MultiEdit') return 'Claude veut modifier un fichier'
   if (card.name === 'Write') return 'Claude veut écrire un fichier'
   if (card.name.startsWith('mcp__workspace__')) return 'Claude veut agir par l’app'
-  return `Claude veut utiliser ${card.name}`
+  return `Claude veut utiliser « ${toolLabel(card.name)} »`
 }
 
 // The kinds of notification the `notify` setting names (« decision, error, slot »).

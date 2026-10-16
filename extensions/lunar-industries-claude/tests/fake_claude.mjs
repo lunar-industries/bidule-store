@@ -84,7 +84,7 @@ const ASKS = [
           question: 'Quelle base ?',
           header: 'Base',
           options: [
-            { label: 'launchpad', description: 'La branche d’intégration' },
+            { label: 'launchpad', description: 'La branche d’intégration', preview: 'git switch launchpad' },
             { label: 'main', description: 'La branche par défaut' },
           ],
           multiSelect: false,

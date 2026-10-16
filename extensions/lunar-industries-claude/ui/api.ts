@@ -70,6 +70,3 @@ export async function board(): Promise<Board | null> {
   const b = await readTasks().catch(() => null)
   return b && b.source !== null ? b : null
 }
-
-// What to tell the user.
-export const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err))

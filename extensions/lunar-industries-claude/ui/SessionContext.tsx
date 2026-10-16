@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { react, useOn } from '@bidule/sdk'
+import { errorMessage, react, useOn } from '@bidule/sdk'
 import type { SessionContext as Context } from '../contract.ts'
-import { api, errorMessage } from './api.ts'
+import { api } from './api.ts'
 import { cost, tokens } from './events.ts'
 import { Icon } from './Icon.tsx'
 import { refreshSessions, useBoard } from './state.ts'
-import { TaskSelect } from './TaskSelect.tsx'
+import { pickTask } from './TaskPick.tsx'
 
 // Kept across visits while the app runs: coming back, the panel shows what it had while it reads again.
 const kept = new Map<string, Context>()
@@ -17,9 +17,9 @@ const kept = new Map<string, Context>()
  */
 export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string; cwd: string; collapse: () => void }) {
   const [context, setContext] = useState<Context | null>(kept.get(sessionId) ?? null)
+  // Why the context could not be read: said with Réessayer, never taken for a session without a task.
+  const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // The task list, open only while the user is changing the task of a session that has one.
-  const [picking, setPicking] = useState(false)
   const tasks = useBoard()?.tasks ?? []
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -28,12 +28,13 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
       (c) => {
         kept.set(sessionId, c)
         setContext(c)
+        setError(null)
       },
-      () => undefined,
+      (err: unknown) => setError(errorMessage(err)),
     )
   useEffect(() => {
     setContext(kept.get(sessionId) ?? null)
-    setPicking(false)
+    setError(null)
     void load()
     return () => clearTimeout(timer.current)
     // Read again for another session only.
@@ -64,7 +65,6 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
     setBusy(true)
     try {
       await api.task(sessionId, taskId, cwd || context?.cwd)
-      setPicking(false)
       await load()
       refreshSessions()
     } catch (err) {
@@ -72,6 +72,12 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
     } finally {
       setBusy(false)
     }
+  }
+
+  // The task chosen in a dialog with a search: nothing is attached before the user confirms one.
+  const change = async () => {
+    const taskId = await pickTask(tasks, context?.task?.id ?? null)
+    if (taskId) await attach(taskId)
   }
 
   const c = context
@@ -98,50 +104,53 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
           <h2 id="lc-ctx-task" className="grow lc-ctx-title">
             Tâche
           </h2>
-          <button type="button" className="icon-btn lc-icon-sm" aria-label="Réduire le contexte" onClick={collapse}>
+          <button type="button" className="icon-btn lc-icon-sm" aria-label="Replier le contexte" title="Replier le contexte" onClick={collapse}>
             <Icon name="right" size={16} />
           </button>
         </div>
+        {error && (
+          <div className="row lc-alert" role="alert">
+            <span className="grow">{c ? 'Le contexte n’a pas pu être relu.' : 'Le contexte n’a pas pu être lu.'}</span>
+            <button type="button" className="btn lc-btn-sm" onClick={() => void load()}>
+              Réessayer
+            </button>
+          </div>
+        )}
+        {!c && !error && (
+          <span className="legend" role="status">
+            Lecture du contexte…
+          </span>
+        )}
         {c?.task ? (
           <>
             <strong className="lc-ctx-task">{c.task.title}</strong>
             <div className="row">
               <span className="tag lc-tone-info">{c.task.status}</span>
               {c.task.url && (
-                <a className="lc-ctx-link" href={c.task.url} target="_blank" rel="noreferrer">
+                // A button, as the design system draws them: a link with `btn` would lose the button's shape.
+                <button type="button" className="btn lc-btn-sm" onClick={() => c.task?.url && window.open(c.task.url, '_blank', 'noopener')}>
                   Ouvrir la tâche
-                </a>
+                </button>
               )}
+            </div>
+            <div className="row">
+              <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => void change()}>
+                Changer de tâche…
+              </button>
+              <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => void attach(null)}>
+                Détacher
+              </button>
             </div>
           </>
         ) : (
-          <span className="legend">Session sans tâche</span>
-        )}
-        {c?.task && !picking ? (
-          <div className="row">
-            <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => setPicking(true)}>
-              Modifier
-            </button>
-            <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => void attach(null)}>
-              Détacher
-            </button>
-          </div>
-        ) : (
-          <>
-            <TaskSelect
-              label="Rattacher à une tâche"
-              tasks={tasks}
-              value={c?.task?.id ?? null}
-              none="Choisir une tâche…"
-              disabled={busy}
-              onChange={(id) => id && void attach(id)}
-            />
-            {c?.task && (
-              <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => setPicking(false)}>
-                Annuler
+          c && (
+            <>
+              <span className="legend">Session sans tâche</span>
+              <button type="button" className="btn lc-btn-sm lc-ctx-attach" disabled={busy} onClick={() => void change()}>
+                Rattacher à une tâche…
               </button>
-            )}
-          </>
+            </>
+          )
         )}
       </section>
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Modal, openDialog, react, useSettingValues, type Task } from '@bidule/sdk'
+import { errorMessage, Modal, openDialog, react, useSettingValues, type Task } from '@bidule/sdk'
 import type { SessionEffort, SessionMode } from '../contract.ts'
-import { api, errorMessage } from './api.ts'
+import { api } from './api.ts'
 import { DEFAULT, effortOf, effortOptions, effortsOf, modelHint, modelOptions, modeOf, MODES, summaryOf } from './models.ts'
 import { useBoard, useModels, useTemplates } from './state.ts'
 import { TaskSelect } from './TaskSelect.tsx'
@@ -95,7 +95,7 @@ function NewSession({ options, done }: { options: Options; done: (id: string | n
             <span className="legend">
               {taskId
                 ? 'Les branches de la tâche auront chacune leur worktree.'
-                : 'Ou lancez une session sans tâche, pour une question ponctuelle.'}
+                : 'Ou lance une session sans tâche, pour une question ponctuelle.'}
             </span>
           </section>
 

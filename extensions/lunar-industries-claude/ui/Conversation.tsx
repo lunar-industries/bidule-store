@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
-import { react, useOn } from '@bidule/sdk'
+import { errorMessage, Modal, openDialog, react, useOn } from '@bidule/sdk'
+import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import {
   IMAGE_TYPES,
   type Attachments,
@@ -11,7 +12,7 @@ import {
   type SessionStatus,
   type SessionSummary,
 } from '../contract.ts'
-import { api, errorMessage } from './api.ts'
+import { api } from './api.ts'
 import { Decided, DecisionCard } from './DecisionCard.tsx'
 import { decidedOf, itemsOf, merge, pendingOf, STATUS, type Permission } from './events.ts'
 import { Icon } from './Icon.tsx'
@@ -62,15 +63,20 @@ export function Conversation({
   heading,
   taskRef,
   repoLabels,
-  focus,
-  toggleFocus,
+  wide,
+  narrow,
+  moreEntries,
 }: {
   session: SessionSummary
   heading: string
   taskRef: string | null
   repoLabels: string[]
-  focus: boolean
-  toggleFocus: () => void
+  // Both side columns folded: the lines take more width.
+  wide: boolean
+  // A narrow window: « Interrompre » and « Arrêter » go into the « ⋯ » menu.
+  narrow: boolean
+  // The session's own actions (the page's): the « ⋯ » menu, also its right click in the list.
+  moreEntries: MenuEntry[]
 }) {
   const sid = session.id
   const current = useRef(session)
@@ -183,12 +189,12 @@ export function Conversation({
   // Claude is at work and there is nothing to send: the button stops it instead of sending.
   const stopping = runHere && status === 'running' && !canSend
   const placeholder = pending.length
-    ? 'Répondez d’abord à la demande de Claude'
+    ? 'Réponds d’abord à la demande de Claude'
     : !runHere
-      ? 'Reprendre la session avec un message'
+      ? 'Reprends la session avec un message'
       : status === 'running'
-        ? 'Ajouter un message à la file…'
-        : 'Répondre à Claude'
+        ? 'Ajoute un message à la file…'
+        : 'Réponds à Claude'
   const info = STATUS[status]
 
   const act = async (run: () => Promise<unknown>) => {
@@ -239,7 +245,44 @@ export function Conversation({
     })
   }
   const interrupt = () => act(() => api.interrupt(sid))
-  const stop = () => act(() => api.stop(sid)).then(refreshSessions)
+  const stopNow = () => act(() => api.stop(sid)).then(refreshSessions)
+  // While Claude works, stopping loses the turn going on: asked first.
+  const stop = () => {
+    if (status !== 'running') return void stopNow()
+    openDialog((close) => (
+      <Modal label="Arrêter la session" onClose={close}>
+        <h2>Arrêter la session pendant que Claude travaille ?</h2>
+        <p>Le tour en cours est perdu. Tu pourras reprendre la session plus tard avec un message.</p>
+        <div className="row">
+          <span className="grow" />
+          <button type="button" className="btn" onClick={close}>
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn-cta"
+            onClick={() => {
+              close()
+              void stopNow()
+            }}
+          >
+            Arrêter
+          </button>
+        </div>
+      </Modal>
+    ))
+  }
+  const canInterrupt = !busy && runHere && (status === 'running' || status === 'waiting')
+  const canStop = !busy && runHere
+  const INTERRUPT_TIP = 'Interrompre le tour en cours : Claude s’arrête et attend ton message'
+  const STOP_TIP = 'Arrêter la session : Claude Code se ferme ; tu pourras la reprendre plus tard'
+  const [menu, openMenu] = useMenu()
+  const menuEntries = (): MenuEntry[] => [
+    narrow && { label: 'Interrompre', run: () => interrupt(), disabled: canInterrupt ? false : 'Claude ne travaille pas' },
+    narrow && { label: 'Arrêter…', run: stop, disabled: canStop ? false : 'La session ne tourne pas dans l’app' },
+    narrow && 'separator',
+    ...moreEntries,
+  ]
   const submit = () => void (stopping ? interrupt() : send())
 
   // A saved session keeps them on its row, for when it is taken up again. An effort the new model does not take goes
@@ -283,7 +326,8 @@ export function Conversation({
     if (e.key === 'Escape' && runHere && status === 'running') {
       e.preventDefault()
       void interrupt()
-    } else if (e.key === 'Tab' && e.shiftKey) {
+    } else if (e.key === 'Tab' && e.shiftKey && !draft) {
+      // Only in an empty field: with text, Shift+Tab leaves the field as everywhere else.
       e.preventDefault()
       const at = MODES.findIndex((m) => m.value === mode)
       changeMode(MODES[(at + 1) % MODES.length]?.value ?? 'default')
@@ -327,7 +371,8 @@ export function Conversation({
   const effortChoices = effortOptions(models, model)
 
   return (
-    <section className={`lc-conv${focus ? ' focus' : ''}`} aria-label="Conversation">
+    <section className={`lc-conv${wide ? ' wide' : ''}`} aria-label="Conversation">
+      {menu}
       <header className="lc-conv-head">
         <div className="lc-conv-title grow">
           <div className="row lc-conv-title-line">
@@ -349,31 +394,36 @@ export function Conversation({
           {status === 'running' && <span className="lc-working" aria-hidden="true" />}
           {info.label}
         </span>
-        <button
-          type="button"
-          className="btn lc-btn-sm"
-          disabled={busy || !runHere || (status !== 'running' && status !== 'waiting')}
-          onClick={() => void interrupt()}
-        >
-          Interrompre
-        </button>
-        <button type="button" className="btn lc-btn-sm" disabled={busy || !runHere} onClick={() => void stop()}>
-          Arrêter
-        </button>
+        {!narrow && (
+          <>
+            <button type="button" className="btn lc-btn-sm" title={INTERRUPT_TIP} disabled={!canInterrupt} onClick={() => void interrupt()}>
+              Interrompre
+            </button>
+            <button type="button" className="btn lc-btn-sm" title={STOP_TIP} disabled={!canStop} onClick={stop}>
+              Arrêter…
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="icon-btn lc-icon-sm"
-          aria-pressed={focus}
-          aria-label={focus ? 'Quitter le focus' : 'Focus'}
-          title={`${focus ? 'Quitter le focus' : 'Focus'} · Ctrl + .`}
-          aria-keyshortcuts="Control+."
-          onClick={toggleFocus}
+          aria-label="Autres actions sur la session"
+          title="Autres actions sur la session"
+          aria-haspopup="menu"
+          onClick={(e) => openMenu(e.currentTarget, menuEntries(), 'Autres actions sur la session')}
         >
-          <Icon name={focus ? 'focusExit' : 'focusEnter'} size={18} />
+          <Icon name="more" size={18} />
         </button>
       </header>
 
-      <div className="lc-log" ref={log} onScroll={(e) => setAway(e.currentTarget.scrollTop < -40)}>
+      <div
+        className="lc-log"
+        ref={log}
+        role="log"
+        aria-live="polite"
+        aria-label="Fil de la session"
+        onScroll={(e) => setAway(e.currentTarget.scrollTop < -40)}
+      >
         <div className="lc-lines selectable">
           {items.map((item) => {
             switch (item.kind) {
@@ -420,11 +470,12 @@ export function Conversation({
                   </p>
                 )
               case 'other':
-                return (
+                // A message the app does not know yet: its text if it has one, never the SDK's raw type.
+                return item.text ? (
                   <span key={item.seq} className="legend lc-info">
-                    {item.type} : {item.text}
+                    {item.text}
                   </span>
-                )
+                ) : null
             }
           })}
           {partial && <div className="lc-text" dangerouslySetInnerHTML={{ __html: md(partial) }} />}
@@ -439,7 +490,7 @@ export function Conversation({
         )}
         {unfollowed === sid && !fromApp && (
           <div className="row">
-            <span className="legend grow">Suivi en direct indisponible ici : relisez avec le bouton.</span>
+            <span className="legend grow">Suivi en direct indisponible ici : relis avec le bouton.</span>
             <button type="button" className="btn lc-btn-sm" onClick={() => void refresh()}>
               Relire
             </button>

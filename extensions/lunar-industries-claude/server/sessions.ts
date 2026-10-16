@@ -330,13 +330,30 @@ const questionsSchema = z.array(
   z.object({
     question: z.string(),
     header: z.string(),
-    options: z.array(z.object({ label: z.string(), description: z.string() })),
+    options: z.array(
+      z.object({ label: z.string(), description: z.string(), preview: z.string().nullish().transform((p) => p ?? null) })
+    ),
     multiSelect: z.boolean(),
   })
 ) satisfies z.ZodType<Question[]>
 const questionsOf = (value: unknown): Question[] => {
   const read = questionsSchema.safeParse(value)
   return read.success ? read.data : []
+}
+
+type Annotation = { preview?: string; notes?: string }
+/**
+ * What goes with the answers (AskUserQuestion's `annotations`, by question): the user's note, and the preview of the
+ * option chosen, so that Claude knows which one the user looked at.
+ */
+export function annotationsOf(questions: Question[], answers: Record<string, string>, notes: Record<string, string>) {
+  const out: Record<string, Annotation> = {}
+  for (const q of questions) {
+    const preview = q.options.find((o) => o.label === answers[q.question])?.preview
+    const note = notes[q.question]?.trim()
+    if (preview || note) out[q.question] = { ...(preview ? { preview } : {}), ...(note ? { notes: note } : {}) }
+  }
+  return out
 }
 
 const isSessionMode = (mode: string): mode is SessionMode => PERMISSION_MODES.some((m) => m === mode)
@@ -937,11 +954,13 @@ export class SessionService {
     const { allow, message } = decision
     const always = Boolean(allow && decision.always && asked.suggestions.length)
     const answers = allow && decision.answers ? decision.answers : null
+    const notes = decision.notes ?? {}
     const answer = answers
       ? Object.entries(answers)
-          .map(([q, a]) => `${q} ${a}`)
+          .map(([q, a]) => [`${q} ${a}`, notes[q]?.trim()].filter(Boolean).join(' · '))
           .join('\n')
       : (message ?? null)
+    const annotations = answers ? annotationsOf(questionsOf(asked.input['questions']), answers, notes) : {}
     this.#push(s, { kind: 'decision', id: requestId, allow, always, answer })
     const kept = { id: requestId, tool: asked.tool, detail: asked.detail, allow, at: new Date().toISOString() }
     this.#save(s, (row) => row.decisions.push(kept))
@@ -951,7 +970,9 @@ export class SessionService {
     } else {
       asked.resolve({
         behavior: 'allow',
-        ...(answers ? { updatedInput: { ...asked.input, answers } } : {}),
+        ...(answers
+          ? { updatedInput: { ...asked.input, answers, ...(Object.keys(annotations).length ? { annotations } : {}) } }
+          : {}),
         ...(always ? { updatedPermissions: asked.suggestions } : {}),
       })
     }

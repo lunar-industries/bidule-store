@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "title": "Claude",
-  "engine": "^0.3.0",
+  "engine": "^0.3.1",
   "dependencies": {
     "lunar-industries-common": "^0.1.0"
   },
@@ -80,6 +80,48 @@
       "lunar-industries-claude.session"
     ],
     "background": true,
+    "shortcuts": [
+      {
+        "keys": "Entrée",
+        "title": "Envoyer le message",
+        "where": "dans le message pour Claude"
+      },
+      {
+        "keys": "Maj+Entrée",
+        "title": "Aller à la ligne",
+        "where": "dans le message pour Claude"
+      },
+      {
+        "keys": "Échap",
+        "title": "Interrompre Claude",
+        "where": "dans le message pour Claude, pendant que Claude travaille"
+      },
+      {
+        "keys": "↑ ↓",
+        "title": "Reprendre un message déjà envoyé",
+        "where": "au début ou à la fin du message pour Claude"
+      },
+      {
+        "keys": "Maj+Tab",
+        "title": "Passer au mode de permission suivant",
+        "where": "dans le message pour Claude, quand il est vide"
+      },
+      {
+        "keys": "↑ ↓",
+        "title": "Passer d’une session à l’autre",
+        "where": "dans la liste des sessions"
+      },
+      {
+        "keys": "Menu",
+        "title": "Actions de la session (aussi Maj+F10)",
+        "where": "dans la liste des sessions"
+      },
+      {
+        "keys": "/",
+        "title": "Chercher une session",
+        "where": "sur la page Claude"
+      }
+    ],
     "settings": {
       "title": "Claude",
       "panel": true,
@@ -228,6 +270,13 @@
           "type": "text",
           "title": "Réglages par dépôt",
           "default": "{}",
+          "hidden": true
+        },
+        {
+          "key": "lunar-industries-claude.columns",
+          "type": "text",
+          "title": "Colonnes repliées et sessions archivées montrées",
+          "default": "{\"left\":true,\"right\":true,\"archived\":false}",
           "hidden": true
         }
       ]

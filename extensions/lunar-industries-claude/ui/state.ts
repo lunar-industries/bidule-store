@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { navigate, on, useSettingValues, type Board } from '@bidule/sdk'
+import { errorMessage, navigate, on, useSettingValues, type Board } from '@bidule/sdk'
 import type { RepoSettings, SessionModel, SessionSummary, Template } from '../contract.ts'
 import { api, board } from './api.ts'
 
@@ -37,13 +37,20 @@ export function useEnabled(): boolean | null {
 
 const sessions = store<SessionSummary[] | null>(null)
 export const useSessions = sessions.use
+// Why the sessions could not be read last time, if they could not: the page says it, never « no session ».
+const sessionsError = store<string | null>(null)
+export const useSessionsError = sessionsError.use
 
 let timer: ReturnType<typeof setTimeout> | undefined
 const load = () =>
   api.sessions().then(
-    (r) => sessions.set(r.sessions),
-    () => sessions.set(sessions.get() ?? []),
+    (r) => {
+      sessionsError.set(null)
+      sessions.set(r.sessions)
+    },
+    (err: unknown) => sessionsError.set(errorMessage(err)),
   )
+export const retrySessions = () => void load()
 
 // Several changes in a row make one read.
 export function refreshSessions(): void {

@@ -90,7 +90,7 @@ describe('Claude runner · finding claude', () => {
     expect(asked[0].argv.at(-1)).toContain('Get-Command claude -CommandType Application')
     expect(asked[0].argv.at(-1)).toMatch(/^\[Console\]::OutputEncoding=\[Text\.Encoding\]::UTF8;/)
     const npm = fakeEnv('powershell', { run: async () => 'C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd' })
-    await expect(claudeIn(npm)).rejects.toThrow(/installez-le par l’installateur natif/)
+    await expect(claudeIn(npm)).rejects.toThrow(/installe-le par l’installateur natif/)
   })
 
   it('in PowerShell, a claude.exe further down the PATH goes before an npm script found first', () => {

@@ -1,4 +1,4 @@
-import { diffLines, toolsSummary, type ToolCallEvent, type ToolResultEvent, type Tools } from './events.ts'
+import { diffLines, toolLabel, toolsSummary, type ToolCallEvent, type ToolResultEvent, type Tools } from './events.ts'
 
 /**
  * One tool call of Claude (Simon's tool-call): its line (the tool and its detail), which opens on its result, then
@@ -10,7 +10,7 @@ export function ToolCall({ call, result }: { call: ToolCallEvent; result: ToolRe
     <div className="lc-call">
       <details className="lc-disclosure">
         <summary className="row">
-          <span className="lc-call-name">{call.name}</span>
+          <span className="lc-call-name">{toolLabel(call.name)}</span>
           <span className="mono ellipsis grow">{call.detail}</span>
           {result?.ok === false && <span className="tag lc-tone-bad">erreur</span>}
           {!result && <span className="legend">en cours…</span>}

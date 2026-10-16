@@ -138,6 +138,35 @@ describe('Sessions with a fake Claude Code', () => {
     expect((await received(id)).updatedInput).toMatchObject({ answers: { 'Quelle base ?': 'launchpad' } })
   })
 
+  it('a question shows each option’s description and preview, and the answer carries the note and the preview chosen', async () => {
+    const id = await start('une question')
+    const card = await asked(id)
+    expect(card.questions[0]?.options).toEqual([
+      { label: 'launchpad', description: 'La branche d’intégration', preview: 'git switch launchpad' },
+      { label: 'main', description: 'La branche par défaut', preview: null },
+    ])
+    service.decide(id, card.id, {
+      allow: true,
+      answers: { 'Quelle base ?': 'launchpad' },
+      notes: { 'Quelle base ?': '  la CI y tourne  ' },
+    })
+    expect((await received(id)).updatedInput).toMatchObject({
+      answers: { 'Quelle base ?': 'launchpad' },
+      annotations: { 'Quelle base ?': { preview: 'git switch launchpad', notes: 'la CI y tourne' } },
+    })
+    const decision = (await lines(id, (e) => e.kind === 'decision')).find((e) => e.kind === 'decision')
+    expect(decision).toMatchObject({ answer: 'Quelle base ? launchpad · la CI y tourne' })
+  })
+
+  it('an answer of the user’s own words carries no annotation it does not need', async () => {
+    const id = await start('une question')
+    const card = await asked(id)
+    service.decide(id, card.id, { allow: true, answers: { 'Quelle base ?': 'une branche à moi' } })
+    const input = (await received(id)).updatedInput
+    expect(input).toMatchObject({ answers: { 'Quelle base ?': 'une branche à moi' } })
+    expect(input).not.toHaveProperty('annotations')
+  })
+
   it('a plan refused goes back with the instruction given', async () => {
     const id = await start('propose un plan')
     const card = await asked(id)

@@ -52,7 +52,7 @@ const POWERSHELL = [
 ]
 // Claude Code installed by npm on Windows is a script (claude.cmd, claude.ps1): Node refuses to start one without a
 // shell (CVE-2024-27980), and a shell would read the SDK's arguments its own way.
-const NPM_ON_WINDOWS = 'Claude Code est installé par npm : installez-le par l’installateur natif (claude.exe)'
+const NPM_ON_WINDOWS = 'Claude Code est installé par npm : installe-le par l’installateur natif (claude.exe)'
 
 /**
  * The `claude` a lookup found, from its answer: the last line of the login shell's (it may print a banner first); in

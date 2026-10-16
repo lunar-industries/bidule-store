@@ -3,7 +3,8 @@
 :where([class*='theme-']) {
   --lc-warn-bg: color-mix(in srgb, var(--butter) 28%, var(--card));
   --lc-warn-ink: color-mix(in srgb, var(--butter) 45%, var(--text));
-  --lc-bad-bg: color-mix(in srgb, var(--bad-ink) 16%, var(--card));
+  /* Light enough for --bad-ink to read on it at 4.5:1, Capy's and Clo's themes included. */
+  --lc-bad-bg: color-mix(in srgb, var(--bad-ink) 10%, var(--card));
   --lc-info-bg: color-mix(in srgb, var(--blue) 24%, var(--card));
 }
 
@@ -134,18 +135,16 @@
   margin: 0;
   font-size: var(--fs-xl);
 }
-.lc-search input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 38px;
-  padding: 0 var(--space-3);
-  border: 2px solid var(--card-line);
-  border-radius: var(--radius-pill);
-  background: var(--bg);
-  color: var(--text);
-  font:
-    600 var(--fs-sm) 'Nunito',
-    sans-serif;
+/* A reading that failed, with Réessayer: above what was read before, if anything. */
+.lc-alert {
+  margin: 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--lc-bad-bg);
+  color: var(--bad-ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
 }
 .lc-groups {
   display: flex;
@@ -339,8 +338,9 @@
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
-.lc-conv.focus .lc-lines,
-.lc-conv.focus .lc-compose {
+/* Both side columns folded: the lines and the message box take more width. */
+.lc-conv.wide .lc-lines,
+.lc-conv.wide .lc-compose {
   max-width: 1040px;
 }
 .lc-user {
@@ -524,14 +524,169 @@
   font-size: var(--fs-sm);
   white-space: normal;
 }
+/* Claude's questions: one fieldset each, one after the other in the card. */
+.lc-questions {
+  gap: var(--space-4);
+}
 .lc-question {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border: none;
+  border-top: 2px solid var(--card-line);
 }
-.lc-choices {
-  flex-wrap: wrap;
+.lc-question > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0;
   gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--fs-md);
+  font-weight: 800;
+}
+.lc-question > legend + * {
+  clear: both;
+}
+/* An option, a whole row: its mark (a round one for one choice, a box for several), its label, its description.
+   Ticked: the coral border and a tint of it, apart from the hover's. */
+.lc-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.lc-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  cursor: pointer;
+}
+.lc-option:hover {
+  border-color: var(--card-hover);
+}
+.lc-option[data-checked='true'] {
+  border-color: var(--coral);
+  background: color-mix(in srgb, var(--coral) 12%, var(--card));
+}
+.lc-option:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.lc-option > input[type='radio'],
+.lc-option > input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--coral);
+}
+.lc-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.lc-option-text > span {
+  color: var(--text-2);
+}
+/* « Autre » : the user's own answer, written in its row. */
+.lc-option.other {
+  align-items: center;
+  border-style: dashed;
+  font-size: var(--fs-sm);
+}
+.lc-option-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font:
+    600 var(--fs-sm) 'Nunito',
+    sans-serif;
+}
+/* Options with a preview: the preview beside them, following the option hovered or focused. */
+.lc-question-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+.lc-preview {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  overflow: hidden;
+}
+.lc-preview > figcaption {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 2px solid var(--card-line);
+}
+.lc-preview > pre {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  max-height: 260px;
+  overflow: auto;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  white-space: pre;
+}
+.lc-add-note {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.lc-add-note:hover {
+  color: var(--text);
+}
+.lc-questions-left {
+  text-align: right;
+}
+/* « Rattacher la session à une tâche »: a search, the tasks found. */
+.lc-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.lc-pick > h2 {
+  margin: 0;
+}
+.lc-pick-list {
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 2px solid var(--card-line);
+  border-radius: var(--radius-md);
+}
+.lc-pick-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.lc-pick-list .menu-item.active {
+  background: var(--chip-hover);
 }
 .lc-decided {
   gap: var(--space-2);
@@ -663,10 +818,8 @@
   font-size: var(--fs-sm);
   line-height: 1.35;
 }
-.lc-ctx-link {
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: var(--accent-text);
+.lc-ctx-attach {
+  align-self: flex-start;
 }
 .lc-ctx-worktree {
   display: flex;
@@ -821,5 +974,13 @@
   }
   .lc-list {
     width: 260px;
+  }
+}
+/* A narrow window: the side columns fold by themselves (ClaudePage.tsx), the first visit stands in one column, an
+   option's preview goes under the options. */
+@media (max-width: 1000px) {
+  .lc-empty-grid,
+  .lc-question-split {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

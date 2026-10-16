@@ -1,40 +1,68 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { navigate, react, useHint, useMascotClearance } from '@bidule/sdk'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import {
+  BannerTools,
+  errorMessage,
+  navigate,
+  react,
+  ToolSearch,
+  useFocusMode,
+  useHint,
+  useMascotClearance,
+  useSavedState,
+} from '@bidule/sdk'
+import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import type { ClaudePlace, SessionStatus } from '../contract.ts'
-import { api, errorMessage } from './api.ts'
+import { api } from './api.ts'
 import { Conversation } from './Conversation.tsx'
-import { relTime } from './events.ts'
+import { relTime, STATUS } from './events.ts'
 import { Icon } from './Icon.tsx'
-import { FloatingMenu } from './Menu.tsx'
 import { openNewSession } from './newSession.tsx'
 import { SessionContext } from './SessionContext.tsx'
 import {
   followSessions,
   refreshSessions,
   repoLabel,
+  retrySessions,
   select,
   useBoard,
   useEnabled,
   useRepos,
   useSelected,
   useSessions,
+  useSessionsError,
 } from './state.ts'
 import './claude.css'
 
 // The list's groups: the one thing it has to surface is a session held up by a decision, the same one the tab counts.
 // The rest sits together: a session of the terminal comes and goes without this app having anything to do about it.
 const GROUPS: { label: string; statuses: SessionStatus[] }[] = [
-  { label: 'En attente de vous', statuses: ['waiting'] },
+  { label: 'En attente de toi', statuses: ['waiting'] },
   { label: 'Sessions', statuses: ['running', 'idle', 'saved'] },
 ]
 
-// Kept across visits while the app runs: the columns folded or not, focus, the archived shown.
-const kept = { left: true, right: true, focus: false, archived: false }
+// The side columns open or folded, and the archived shown: kept from one launch to the next (a hidden setting).
+const COLUMNS = 'lunar-industries-claude.columns'
+type Columns = { left: boolean; right: boolean; archived: boolean }
+const OPEN: Columns = { left: true, right: true, archived: false }
+function readColumns(raw: unknown): Columns | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const { left, right, archived } = raw as Record<string, unknown>
+  return typeof left === 'boolean' && typeof right === 'boolean' && typeof archived === 'boolean' ? { left, right, archived } : null
+}
+
+// Under this width the side columns fold by themselves, and the first visit stands in one column.
+const NARROW = '(max-width: 1000px)'
+const subscribeNarrow = (changed: () => void) => {
+  const query = matchMedia(NARROW)
+  query.addEventListener('change', changed)
+  return () => query.removeEventListener('change', changed)
+}
+const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches)
 
 /**
  * Claude (Lunar Industries, Simon's pages/claude): Claude Code sessions run in the app. The list on the left
  * (grouped by state), the conversation, the session's context on the right. Each side column folds into a strip;
- * « Focus » (Ctrl + .) folds both. Off until the experimental switch of its settings is on.
+ * the core's focus mode, and a narrow window, fold both. Off until the experimental switch of its settings is on.
  */
 export function ClaudePage() {
   const enabled = useEnabled()
@@ -67,18 +95,27 @@ function Disabled() {
 
 function Sessions() {
   const list = useSessions()
+  const listError = useSessionsError()
   const repos = useRepos()
   const board = useBoard()
   const selectedId = useSelected()
   const [search, setSearch] = useState('')
-  const [left, setLeft] = useState(kept.left)
-  const [right, setRight] = useState(kept.right)
-  const [focus, setFocus] = useState(kept.focus)
-  const [archived, setArchived] = useState(kept.archived)
-  const [menu, setMenu] = useState<{ at: CSSProperties; id: string } | null>(null)
+  const [columns, setColumns] = useSavedState<Columns>(COLUMNS, OPEN, readColumns)
+  const [menu, openMenu] = useMenu()
+
+  // The core's focus mode or a narrow window: both columns folded. One unfolded by hand stays so until the page is
+  // compact again; the columns kept for the wide page are untouched.
+  const focus = useFocusMode()
+  const narrow = useNarrow()
+  const compact = focus || narrow
+  const [unfolded, setUnfolded] = useState({ left: false, right: false })
   useEffect(() => {
-    Object.assign(kept, { left, right, focus, archived })
-  }, [left, right, focus, archived])
+    if (compact) setUnfolded({ left: false, right: false })
+  }, [compact])
+  const leftOpen = compact ? unfolded.left : columns.left
+  const rightOpen = compact ? unfolded.right : columns.right
+  const fold = (side: 'left' | 'right', open: boolean) =>
+    compact ? setUnfolded((u) => ({ ...u, [side]: open })) : setColumns((c) => ({ ...c, [side]: open }))
 
   useEffect(followSessions, [])
 
@@ -93,18 +130,6 @@ function Sessions() {
     if (task !== null) void newSession(task || null)
   }, [])
 
-  // Ctrl + . : focus, in or out.
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
-      if (e.key !== '.' && e.code !== 'Period') return
-      e.preventDefault()
-      setFocus((f) => !f)
-    }
-    addEventListener('keydown', key)
-    return () => removeEventListener('keydown', key)
-  }, [])
-
   const tasks = board?.tasks ?? []
   const all = (list ?? []).map((s) => {
     const known = tasks.find((t) => t.id === s.taskId)
@@ -114,6 +139,7 @@ function Sessions() {
       ...s,
       task,
       labels,
+      url: known?.url ?? null,
       // No status here: only a decision awaited is worth naming, and the group already says it.
       meta: [task?.ref ?? (s.fromApp ? 'Sans tâche' : 'Terminal ou VS Code'), labels.join(', ')].filter(Boolean).join(' · '),
     }
@@ -123,32 +149,24 @@ function Sessions() {
     (s) => !words || [s.title, s.task?.title, s.task?.ref, ...s.labels].some((v) => v?.toLowerCase().includes(words)),
   )
   const archivedCount = visible.filter((s) => s.archived).length
-  const shown = visible.filter((s) => !s.archived || archived)
+  const shown = visible.filter((s) => !s.archived || columns.archived)
   const groups = [
     ...GROUPS.map((g) => ({ label: g.label, items: visible.filter((s) => !s.archived && g.statuses.includes(s.status)) })),
-    { label: 'Archivées', items: archived ? visible.filter((s) => s.archived) : [] },
+    { label: 'Archivées', items: columns.archived ? visible.filter((s) => s.archived) : [] },
   ].filter((g) => g.items.length)
   const current = all.find((s) => s.id === selectedId) ?? all.find((s) => !s.archived) ?? null
   const waiting = all.filter((s) => !s.archived && s.status === 'waiting').length
+  const working = all.some((s) => !s.archived && s.status === 'running')
 
   useHint(
     list === null
       ? null
       : waiting
         ? `${waiting} session${waiting > 1 ? 's attendent' : ' attend'} ta décision. Coin !`
-        : all.length
+        : working
           ? 'Claude bosse, je surveille. Coin.'
           : null,
   )
-
-  const leftOpen = left && !focus
-  const rightOpen = right && !focus
-  // Folding or unfolding a column by hand leaves focus: the two would otherwise fight over the same space.
-  const fold = (side: 'left' | 'right', open: boolean) => {
-    setFocus(false)
-    if (side === 'left') setLeft(open)
-    else setRight(open)
-  }
 
   async function newSession(taskId: string | null = null) {
     const id = await openNewSession({ taskId })
@@ -166,29 +184,75 @@ function Sessions() {
       react('panic', errorMessage(err), errorMessage(err))
     }
   }
+  const copyId = async (id: string) => {
+    await navigator.clipboard.writeText(id)
+    react('quack', 'Identifiant copié, coin !', 'Identifiant de la session copié')
+  }
+  // A session's own actions: the « ⋯ » of its conversation, and its right click in the list.
+  const entriesFor = (s: (typeof all)[number]): MenuEntry[] => [
+    s.url ? { label: 'Ouvrir la tâche', run: () => s.url && window.open(s.url, '_blank', 'noopener') } : null,
+    { label: 'Copier l’identifiant de la session', run: () => copyId(s.id) },
+    'separator',
+    {
+      label: s.archived ? 'Désarchiver' : 'Archiver',
+      run: () => archive(s.id, !s.archived),
+      disabled: s.fromApp && s.status !== 'saved' ? 'Arrête d’abord la session pour l’archiver.' : false,
+    },
+  ]
+  const titleOf = (s: (typeof all)[number]) => s.task?.title ?? s.title
+
+  const tools = (
+    <BannerTools>
+      <ToolSearch label="Chercher une session" placeholder="Session ou tâche…" value={search} onChange={setSearch} />
+      <button type="button" className="banner-button" onClick={() => void newSession()}>
+        Nouvelle session
+      </button>
+    </BannerTools>
+  )
+
+  // The sessions could not be read at all: said, with Réessayer, never taken for a first visit.
+  if (list === null && listError)
+    return (
+      <div className="page fill with-tools lc-page">
+        {tools}
+        <section className="panel lc-none" role="alert">
+          <p className="lc-error">Les sessions n’ont pas pu être lues : {listError}</p>
+          <button type="button" className="btn" onClick={retrySessions}>
+            Réessayer
+          </button>
+        </section>
+      </div>
+    )
 
   // Nothing at all to show, sessions of the terminal included: the first visit.
   if (list !== null && !all.length) return <FirstVisit start={(id) => void newSession(id)} />
 
-  const menuSession = menu && all.find((s) => s.id === menu.id)
-
   return (
-    <div className={`page fill lc-page${focus ? ' focus' : ''}`}>
+    <div className="page fill with-tools lc-page">
+      {tools}
+      {menu}
       {leftOpen ? (
         <section className="panel lc-list" aria-label="Sessions">
           <div className="row">
             <h2 className="grow">Sessions</h2>
-            <button type="button" className="btn lc-btn-sm" onClick={() => void newSession()}>
-              Nouvelle
-            </button>
-            <button type="button" className="icon-btn lc-icon-sm" aria-label="Réduire la liste des sessions" onClick={() => fold('left', false)}>
+            <button
+              type="button"
+              className="icon-btn lc-icon-sm"
+              aria-label="Replier la liste des sessions"
+              title="Replier la liste"
+              onClick={() => fold('left', false)}
+            >
               <Icon name="left" size={16} />
             </button>
           </div>
-          <label className="lc-search">
-            <span className="sr-only">Chercher une session</span>
-            <input type="search" placeholder="Chercher une session ou une tâche" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </label>
+          {listError && (
+            <div className="row lc-alert" role="alert">
+              <span className="grow">Les sessions n’ont pas pu être relues.</span>
+              <button type="button" className="btn lc-btn-sm" onClick={retrySessions}>
+                Réessayer
+              </button>
+            </div>
+          )}
           <div className="lc-groups" role="listbox" aria-label="Sessions">
             {groups.map((g) => (
               <div key={g.label} role="group" aria-label={g.label} className="lc-group">
@@ -199,12 +263,13 @@ function Sessions() {
                   <div
                     key={s.id}
                     role="option"
-                    tabIndex={0}
+                    tabIndex={current?.id === s.id ? 0 : -1}
                     aria-selected={current?.id === s.id}
                     className="lc-item"
                     data-status={s.status}
                     onClick={() => select(s.id)}
                     onKeyDown={(e) => {
+                      if (isMenuKey(e)) return openMenu(e, entriesFor(s), `Session ${titleOf(s)}`)
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
                         select(s.id)
@@ -217,13 +282,10 @@ function Sessions() {
                         next?.click()
                       }
                     }}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      setMenu({ at: { left: e.clientX, top: e.clientY }, id: s.id })
-                    }}
+                    onContextMenu={(e) => openMenu(e, entriesFor(s), `Session ${titleOf(s)}`)}
                   >
                     <span className="lc-item-text grow">
-                      <strong className="ellipsis">{s.task?.title ?? s.title}</strong>
+                      <strong className="ellipsis">{titleOf(s)}</strong>
                       <span className="legend ellipsis">{s.meta}</span>
                     </span>
                     <span className="legend lc-when">{relTime(s.updatedAt)}</span>
@@ -234,57 +296,70 @@ function Sessions() {
             {!groups.length && <span className="legend">{list === null ? 'Lecture des sessions…' : 'Aucune session ne correspond.'}</span>}
           </div>
           {archivedCount > 0 && (
-            <button type="button" className="chip-btn lc-archived" aria-pressed={archived} onClick={() => setArchived(!archived)}>
-              {archived ? 'Masquer' : 'Afficher'} les archivées ({archivedCount})
+            <button
+              type="button"
+              className="chip-btn lc-archived"
+              aria-pressed={columns.archived}
+              onClick={() => setColumns((c) => ({ ...c, archived: !c.archived }))}
+            >
+              {columns.archived ? 'Masquer' : 'Afficher'} les archivées ({archivedCount})
             </button>
           )}
         </section>
       ) : (
-        !focus && (
-          <nav className="panel lc-rail" aria-label="Sessions, réduites">
-            <button type="button" className="icon-btn lc-icon-sm" aria-label="Afficher la liste des sessions" onClick={() => fold('left', true)}>
-              <Icon name="right" size={16} />
+        <nav className="panel lc-rail" aria-label="Sessions, repliées">
+          <button
+            type="button"
+            className="icon-btn lc-icon-sm"
+            aria-label="Déplier la liste des sessions"
+            title="Déplier la liste"
+            onClick={() => fold('left', true)}
+          >
+            <Icon name="right" size={16} />
+          </button>
+          {shown.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className="lc-rail-item"
+              aria-pressed={current?.id === s.id}
+              // Its state is in its name: the dot alone says nothing to a screen reader.
+              aria-label={`${titleOf(s)}, ${STATUS[s.status].label}`}
+              title={`${titleOf(s)} · ${STATUS[s.status].label}`}
+              onClick={() => select(s.id)}
+              onContextMenu={(e) => openMenu(e, entriesFor(s), `Session ${titleOf(s)}`)}
+            >
+              <span className="lc-dot" data-status={s.status} />
             </button>
-            <button type="button" className="icon-btn lc-icon-sm" aria-label="Nouvelle session" onClick={() => void newSession()}>
-              <Icon name="plus" size={16} />
-            </button>
-            {shown.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className="lc-rail-item"
-                aria-pressed={current?.id === s.id}
-                aria-label={s.task?.title ?? s.title}
-                title={s.task?.title ?? s.title}
-                onClick={() => select(s.id)}
-              >
-                <span className="lc-dot" data-status={s.status} />
-              </button>
-            ))}
-          </nav>
-        )
+          ))}
+        </nav>
       )}
 
       {current ? (
         <>
           <Conversation
             session={current}
-            heading={current.task?.title ?? current.title}
+            heading={titleOf(current)}
             taskRef={current.task?.ref ?? null}
             repoLabels={current.labels}
-            focus={focus}
-            toggleFocus={() => setFocus(!focus)}
+            wide={!leftOpen && !rightOpen}
+            narrow={narrow}
+            moreEntries={entriesFor(current)}
           />
           {rightOpen ? (
             <SessionContext sessionId={current.id} cwd={current.cwd} collapse={() => fold('right', false)} />
           ) : (
-            !focus && (
-              <nav className="panel lc-rail" aria-label="Contexte, réduit">
-                <button type="button" className="icon-btn lc-icon-sm" aria-label="Afficher le contexte" onClick={() => fold('right', true)}>
-                  <Icon name="left" size={16} />
-                </button>
-              </nav>
-            )
+            <nav className="panel lc-rail" aria-label="Contexte, replié">
+              <button
+                type="button"
+                className="icon-btn lc-icon-sm"
+                aria-label="Déplier le contexte"
+                title="Déplier le contexte"
+                onClick={() => fold('right', true)}
+              >
+                <Icon name="left" size={16} />
+              </button>
+            </nav>
           )}
         </>
       ) : (
@@ -295,24 +370,6 @@ function Sessions() {
           </button>
         </section>
       )}
-
-      {menu && menuSession && (
-        <FloatingMenu at={menu.at} label={`Session ${menuSession.title}`} onClose={() => setMenu(null)}>
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            aria-disabled={menuSession.fromApp && menuSession.status !== 'saved'}
-            title={menuSession.fromApp && menuSession.status !== 'saved' ? 'Arrêtez la session pour l’archiver' : undefined}
-            onClick={() => {
-              setMenu(null)
-              void archive(menuSession.id, !menuSession.archived)
-            }}
-          >
-            {menuSession.archived ? 'Désarchiver' : 'Archiver'}
-          </button>
-        </FloatingMenu>
-      )}
     </div>
   )
 }
@@ -322,13 +379,14 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
   const board = useBoard()
   const [places, setPlaces] = useState<ClaudePlace[] | null>(null)
   const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
   const check = async () => {
     setChecking(true)
     try {
       setPlaces((await api.status()).places)
+      setCheckError(null)
     } catch (err) {
-      react('panic', errorMessage(err), errorMessage(err))
-      setPlaces([])
+      setCheckError(errorMessage(err))
     } finally {
       setChecking(false)
     }
@@ -344,7 +402,7 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
       <section className="empty lc-empty-head">
         <p>Aucune session Claude pour l’instant</p>
         <p className="legend">
-          Lancez une session depuis une tâche en cours : Claude reçoit la tâche en contexte et travaille dans des worktrees
+          Lance une session depuis une tâche en cours : Claude reçoit la tâche en contexte et travaille dans des worktrees
           à part.
         </p>
         <button type="button" className="btn-cta" onClick={() => start(null)}>
@@ -354,7 +412,7 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
       <div className="lc-empty-grid">
         <section className="panel" aria-labelledby="lc-checks">
           <h2 id="lc-checks">Vérifications</h2>
-          <Places places={places} checking={checking} />
+          <Places places={places} checking={checking} error={checkError} />
           <div className="row">
             <button type="button" className="btn lc-btn-sm" disabled={checking} onClick={() => void check()}>
               Vérifier à nouveau
@@ -373,7 +431,7 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
                   <strong className="ellipsis">{t.title}</strong>
                   <span className="legend">{t.ref ?? ''}</span>
                 </span>
-                <button type="button" className="btn lc-btn-sm" onClick={() => start(t.id)}>
+                <button type="button" className="btn lc-btn-sm" aria-label={`Lancer une session sur ${t.title}`} onClick={() => start(t.id)}>
                   Lancer
                 </button>
               </div>
@@ -388,8 +446,14 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
 }
 
 // The Claude Code the sessions run (the one of the tools' environment), and whether it is logged in or the module has
-// an API key.
-export function Places({ places, checking }: { places: ClaudePlace[] | null; checking: boolean }) {
+// an API key. A check that failed says why, never « none found ».
+export function Places({ places, checking, error }: { places: ClaudePlace[] | null; checking: boolean; error: string | null }) {
+  if (error)
+    return (
+      <p className="lc-alert" role="alert">
+        La vérification a échoué : {error}
+      </p>
+    )
   if (!places?.length) return <span className="legend">{checking || !places ? 'Recherche de Claude Code…' : 'Aucun Claude Code trouvé.'}</span>
   return (
     <>
@@ -406,7 +470,7 @@ export function Places({ places, checking }: { places: ClaudePlace[] | null; che
                   ? [`Version ${p.version ?? '?'}`, 'clé d’API des réglages'].join(' · ')
                   : p.loggedIn
                     ? [`Version ${p.version ?? '?'}`, p.email, p.subscription].filter(Boolean).join(' · ')
-                    : 'Dans un terminal, lancez « claude » puis « /login », une seule fois.')}
+                    : 'Dans un terminal, lance « claude » puis « /login », une seule fois.')}
             </span>
           </span>
         </div>

@@ -44,6 +44,7 @@ export const decisionValidator = vine.create({
   allow: vine.boolean(),
   always: vine.boolean().optional(),
   answers: vine.record(vine.string()).optional(),
+  notes: vine.record(vine.string().maxLength(10_000)).optional(),
   message: vine.string().trim().maxLength(10_000).optional(),
 })
 

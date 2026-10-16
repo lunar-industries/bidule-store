@@ -7,16 +7,17 @@ const PATHS = {
   stop: 'M8 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z',
   left: 'm15 6-6 6 6 6',
   right: 'm9 6 6 6-6 6',
-  focusEnter: 'M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5',
-  focusExit: 'M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5',
   close: 'M6 6l12 12M18 6 6 18',
+  // « ⋯ »: three round dots, drawn thicker than the lines.
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
 }
+const THICK: Partial<Record<keyof typeof PATHS, number>> = { more: 3.5 }
 export type IconName = keyof typeof PATHS
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d={PATHS[name]} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <path d={PATHS[name]} fill="none" stroke="currentColor" strokeWidth={THICK[name] ?? 2} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

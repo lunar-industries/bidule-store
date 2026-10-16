@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { execute, react, saveSettingValues, useOn, useSettingValues } from '@bidule/sdk'
+import { errorMessage, execute, react, saveSettingValues, useOn, useSettingValues } from '@bidule/sdk'
 import type { ClaudePlace, RepoOverrides, RepoSettings } from '../contract.ts'
-import { api, errorMessage } from './api.ts'
+import { api } from './api.ts'
 import { ChipField } from './ChipField.tsx'
 import { Places } from './ClaudePage.tsx'
 import { useEnabled } from './state.ts'
@@ -63,16 +63,18 @@ export function SettingsPanel() {
   const enabled = useEnabled()
   const [places, setPlaces] = useState<ClaudePlace[] | null>(null)
   const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
   const [repos, setRepos] = useState<RepoSettings[] | null>(null)
   const [reposError, setReposError] = useState<string | null>(null)
 
+  // A check that fails says why, in place of the result: never « no Claude Code found ».
   const check = async () => {
     setChecking(true)
     try {
       setPlaces((await api.status()).places)
+      setCheckError(null)
     } catch (err) {
-      setPlaces([])
-      react('panic', errorMessage(err), errorMessage(err))
+      setCheckError(errorMessage(err))
     } finally {
       setChecking(false)
     }
@@ -121,7 +123,7 @@ export function SettingsPanel() {
             {checking ? 'Vérification…' : 'Vérifier'}
           </button>
         </div>
-        <Places places={places} checking={checking} />
+        <Places places={places} checking={checking} error={checkError} />
       </section>
       <section className="lc-settings-block" aria-labelledby="lc-settings-repos">
         <h3 id="lc-settings-repos">Par dépôt</h3>
