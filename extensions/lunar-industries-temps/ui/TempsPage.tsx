@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import {
+  BannerTools,
   busy,
   errorMessage,
   Modal,
@@ -717,8 +718,45 @@ export function TempsPage() {
   )
 
   return (
-    <div className="page lit-temps">
+    <div className="page with-tools lit-temps">
       {menu}
+      {/* On the banner's edge: back to today, and the calendar, which hangs under its button. */}
+      <BannerTools>
+        <button type="button" className="banner-button" onClick={() => go(today)}>
+          Aujourd'hui
+        </button>
+        <button
+          ref={calToggle}
+          type="button"
+          className="banner-button lit-cal-toggle"
+          aria-expanded={cal !== null}
+          aria-haspopup="dialog"
+          onClick={() => {
+            const d = parseDay(day)
+            setCal((c) => (c ? null : { y: d.getFullYear(), m: d.getMonth() }))
+          }}
+        >
+          Calendrier
+        </button>
+        <button type="button" className="banner-button" title="Réglages de Temps" onClick={() => navigate('/reglages/lunar-industries-temps')}>
+          Réglages
+        </button>
+      </BannerTools>
+      {cal && (
+        <Calendar
+          anchor={calToggle.current}
+          cursor={cal}
+          onCursor={setCal}
+          month={month}
+          day={day}
+          today={today}
+          onPick={(key) => {
+            go(key)
+            closeCalendar()
+          }}
+          onClose={closeCalendar}
+        />
+      )}
       {/* The week on the left, the chosen day on the right. */}
       <section className="panel lit-week" aria-label="Choisir un jour" aria-busy={weekLoading}>
         <div className="row lit-week-head">
@@ -732,40 +770,6 @@ export function TempsPage() {
           <button type="button" className="btn icon" aria-label="Semaine suivante" onClick={() => go(dayKey(addDays(parseDay(day), 7)))}>
             ›
           </button>
-        </div>
-        <div className="row lit-week-actions">
-          <button type="button" className="btn grow" onClick={() => go(today)}>
-            Aujourd'hui
-          </button>
-          <div className="grow lit-cal-anchor">
-            <button
-              ref={calToggle}
-              type="button"
-              className="btn lit-cal-toggle"
-              aria-expanded={cal !== null}
-              aria-haspopup="dialog"
-              onClick={() => {
-                const d = parseDay(day)
-                setCal((c) => (c ? null : { y: d.getFullYear(), m: d.getMonth() }))
-              }}
-            >
-              Calendrier
-            </button>
-            {cal && (
-              <Calendar
-                cursor={cal}
-                onCursor={setCal}
-                month={month}
-                day={day}
-                today={today}
-                onPick={(key) => {
-                  go(key)
-                  closeCalendar()
-                }}
-                onClose={closeCalendar}
-              />
-            )}
-          </div>
         </div>
         {weekError ? (
           <div className="row lit-week-status">
@@ -817,14 +821,9 @@ export function TempsPage() {
             </div>
           ))}
         </div>
-        <div className="row lit-week-work">
-          <span className="legend grow">
-            Jours de travail : <span className="lit-nowrap">{workText(workDays)}</span>
-          </span>
-          <button type="button" className="btn" onClick={() => navigate('/reglages/lunar-industries-temps')}>
-            Réglages
-          </button>
-        </div>
+        <p className="legend lit-week-work">
+          Jours de travail : <span className="lit-nowrap">{workText(workDays)}</span>
+        </p>
         {weekPending.length > 0 && (
           <div className="lit-week-pending">
             <span className="lit-week-pending-text">

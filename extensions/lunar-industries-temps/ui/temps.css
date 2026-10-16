@@ -45,18 +45,6 @@
   font-weight: 700;
   line-height: 1.1;
 }
-.lit-week-actions {
-  gap: var(--space-2);
-}
-/* « Aujourd'hui » and « Calendrier » share the row (not the calendar's own buttons, which hang below). */
-.lit-week-actions > .btn,
-.lit-cal-anchor > .btn {
-  width: 100%;
-}
-/* The calendar hangs under its button. */
-.lit-cal-anchor {
-  position: relative;
-}
 .lit-week-days {
   display: flex;
   flex-direction: column;
@@ -123,7 +111,7 @@
   color: var(--text);
 }
 .lit-week-work {
-  gap: var(--space-2);
+  margin: 0;
   padding-left: var(--space-3);
 }
 /* « Lecture de la semaine… », or why it could not be read, with Réessayer. */
@@ -152,12 +140,10 @@
   color: var(--lit-warn-ink);
 }
 
-/* ---------- the calendar */
+/* ---------- the calendar: floating (`menu floating`), placed under its button on the banner's edge by Calendar.tsx */
 .lit-cal {
-  position: absolute;
-  z-index: 60;
-  top: calc(100% + var(--space-2));
-  left: 0;
+  /* In the page's body, outside the app: its text colour is not inherited. */
+  color: var(--text);
   width: 320px;
   padding: var(--space-3);
   display: flex;
@@ -660,19 +646,10 @@
   }
 }
 /* Narrower still: the week goes above the day, its seven days on one row (the state is in each day's name for screen
-   readers, its dot and total in view), its other controls side by side. */
+   readers, its dot and total in view). */
 @media (max-width: 900px) {
   .page.lit-temps {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .panel.lit-week {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: var(--space-2) var(--space-3);
-  }
-  .lit-week > *:not(.lit-week-head, .lit-week-actions) {
-    grid-column: 1 / -1;
   }
   .lit-week-days {
     display: grid;
@@ -707,10 +684,5 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-  }
-  /* « Calendrier » is at the right edge now: the calendar hangs from its right side. */
-  .lit-cal {
-    left: auto;
-    right: 0;
   }
 }

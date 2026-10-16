@@ -23,11 +23,13 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
 
 ## La page (`ui/TempsPage.tsx`)
 
-- **La semaine** à gauche : un seul arrêt de Tab, les flèches passent d'un jour à l'autre ; pendant sa lecture, des
-  points creux et « … » (jamais « aucune activité »), en cas d'échec le message avec Réessayer. Le calendrier
-  (`ui/Calendar.tsx`) : un seul jour tabulable, les flèches passent au mois voisin (année et mois ensemble,
+- **Au bord du bandeau** (`BannerTools`, page `with-tools`) : « Aujourd'hui », « Calendrier » et « Réglages » (ceux du
+  module). Le calendrier (`ui/Calendar.tsx`) est dessiné dans le `body` de la page (`menu floating`), calé sous son
+  bouton et gardé dans la fenêtre : un seul jour tabulable, les flèches passent au mois voisin (année et mois ensemble,
   `monthStep`), les boutons de mois laissent le focus où il est, Échap le ferme et rend le focus à « Calendrier », une
   légende dit les points.
+- **La semaine** à gauche : un seul arrêt de Tab, les flèches passent d'un jour à l'autre ; pendant sa lecture, des
+  points creux et « … » (jamais « aucune activité »), en cas d'échec le message avec Réessayer.
 - **Le jour** à droite : la barre (un segment par ligne, la couleur de l'étiquette mêlée à la carte sous le texte du
   thème, lisible sur tous les thèmes), dont on tire les frontières à la souris ou aux flèches ; puis une ligne par
   tâche, avec son étiquette et sa part dans deux listes (la part de 0 à 1 j par 0,05). Une branche sans tâche se règle
@@ -55,11 +57,11 @@ Ce qui se calcule sans rien dessiner est dans `ui/format.ts` et testé dans `ui/
 Toutes dans `ui/temps.css`, sous `lit-` :
 
 - La page : `lit-temps`, les tons `lit-tone-ok`, `lit-tone-warn`, `lit-tone-bad`, `lit-tone-neutral`, `lit-nowrap`.
-- La semaine : `lit-week`, `lit-week-head`, `lit-week-title`, `lit-week-name`, `lit-week-actions`, `lit-week-status`
+- La semaine : `lit-week`, `lit-week-head`, `lit-week-title`, `lit-week-name`, `lit-week-status`
   (lecture en cours ou échec), `lit-week-days`, `lit-week-day` (`today`, `off`), `lit-week-dot` (`hollow`),
   `lit-week-day-name`, `lit-week-day-today`, `lit-week-day-state`, `lit-week-day-total` (`recorded`),
   `lit-week-work`, `lit-week-pending`, `lit-week-pending-text`.
-- Le calendrier : `lit-cal-anchor`, `lit-cal`, `lit-cal-title`, `lit-cal-grid`, `lit-cal-week`, `lit-cal-letter`, `lit-cal-day`
+- Le calendrier : `lit-cal`, `lit-cal-title`, `lit-cal-grid`, `lit-cal-week`, `lit-cal-letter`, `lit-cal-day`
   (`today`, `future`), `lit-cal-dot`, `lit-cal-key`, `lit-cal-key-dot`.
 - Le jour : `lit-day`, `lit-day-head`, `lit-day-title`, `lit-day-legend`, `lit-alert` (une lecture qui a échoué),
   `lit-problem` (pourquoi la journée ne s'envoie pas), `lit-bar-wrap`, `lit-bar`, `lit-rest`, `lit-scale`, `lit-seg`

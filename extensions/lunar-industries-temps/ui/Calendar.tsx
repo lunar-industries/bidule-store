@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { DaySummary } from '../contract.ts'
 import { dayKey, monthStep, monthTitle, parseDay, STATE_DOT, STATE_LABEL } from './format.ts'
 
@@ -24,10 +25,15 @@ const KEY = [
 
 const inMonth = (key: string, c: MonthCursor) => monthStep(c, parseDay(key)) === 0
 
+const MARGIN = 8
+
 // Taken from quack-board (pages/temps/calendar, Simon's): a month, a dot of each day's state; a click picks the day.
 // One stop for Tab, the day shown (else the first of the month); the arrows move day by day and week by week, into the
 // next month or the one before; Escape closes it. Changing month by its buttons leaves the focus on the button.
+// Drawn in the page's body under its button on the banner's edge (right-aligned with it, kept in the window): an
+// ancestor moved by a transform (the banner's edge) would offset it inside it.
 export function Calendar({
+  anchor,
   cursor,
   onCursor,
   month,
@@ -36,6 +42,7 @@ export function Calendar({
   onPick,
   onClose,
 }: {
+  anchor: HTMLElement | null
   cursor: MonthCursor
   onCursor: (c: MonthCursor) => void
   month: DaySummary[]
@@ -45,6 +52,21 @@ export function Calendar({
   onClose: () => void
 }) {
   const box = useRef<HTMLDivElement>(null)
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    const own = box.current?.getBoundingClientRect()
+    const from = anchor?.getBoundingClientRect()
+    if (!own || !from) return
+    const left = Math.max(MARGIN, Math.min(from.right - own.width, innerWidth - own.width - MARGIN))
+    const below = from.bottom + MARGIN
+    const top = below + own.height > innerHeight - MARGIN ? Math.max(MARGIN, from.top - MARGIN - own.height) : below
+    setAt({ left, top })
+  }, [anchor, cursor])
+  // The window resized: the button moved, the calendar would float away from it.
+  useEffect(() => {
+    addEventListener('resize', onClose)
+    return () => removeEventListener('resize', onClose)
+  }, [onClose])
   const [focusKey, setFocusKey] = useState(day)
   // The day the arrows went to: it takes the focus once drawn (in a month just turned to, after it renders).
   const goTo = useRef<string | null>(null)
@@ -52,11 +74,14 @@ export function Calendar({
   const tabKey = inMonth(focusKey, cursor) ? focusKey : inMonth(day, cursor) ? day : first
   const dayButton = (key: string) => box.current?.querySelector<HTMLButtonElement>(`[data-day="${key}"]`)
 
-  // Opened: the day shown takes the focus.
+  // Opened: the day shown takes the focus, once the calendar is placed (a hidden button cannot take it).
+  const opened = useRef(false)
   useEffect(() => {
+    if (!at || opened.current) return
+    opened.current = true
     dayButton(tabKey)?.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [at])
   useEffect(() => {
     if (!goTo.current) return
     dayButton(goTo.current)?.focus()
@@ -90,12 +115,14 @@ export function Calendar({
     setFocusKey(key)
     goTo.current = key
   }
-  return (
+  return createPortal(
     <div
       ref={box}
-      className="menu lit-cal"
+      className="menu floating lit-cal"
       role="dialog"
       aria-label="Calendrier"
+      // Measured before it shows: never drawn a frame at the wrong place.
+      style={at ? { left: at.left, top: at.top } : { left: 0, top: 0, visibility: 'hidden' }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation()
@@ -160,6 +187,7 @@ export function Calendar({
           </li>
         ))}
       </ul>
-    </div>
+    </div>,
+    document.body
   )
 }
