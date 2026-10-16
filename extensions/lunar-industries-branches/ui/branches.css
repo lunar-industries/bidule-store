@@ -6,14 +6,10 @@
   --lib-bad-bg: color-mix(in srgb, var(--bad-ink) 10%, var(--card));
 }
 
-/* The table; the drawer at the window's right edge, the table keeping clear of it (on a narrow window, it goes over
-   the table). With it open, the table hides its review, CI and commit columns, which the drawer says. */
+/* The table; the drawer over it, at the window's right edge: opening or closing it moves nothing on the page. */
 .page.lib-page {
   display: flex;
   flex-direction: column;
-}
-.page.lib-page.with-drawer {
-  padding-right: calc(min(460px, 100vw) + var(--space-4));
 }
 .lib-main {
   display: flex;
@@ -230,9 +226,6 @@
 }
 .lib-ci[data-ci='ok'] {
   color: var(--ok-ink);
-}
-.lib-page.with-drawer .lib-col-extra {
-  display: none;
 }
 
 /* ---------- the drawer: drawn as the Kanban's panel of the branches without a task, at the window's right edge under
@@ -468,7 +461,7 @@
   gap: var(--space-2);
 }
 
-/* A narrow window: the table keeps the branch (its task under it), the state and the action; the drawer goes over it. */
+/* A narrow window: the table keeps the branch (its task under it), the state and the action. */
 @media (max-width: 1000px) {
   .lib-col-extra,
   .lib-col-task {
@@ -476,8 +469,5 @@
   }
   .lib-sub {
     display: block;
-  }
-  .page.lib-page.with-drawer {
-    padding-right: 0;
   }
 }

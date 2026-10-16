@@ -225,6 +225,7 @@ export function BranchesPage() {
     setOpened(r.key)
     if (focusTask) setTimeout(() => document.querySelector<HTMLInputElement>('.lib-drawer .lib-picker input')?.focus())
   }
+  const dismiss = useCallback(() => setOpened(null), [])
   const close = () => {
     const key = opened
     setOpened(null)
@@ -332,9 +333,8 @@ export function BranchesPage() {
       </div>
     )
 
-  const drawerOpen = Boolean(openRow && openRepo)
   return (
-    <div className={`page with-tools lib-page${drawerOpen ? ' with-drawer' : ''}${narrow ? ' narrow' : ''}`}>
+    <div className={`page with-tools lib-page${narrow ? ' narrow' : ''}`}>
       {tools}
       {menu}
       <div className="lib-main">
@@ -451,6 +451,7 @@ export function BranchesPage() {
           busy={writing}
           narrow={narrow}
           close={close}
+          dismiss={dismiss}
           menu={(el) => openMenu(el, entriesFor(openRow), `Branche ${openRow.name}`)}
           jobsMenu={(el, entries) => openMenu(el, entries, 'Jobs manuels')}
           link={(id) => void link(openRow, id)}
@@ -574,6 +575,7 @@ function Drawer({
   busy,
   narrow,
   close,
+  dismiss,
   menu,
   jobsMenu,
   link,
@@ -595,6 +597,8 @@ function Drawer({
   busy: boolean
   narrow: boolean
   close: () => void
+  // Closed by a click outside it: the focus stays where that click put it.
+  dismiss: () => void
   menu: (el: HTMLElement) => void
   jobsMenu: (el: HTMLElement, entries: MenuEntry[]) => void
   link: (taskId: string | null) => void
@@ -608,6 +612,18 @@ function Drawer({
   setTarget: (target: string) => void
 }) {
   // Where its review, pipeline and issue are, read on the forge (again after a change of the branch).
+  const box = useRef<HTMLElement>(null)
+  // Over the page: a click outside it closes it, except on a row of the table (which opens that row instead), in a
+  // menu, or while a dialog (a confirmation) is open.
+  useEffect(() => {
+    const down = (e: PointerEvent) => {
+      const at = e.target instanceof Element ? e.target : null
+      if (!at || box.current?.contains(at) || at.closest('.lib-row, [role="menu"], dialog') || document.querySelector('dialog[open]')) return
+      dismiss()
+    }
+    document.addEventListener('pointerdown', down, true)
+    return () => document.removeEventListener('pointerdown', down, true)
+  }, [dismiss])
   const [links, setLinks] = useState<Read>('loading')
   const [failed, setFailed] = useState<string[]>([])
   const linkKey = `${r.key}\u0000${r.reviewState}\u0000${r.ci}\u0000${r.headSha}\u0000${r.reviewDraft}`
@@ -654,6 +670,7 @@ function Drawer({
     // As the Kanban's panel of the branches without a task: at the window's right edge, its head, its body that
     // scrolls, its keys at the foot.
     <aside
+      ref={box}
       className="lib-drawer"
       aria-labelledby="lib-drawer-title"
       onKeyDown={(e) => {
