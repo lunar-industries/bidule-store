@@ -3,9 +3,7 @@ import {
   BannerTools,
   busy,
   errorMessage,
-  Modal,
   navigate,
-  openDialog,
   react,
   useFocusMode,
   useHint,
@@ -14,7 +12,11 @@ import {
   type Board,
   type Task,
 } from '@bidule/sdk'
+import { confirm, type Ask } from '@bidule/ext-lunar-industries-common/ui/confirm'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
+import { Alert, Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
+import { doneOf, TaskField, type TaskProblem } from '@bidule/ext-lunar-industries-common/ui/tasks'
 import type { DayLine, DayState, DaySummary, DayView, LineInput, Props, Summary } from '../contract.ts'
 import { api, board as readBoard, moveTask } from './api.ts'
 import { Calendar, type MonthCursor } from './Calendar.tsx'
@@ -46,7 +48,6 @@ import {
   weekRange,
   workText,
 } from './format.ts'
-import { TaskPicker, type TasksProblem } from './TaskPicker.tsx'
 import './temps.css'
 
 // Kept while the app runs: coming back the same date, the page shows the day chosen again.
@@ -107,31 +108,22 @@ const fail = (err: unknown) => react('panic', errorMessage(err), errorMessage(er
 
 const EDITABLE: DayState[] = ['to_validate', 'modified', 'empty', 'to_fill', 'off']
 
-// Asks before an action that replaces what the user changed by hand; runs it at once when there is nothing to lose.
-function confirmFirst(ask: boolean, o: { title: string; body: string; confirm: string; run: () => void }) {
-  if (!ask) return o.run()
-  openDialog((close) => (
-    <Modal label={o.title} onClose={close}>
-      <h2>{o.title}</h2>
-      <p>{o.body}</p>
-      <div className="row">
-        <span className="grow" />
-        <button type="button" className="btn" onClick={close}>
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="btn-cta"
-          onClick={() => {
-            close()
-            o.run()
-          }}
-        >
-          {o.confirm}
-        </button>
-      </div>
-    </Modal>
-  ))
+// A day without lines: what it means (its title, its sentence), and what can be done about it.
+const EMPTY_DAY: Partial<Record<DayState, [string, string]>> & { empty: [string, string] } = {
+  to_fill: [
+    'Jour de travail sans activité',
+    'Un jour de travail passé doit figurer dans le Time Log : ajoute une ligne (réunion, veille…) ou marque une absence.',
+  ],
+  off: ['Jour non travaillé', "D'après tes réglages, rien n'est attendu ce jour-là."],
+  absent: ['Absent ce jour-là', 'La journée est notée comme absence dans le Time Log.'],
+  future: ["Ce jour n'est pas encore passé", 'Il sera proposé une fois passé.'],
+  empty: ["Aucune activité pour l'instant", 'La journée se remplira avec tes commits et tes changements de statut.'],
+}
+
+// Asks before an action that replaces what the user changed by hand (the common confirmation, the focus on « Annuler »:
+// something is lost); runs it at once when there is nothing to lose.
+async function confirmFirst(ask: boolean, question: Omit<Ask, 'danger'>, run: () => void) {
+  if (!ask || (await confirm({ ...question, danger: true }))) run()
 }
 
 // Taken from quack-board (pages/temps, Simon's): the week on the left, the chosen day on the right, shared out in
@@ -148,7 +140,7 @@ export function TempsPage() {
   const [cal, setCal] = useState<MonthCursor | null>(null)
   const [month, setMonth] = useState<DaySummary[]>([])
   const [taskBoard, setBoard] = useState<Board | null>(null)
-  const [tasksProblem, setTasksProblem] = useState<TasksProblem | null>(null)
+  const [tasksProblem, setTasksProblem] = useState<TaskProblem | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [edits, setEdits] = useState<Line[] | null>(null)
   const [saving, setSaving] = useState(false)
@@ -338,6 +330,9 @@ export function TempsPage() {
   const canSend = lines.length > 0 && total === DAY_SHARES && !orphans.length && !working && !view?.logProblem
   const tasks: Task[] = taskBoard?.tasks ?? []
   const columns = taskBoard?.columns ?? []
+  const done = useMemo(() => doneOf(columns), [columns])
+  // What the task fields offer: null while the tasks are read.
+  const offered = taskBoard || tasksProblem ? tasks : null
   const labels = view?.labels ?? []
   const extras = view?.extras ?? []
   const workDays = summary?.workDays ?? [1, 2, 3, 4, 5]
@@ -594,26 +589,31 @@ export function TempsPage() {
   }
   const name = dayName(shownDay)
   const markAbsent = () =>
-    confirmFirst(handMade, {
-      title: `Marquer le ${name} absent ?`,
-      body: 'Une seule ligne d’absence remplace tes changements faits à la main sur cette journée.',
-      confirm: 'Marquer absent',
-      run: () => act(api.absent, () => react('quack', `Le ${name} est marqué absent : envoie-le au Time Log quand c’est bon.`)),
-    })
+    void confirmFirst(
+      handMade,
+      {
+        title: `Marquer le ${name} absent ?`,
+        text: 'Une seule ligne d’absence remplace tes changements faits à la main sur cette journée.',
+        action: 'Marquer absent',
+      },
+      () => act(api.absent, () => react('quack', `Le ${name} est marqué absent : envoie-le au Time Log quand c’est bon.`))
+    )
   const recompute = () =>
-    confirmFirst(handMade, {
-      title: `Recalculer le ${name} ?`,
-      body: 'La journée est refaite depuis git et tes tâches : tes changements faits à la main sont perdus.',
-      confirm: 'Recalculer',
-      run: () => act(api.recompute, () => react('quack', "J'ai tout recalculé depuis git et tes tâches.")),
-    })
+    void confirmFirst(
+      handMade,
+      {
+        title: `Recalculer le ${name} ?`,
+        text: 'La journée est refaite depuis git et tes tâches : tes changements faits à la main sont perdus.',
+        action: 'Recalculer',
+      },
+      () => act(api.recompute, () => react('quack', "J'ai tout recalculé depuis git et tes tâches."))
+    )
   const discard = () =>
-    confirmFirst(true, {
-      title: `Abandonner les modifications du ${name} ?`,
-      body: 'La journée revient à ce que le Time Log en a.',
-      confirm: 'Abandonner',
-      run: () => act(api.discard),
-    })
+    void confirmFirst(
+      true,
+      { title: `Abandonner les modifications du ${name} ?`, text: 'La journée revient à ce que le Time Log en a.', action: 'Abandonner' },
+      () => act(api.discard)
+    )
   // Read now, keeping the draft: what waits is saved first.
   const reread = () =>
     void (async () => {
@@ -661,41 +661,21 @@ export function TempsPage() {
       Encore « à faire » malgré des commits : passer en {column}
     </button>
   )
-  const send = () => {
+  const send = async () => {
     const n = lines.filter((l) => l.share > 0).length
-    openDialog((close) => (
-      <Modal label="Envoyer la journée au Time Log" onClose={close}>
-        <h2>Envoyer la journée au Time Log ?</h2>
-        <p>
-          {n} ligne{n > 1 ? 's' : ''} {n > 1 ? 'seront écrites' : 'sera écrite'} dans le Time Log ; les lignes de ce jour qui n'y sont plus
-          seront retirées.
-        </p>
-        <div className="row">
-          <span className="grow" />
-          <button type="button" className="btn" onClick={close}>
-            Annuler
-          </button>
-          <button
-            type="button"
-            className="btn-cta"
-            onClick={() => {
-              close()
-              void (async () => {
-                await flush()
-                await run(async () => {
-                  show(await api.send(shownDay))
-                  loadWeek()
-                  loadSummary()
-                  react('quack', 'Coin coin ! Tout est parti dans le Time Log.', 'Journée envoyée dans le Time Log')
-                })
-              })()
-            }}
-          >
-            Envoyer
-          </button>
-        </div>
-      </Modal>
-    ))
+    const yes = await confirm({
+      title: 'Envoyer la journée au Time Log ?',
+      text: `${n} ligne${n > 1 ? 's' : ''} ${n > 1 ? 'seront écrites' : 'sera écrite'} dans le Time Log ; les lignes de ce jour qui n'y sont plus seront retirées.`,
+      action: 'Envoyer',
+    })
+    if (!yes) return
+    await flush()
+    await run(async () => {
+      show(await api.send(shownDay))
+      loadWeek()
+      loadSummary()
+      react('quack', 'Coin coin ! Tout est parti dans le Time Log.', 'Journée envoyée dans le Time Log')
+    })
   }
 
   const valueOf = (props: Props, name: string) => {
@@ -710,7 +690,15 @@ export function TempsPage() {
   // A task search, with the choice of no task next to it.
   const addRow = (className: string): ReactNode => (
     <div className={`row lit-attach ${className}`}>
-      <TaskPicker tasks={tasks} columns={columns} problem={tasksProblem} label="Chercher une tâche à ajouter" onPick={add} />
+      <TaskField
+        label="Chercher une tâche à ajouter"
+        placeholder="Titre ou référence…"
+        tasks={offered}
+        done={done}
+        problem={tasksProblem}
+        retry={loadBoard}
+        onPick={(t) => add(t.id)}
+      />
       <button type="button" className="btn" onClick={() => add('')}>
         Sans tâche
       </button>
@@ -761,31 +749,20 @@ export function TempsPage() {
       <section className="panel lit-week" aria-label="Choisir un jour" aria-busy={weekLoading}>
         <div className="row lit-week-head">
           <button type="button" className="btn icon" aria-label="Semaine précédente" onClick={() => go(dayKey(addDays(parseDay(day), -7)))}>
-            ‹
+            <Icon name="left" />
           </button>
           <div className="lit-week-title">
             <div className="baloo lit-week-name">Semaine {weekNumber(weekStart)}</div>
             <div className="legend">{weekRange(weekStart)}</div>
           </div>
           <button type="button" className="btn icon" aria-label="Semaine suivante" onClick={() => go(dayKey(addDays(parseDay(day), 7)))}>
-            ›
+            <Icon name="right" />
           </button>
         </div>
         {weekError ? (
-          <div className="row lit-week-status">
-            <span className="test-result bad grow" role="alert">
-              {weekError}
-            </span>
-            <button type="button" className="btn" onClick={loadWeek}>
-              Réessayer
-            </button>
-          </div>
+          <Alert retry={loadWeek}>La semaine n’a pas pu être lue : {weekError}</Alert>
         ) : (
-          weekLoading && (
-            <p className="muted lit-week-status" role="status">
-              Lecture de la semaine…
-            </p>
-          )
+          weekLoading && <Loading>Lecture de la semaine…</Loading>
         )}
         {/* One stop for Tab, the arrows go to the previous or next day and show it. */}
         <div
@@ -841,7 +818,7 @@ export function TempsPage() {
           <h2 id="lit-day-title" className="baloo lit-day-title">
             {dayTitle(shownDay)}
           </h2>
-          {view && <span className={`tag lit-tone-${recorded ? 'ok' : PENDING.includes(state) ? 'warn' : 'neutral'}`}>{STATE_LABEL[state]}</span>}
+          {view && <span className={`tag lunar-tone-${recorded ? 'ok' : PENDING.includes(state) ? 'warn' : 'neutral'}`}>{STATE_LABEL[state]}</span>}
           {offWithActivity && <span className="legend">Jour non travaillé d'après tes réglages, mais il y a eu de l'activité.</span>}
           <span className="grow" />
           {editable && (
@@ -853,27 +830,18 @@ export function TempsPage() {
               disabled={working}
               onClick={(e) => openMenu(e.currentTarget, moreEntries(), 'Autres actions sur ce jour')}
             >
-              ⋯
+              <Icon name="more" />
             </button>
           )}
         </div>
 
         {dayError && (
-          <div className="row lit-alert" role="alert">
-            <span className="test-result bad grow">
-              {dayError}
-              {view ? ' Ce qui suit est la dernière lecture de cette journée.' : ''}
-            </span>
-            <button type="button" className="btn" onClick={() => void loadDay(day)}>
-              Réessayer
-            </button>
-          </div>
+          <Alert retry={() => void loadDay(day)}>
+            La journée n’a pas pu être lue : {dayError}
+            {view ? ' Ce qui suit est la dernière lecture de cette journée.' : ''}
+          </Alert>
         )}
-        {!view && !dayError && (
-          <p className="muted" role="status">
-            Lecture de la journée…
-          </p>
-        )}
+        {!view && !dayError && <Loading lines={4}>Lecture de la journée…</Loading>}
 
         {view?.logProblem && editable && <p className="lit-problem">{view.logProblem}</p>}
 
@@ -953,17 +921,17 @@ export function TempsPage() {
                         aria-expanded={open}
                         onClick={() => setSelected(open ? null : r.rowId)}
                       >
-                        <span className="lit-chevron" aria-hidden="true">
-                          ›
+                        <span className="lit-chevron">
+                          <Icon name="right" size={14} />
                         </span>
                         <span className={`dot lit-chip-dot${r.orphan ? ' orphan' : ''}`} style={r.orphan ? undefined : { background: r.color }} />
                         {r.ref && !r.orphan && <span className="card-id">{r.ref}</span>}
                         <span className={`ellipsis lit-line-title${r.orphan ? ' mono' : ''}`}>{r.name}</span>
                         {r.where && !r.orphan && <span className="mono ellipsis lit-line-where">{r.where}</span>}
                         {(r.orphan || r.kept || (!r.taskId && !r.branch)) && (
-                          <span className={`tag lit-tone-${r.orphan ? 'bad' : 'neutral'}`}>{r.kept ? 'sans tâche, voulu' : 'sans tâche'}</span>
+                          <span className={`tag lunar-tone-${r.orphan ? 'bad' : 'neutral'}`}>{r.kept ? 'sans tâche, voulu' : 'sans tâche'}</span>
                         )}
-                        {r.tiny && <span className="tag lit-tone-warn">moins de 0,05 j</span>}
+                        {r.tiny && <span className="tag lunar-tone-warn">moins de 0,05 j</span>}
                       </button>
                       {editable ? (
                         <>
@@ -989,7 +957,7 @@ export function TempsPage() {
                         </>
                       ) : (
                         <>
-                          <span className="tag lit-tone-neutral">{r.label}</span>
+                          <span className="tag lunar-tone-neutral">{r.label}</span>
                           <span className="baloo lit-line-share">{fmtShare(r.share)}</span>
                         </>
                       )}
@@ -1002,12 +970,15 @@ export function TempsPage() {
                           Des commits sur <span className="mono">{r.where}</span> ne sont liés à aucune tâche. C'était pour quoi ?
                         </p>
                         <div className="row lit-attach">
-                          <TaskPicker
-                            tasks={tasks}
-                            columns={columns}
-                            problem={tasksProblem}
+                          <TaskField
                             label="Rattacher à une tâche"
-                            onPick={(id) => void resolve(r.index, { taskId: id })}
+                            placeholder="Titre ou référence…"
+                            tasks={offered}
+                            done={done}
+                            problem={tasksProblem}
+                            retry={loadBoard}
+                            hint={r.branch ?? undefined}
+                            onPick={(t) => void resolve(r.index, { taskId: t.id })}
                           />
                           <button type="button" className="btn" disabled={working} onClick={() => void resolve(r.index, { confirmed: true })}>
                             Garder sans tâche
@@ -1026,7 +997,7 @@ export function TempsPage() {
                             {r.evidence.map((s, i) => (
                               <li key={i} className="row">
                                 <span className="mono muted">{s.time}</span>
-                                <span className="tag lit-tone-neutral">{s.kind}</span>
+                                <span className="tag lunar-tone-neutral">{s.kind}</span>
                                 <span className="ellipsis">{s.detail}</span>
                               </li>
                             ))}
@@ -1127,43 +1098,24 @@ export function TempsPage() {
         ) : (
           view && (
             // A day without lines: what it means, and what can be done about it.
-            <div className="empty lit-empty">
-              {state === 'to_fill' ? (
-                <>
-                  <h3 className="baloo">Jour de travail sans activité</h3>
-                  <p className="legend">Un jour de travail passé doit figurer dans le Time Log : ajoute une ligne (réunion, veille…) ou marque une absence.</p>
-                </>
-              ) : state === 'off' ? (
-                <>
-                  <h3 className="baloo">Jour non travaillé</h3>
-                  <p className="legend">D'après tes réglages, rien n'est attendu ce jour-là.</p>
-                </>
-              ) : state === 'absent' ? (
-                <>
-                  <h3 className="baloo">Absent ce jour-là</h3>
-                  <p className="legend">La journée est notée comme absence dans le Time Log.</p>
-                </>
-              ) : state === 'future' ? (
-                <>
-                  <h3 className="baloo">Ce jour n'est pas encore passé</h3>
-                  <p className="legend">Il sera proposé une fois passé.</p>
-                </>
-              ) : (
-                <>
-                  <h3 className="baloo">Aucune activité pour l'instant</h3>
-                  <p className="legend">La journée se remplira avec tes commits et tes changements de statut.</p>
-                </>
-              )}
-              {editable && (
-                <>
-                  {addRow('lit-empty-add')}
-                  {state !== 'off' && (
-                    <button type="button" className="btn" disabled={working} onClick={markAbsent}>
-                      Marquer absent
-                    </button>
-                  )}
-                </>
-              )}
+            <div className="lit-empty">
+            <Empty
+              title={EMPTY_DAY[state]?.[0] ?? EMPTY_DAY.empty[0]}
+              action={
+                editable && (
+                  <>
+                    {addRow('lit-empty-add')}
+                    {state !== 'off' && (
+                      <button type="button" className="btn" disabled={working} onClick={markAbsent}>
+                        Marquer absent
+                      </button>
+                    )}
+                  </>
+                )
+              }
+            >
+              {EMPTY_DAY[state]?.[1] ?? EMPTY_DAY.empty[1]}
+            </Empty>
             </div>
           )
         )}
@@ -1187,7 +1139,7 @@ export function TempsPage() {
                 Abandonner les modifications…
               </button>
             )}
-            <button type="button" className="btn-cta" disabled={!canSend} onClick={send}>
+            <button type="button" className="btn-cta" disabled={!canSend} onClick={() => void send()}>
               {state === 'modified' ? 'Renvoyer au Time Log' : 'Envoyer au Time Log'}
             </button>
           </footer>

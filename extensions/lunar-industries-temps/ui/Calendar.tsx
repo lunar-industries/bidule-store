@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import type { DaySummary } from '../contract.ts'
 import { dayKey, monthStep, monthTitle, parseDay, STATE_DOT, STATE_LABEL } from './format.ts'
 
@@ -132,11 +133,11 @@ export function Calendar({
     >
       <div className="row">
         <button type="button" className="btn icon" aria-label="Mois précédent" onClick={() => shift(-1)}>
-          ‹
+          <Icon name="left" />
         </button>
         <span className="grow baloo lit-cal-title">{monthTitle(cursor.y, cursor.m)}</span>
         <button type="button" className="btn icon" aria-label="Mois suivant" onClick={() => shift(1)}>
-          ›
+          <Icon name="right" />
         </button>
       </div>
       <div className="lit-cal-grid" role="grid" aria-label={monthTitle(cursor.y, cursor.m)}>

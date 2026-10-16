@@ -41,10 +41,14 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
   et « Modifier ». En mode focus, la mascotte reste au-dessus d'elle (`useMascotClearance`).
 - **Le matin**, avant toute activité, la page ouvre le jour de travail précédent s'il reste à valider ou à remplir, et
   la mascotte le dit (« Hier n'est pas encore validé, je te l'ai ouvert »).
-- **Le chargement et les échecs** : « Lecture de la journée… » pendant la première lecture d'un jour ; un échec est
-  dit avec Réessayer, au-dessus de la dernière lecture s'il y en a une. Le sélecteur de tâches (`ui/TaskPicker.tsx`)
-  dit « Aucune tâche ne correspond », « Aucun fournisseur de tâches » (avec un lien vers Réglages › Extensions) ou
-  pourquoi les tâches n'ont pas pu être lues.
+- **Le chargement et les échecs** (`Loading`, `Alert` et `Empty` de `lunar-industries-common`) : « Lecture de la
+  journée… » pendant la première lecture d'un jour ; un échec est dit avec Réessayer, au-dessus de la dernière lecture
+  s'il y en a une. Les champs de tâche sont le `TaskField` commun : il se vide après chaque choix ; celui d'une branche
+  sans tâche propose d'abord les tâches qui partagent ses mots. Il dit « Aucune tâche ne correspond », « Aucun module
+  de tâches actif » (avec Réglages › Extensions) ou pourquoi les tâches n'ont pas pu être lues (avec Réessayer).
+- **Les confirmations** sont le `confirm` commun. Marquer absent, recalculer et abandonner les modifications font
+  perdre des changements faits à la main : le focus est sur « Annuler » et l'action en rouge. Les icônes (les flèches
+  de la semaine et du calendrier, « plus », le chevron d'une ligne) et les teintes des étiquettes sont les communes.
 - **La fenêtre étroite** : sous 1 200 px, l'étiquette et la part d'une ligne passent sous son nom ; sous 900 px, la
   semaine passe au-dessus du jour, ses sept jours sur une ligne.
 - **La partie de fond** (`ui/Background.tsx`) met sur l'onglet le nombre de jours à valider ou à remplir parmi les
@@ -56,22 +60,20 @@ Ce qui se calcule sans rien dessiner est dans `ui/format.ts` et testé dans `ui/
 
 Toutes dans `ui/temps.css`, sous `lit-` :
 
-- La page : `lit-temps`, les tons `lit-tone-ok`, `lit-tone-warn`, `lit-tone-bad`, `lit-tone-neutral`, `lit-nowrap`.
-- La semaine : `lit-week`, `lit-week-head`, `lit-week-title`, `lit-week-name`, `lit-week-status`
-  (lecture en cours ou échec), `lit-week-days`, `lit-week-day` (`today`, `off`), `lit-week-dot` (`hollow`),
+- La page : `lit-temps`, `lit-nowrap`.
+- La semaine : `lit-week`, `lit-week-head`, `lit-week-title`, `lit-week-name`, `lit-week-days`, `lit-week-day` (`today`, `off`), `lit-week-dot` (`hollow`),
   `lit-week-day-name`, `lit-week-day-today`, `lit-week-day-state`, `lit-week-day-total` (`recorded`),
   `lit-week-work`, `lit-week-pending`, `lit-week-pending-text`.
 - Le calendrier : `lit-cal`, `lit-cal-title`, `lit-cal-grid`, `lit-cal-week`, `lit-cal-letter`, `lit-cal-day`
   (`today`, `future`), `lit-cal-dot`, `lit-cal-key`, `lit-cal-key-dot`.
-- Le jour : `lit-day`, `lit-day-head`, `lit-day-title`, `lit-day-legend`, `lit-alert` (une lecture qui a échoué),
+- Le jour : `lit-day`, `lit-day-head`, `lit-day-title`, `lit-day-legend`,
   `lit-problem` (pourquoi la journée ne s'envoie pas), `lit-bar-wrap`, `lit-bar`, `lit-rest`, `lit-scale`, `lit-seg`
   (`orphan`), `lit-seg-title`, `lit-seg-share`, `lit-grip`.
 - Les lignes : `lit-lines`, `lit-line` (`zero`, `open`), `lit-line-row`, `lit-line-name`, `lit-chevron`,
   `lit-chip-dot` (`orphan`), `lit-line-title`, `lit-line-where`, `lit-line-label`, `lit-line-share-pick`,
   `lit-line-share`, `lit-line-detail`, `lit-line-actions`, `lit-line-fix`, `lit-started`, `lit-evidence`, `lit-chips`,
   `lit-check`.
-- L'ajout d'une ligne et le sélecteur : `lit-attach`, `lit-add`, `lit-empty` (avec `empty` du cœur), `lit-empty-add`,
-  `lit-picker`, `lit-picker-list`, `lit-picker-item`, `lit-picker-note`.
+- L'ajout d'une ligne : `lit-attach`, `lit-add`, `lit-empty` (autour de l'`Empty` commun), `lit-empty-add`.
 - La barre d'envoi : `lit-foot`, `lit-checks`, `lit-check-line` (`ok`).
 - Réglages › Temps : `lit-workdays`.
 
