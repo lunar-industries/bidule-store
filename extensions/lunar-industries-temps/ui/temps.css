@@ -403,9 +403,9 @@
 .lit-line.zero .lit-line-share {
   color: var(--text-off);
 }
-/* A line's label and share: chosen in lists drawn as the core's fields (`.field select`). */
-.lit-line-label,
-.lit-line-share-pick {
+/* A line's label, chosen in a list drawn as the core's fields (`.field select`); its share, with − and + on its sides. */
+.lit-line-label {
+  width: 170px;
   height: 40px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-md);
@@ -415,12 +415,13 @@
   font-size: var(--fs-md);
   font-weight: 600;
 }
-.lit-line-label {
-  width: 170px;
+.lit-line-step {
+  flex: none;
+  gap: var(--space-1);
+  align-items: center;
 }
-.lit-line-share-pick {
-  width: 96px;
-  font-weight: 700;
+.lit-line-step .lit-line-share {
+  min-width: 64px;
 }
 .lit-line-share {
   min-width: 44px;

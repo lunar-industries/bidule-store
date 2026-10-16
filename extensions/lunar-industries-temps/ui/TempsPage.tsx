@@ -40,7 +40,6 @@ import {
   PENDING,
   previousWorkDay,
   sentAtText,
-  SHARE_CHOICES,
   shift,
   STATE_DOT,
   STATE_LABEL,
@@ -486,9 +485,10 @@ export function TempsPage() {
     setLines(change(lines.map((l) => ({ ...l }))))
     queueSave()
   }
-  const setShare = (index: number, share: number) =>
+  // − and + on a line: a twentieth of a day less or more, between 0 and the whole day.
+  const step = (index: number, delta: number) =>
     edit((ls) => {
-      ls[index].share = share
+      ls[index].share = Math.min(DAY_SHARES, Math.max(0, ls[index].share + delta))
       return ls
     })
   const setShares = (from: Line[], left: number, right: number | null, delta: number) => {
@@ -942,18 +942,24 @@ export function TempsPage() {
                               </option>
                             ))}
                           </select>
-                          <select
-                            className="baloo lit-line-share-pick"
-                            aria-label={`Part de ${r.name}`}
-                            value={r.share}
-                            onChange={(e) => setShare(r.index, Number(e.target.value))}
-                          >
-                            {SHARE_CHOICES.map((n) => (
-                              <option key={n} value={n}>
-                                {fmtShare(n)} j
-                              </option>
-                            ))}
-                          </select>
+                          <span className="row lit-line-step" role="group" aria-label={`Part de ${r.name}`}>
+                            <button type="button" className="icon-btn" aria-label={`Retirer 0,05 j à ${r.name}`} title="Retirer 0,05 j" disabled={!r.share} onClick={() => step(r.index, -1)}>
+                              <Icon name="minus" size={14} />
+                            </button>
+                            <span className="baloo lit-line-share" aria-live="polite">
+                              {fmtShare(r.share)} j
+                            </span>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label={`Ajouter 0,05 j à ${r.name}`}
+                              title="Ajouter 0,05 j"
+                              disabled={r.share >= DAY_SHARES}
+                              onClick={() => step(r.index, 1)}
+                            >
+                              <Icon name="plus" size={14} />
+                            </button>
+                          </span>
                         </>
                       ) : (
                         <>

@@ -32,7 +32,7 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
   points creux et « … » (jamais « aucune activité »), en cas d'échec le message avec Réessayer.
 - **Le jour** à droite : la barre (un segment par ligne, la couleur de l'étiquette mêlée à la carte sous le texte du
   thème, lisible sur tous les thèmes), dont on tire les frontières à la souris ou aux flèches ; puis une ligne par
-  tâche, avec son étiquette et sa part dans deux listes (la part de 0 à 1 j par 0,05). Une branche sans tâche se règle
+  tâche, avec son étiquette dans une liste et sa part entre − et + (0,05 j de moins ou de plus, de 0 à 1 j). Une branche sans tâche se règle
   sous sa ligne. Le menu ⋯ (le menu commun de `lunar-industries-common`) : « Relire le Time Log », « Marquer
   absent… », « Recalculer depuis git et les tâches… », « Abandonner les modifications… ». Les trois derniers demandent
   confirmation quand le brouillon a des changements faits à la main (`edited`, ou des modifications pas encore
@@ -70,7 +70,7 @@ Toutes dans `ui/temps.css`, sous `lit-` :
   `lit-problem` (pourquoi la journée ne s'envoie pas), `lit-bar-wrap`, `lit-bar`, `lit-rest`, `lit-scale`, `lit-seg`
   (`orphan`), `lit-seg-title`, `lit-seg-share`, `lit-grip`.
 - Les lignes : `lit-lines`, `lit-line` (`zero`, `open`), `lit-line-row`, `lit-line-name`, `lit-chevron`,
-  `lit-chip-dot` (`orphan`), `lit-line-title`, `lit-line-where`, `lit-line-label`, `lit-line-share-pick`,
+  `lit-chip-dot` (`orphan`), `lit-line-title`, `lit-line-where`, `lit-line-label`, `lit-line-step`,
   `lit-line-share`, `lit-line-detail`, `lit-line-actions`, `lit-line-fix`, `lit-started`, `lit-evidence`, `lit-chips`,
   `lit-check`.
 - L'ajout d'une ligne : `lit-attach`, `lit-add`, `lit-empty` (autour de l'`Empty` commun), `lit-empty-add`.

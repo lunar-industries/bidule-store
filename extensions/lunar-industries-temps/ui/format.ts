@@ -100,9 +100,6 @@ export function labelColor(label: string, labels: string[]): string {
   return i < 0 ? 'var(--chip-hover)' : `var(--task-${(i % LABEL_COLOURS) + 1})`
 }
 
-// The shares a line can be given in its list: 0 (a line not given any yet) to the whole day, by twentieths.
-export const SHARE_CHOICES = Array.from({ length: DAY_SHARES + 1 }, (_, i) => i)
-
 // How a signal behind a line reads (the kinds of the core's activity, as the engine names them).
 const KINDS: Record<string, string> = {
   commit: 'commit',
