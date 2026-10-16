@@ -6,16 +6,14 @@
   --lib-bad-bg: color-mix(in srgb, var(--bad-ink) 10%, var(--card));
 }
 
-/* The table, and beside it the drawer (sticky while the table scrolls): with it open, the table hides its review, CI
-   and commit columns, which the drawer says. */
+/* The table; the drawer at the window's right edge, the table keeping clear of it (on a narrow window, it goes over
+   the table). With it open, the table hides its review, CI and commit columns, which the drawer says. */
 .page.lib-page {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
 }
 .page.lib-page.with-drawer {
-  grid-template-columns: minmax(0, 1fr) 440px;
+  padding-right: calc(min(460px, 100vw) + var(--space-4));
 }
 .lib-main {
   display: flex;
@@ -237,33 +235,58 @@
   display: none;
 }
 
-/* ---------- the drawer: stuck in view while the table scrolls */
-.panel.lib-drawer {
-  position: sticky;
-  top: var(--space-4);
-  max-height: calc(100vh - 2 * var(--space-6));
-  overflow-y: auto;
-  gap: var(--space-4);
-  border-color: var(--card-hover);
-}
-.lib-back {
-  align-self: flex-start;
-}
-.lib-drawer-head {
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-.lib-drawer-title {
+/* ---------- the drawer: drawn as the Kanban's panel of the branches without a task, at the window's right edge under
+   the title bar: its head, its body that scrolls, its keys at the foot. */
+.lib-drawer {
+  position: fixed;
+  z-index: 30;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
+  border-left: 2px solid var(--card-line);
+  background: var(--banner);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
 }
-.lib-drawer-title h2 {
+.lib-drawer-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 2px solid var(--card-line);
+}
+.lib-drawer-head .row {
+  gap: var(--space-1);
+}
+.lib-drawer-head h2 {
   margin: 0;
   font-size: var(--fs-lg);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.lib-drawer-head p {
+  margin: 0;
+}
+.lib-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+.lib-drawer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 2px solid var(--card-line);
+}
+.lib-drawer-foot kbd {
+  font-family: 'JetBrains Mono', monospace;
 }
 /* Where it is with its review, its CI and origin, in three small boxes. */
 .lib-facts {
@@ -445,8 +468,7 @@
   gap: var(--space-2);
 }
 
-/* A narrow window: the table keeps the branch (its task under it), the state and the action; the drawer takes the
-   whole page, with its way back. */
+/* A narrow window: the table keeps the branch (its task under it), the state and the action; the drawer goes over it. */
 @media (max-width: 1000px) {
   .lib-col-extra,
   .lib-col-task {
@@ -456,13 +478,6 @@
     display: block;
   }
   .page.lib-page.with-drawer {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .lib-page.with-drawer .lib-main {
-    display: none;
-  }
-  .panel.lib-drawer {
-    position: static;
-    max-height: none;
+    padding-right: 0;
   }
 }

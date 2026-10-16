@@ -276,6 +276,8 @@ export function BranchesPage() {
       e.preventDefault()
       const next = visible[Math.max(0, Math.min(visible.length - 1, to))]
       setActive(next.key)
+      // The panel open follows the row chosen.
+      if (opened) setOpened(next.key)
       document.getElementById(rowId(next.key))?.scrollIntoView({ block: 'nearest' })
     } else if (e.key === 'Enter' && row) {
       e.preventDefault()
@@ -649,8 +651,10 @@ function Drawer({
 
   const current = r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? `Tâche inconnue · ${r.taskId.slice(0, 6)}` : ''
   return (
+    // As the Kanban's panel of the branches without a task: at the window's right edge, its head, its body that
+    // scrolls, its keys at the foot.
     <aside
-      className="panel lib-drawer"
+      className="lib-drawer"
       aria-labelledby="lib-drawer-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) {
@@ -659,115 +663,125 @@ function Drawer({
         }
       }}
     >
-      {narrow && (
-        <button type="button" className="btn lib-btn-sm lib-back" onClick={close}>
-          ‹ Toutes les branches
-        </button>
-      )}
-      <header className="row lib-drawer-head">
-        <div className="grow lib-drawer-title">
-          <h2 id="lib-drawer-title" className="mono selectable">
+      <header className="lib-drawer-head">
+        <div className="row">
+          <h2 id="lib-drawer-title" className="grow mono selectable">
             {r.name}
           </h2>
-          <span className="legend">
-            {r.repoLabel} · dernier commit il y a {relTime(r.lastCommitAt)}
-          </span>
-        </div>
-        <button type="button" className="icon-btn" aria-label={`Plus d’actions pour ${r.name}`} title="Plus d’actions" onClick={(e) => menu(e.currentTarget)}>
-          ⋯
-        </button>
-        {!narrow && (
-          <button type="button" className="icon-btn" aria-label="Fermer le détail (Échap)" title="Fermer (Échap)" onClick={close}>
-            ×
+          <button type="button" className="icon-btn" aria-label={`Plus d’actions pour ${r.name}`} title="Plus d’actions" onClick={(e) => menu(e.currentTarget)}>
+            ⋯
           </button>
-        )}
+          <button type="button" className="icon-btn" aria-label="Fermer (Échap)" title="Fermer (Échap)" onClick={close}>
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <p className="legend">
+          {r.repoLabel} · dernier commit il y a {relTime(r.lastCommitAt)}
+        </p>
       </header>
 
-      <ol className="lib-steps" aria-label="Étapes de la branche">
-        {r.steps.map((st) => (
-          <li key={st.id} className={`lib-step ${st.state}`} aria-current={st.state === 'current' ? 'step' : undefined}>
-            <span className="lib-step-track" aria-hidden="true">
-              <span className="lib-step-mark" />
-            </span>
-            <span className="lib-step-label">
-              {st.label}
-              <span className="sr-only">{st.state === 'done' ? ', faite' : st.state === 'current' ? ', en cours' : ', à venir'}</span>
-            </span>
-          </li>
-        ))}
-      </ol>
+      <div className="lib-drawer-body">
+        <ol className="lib-steps" aria-label="Étapes de la branche">
+          {r.steps.map((st) => (
+            <li key={st.id} className={`lib-step ${st.state}`} aria-current={st.state === 'current' ? 'step' : undefined}>
+              <span className="lib-step-track" aria-hidden="true">
+                <span className="lib-step-mark" />
+              </span>
+              <span className="lib-step-label">
+                {st.label}
+                <span className="sr-only">{st.state === 'done' ? ', faite' : st.state === 'current' ? ', en cours' : ', à venir'}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
 
-      <dl className="lib-facts">
-        <div>
-          <dt>Revue</dt>
-          <dd>{r.reviewLabel ? `${r.reviewLabel}${r.reviewState === 'closed' ? ' fermée' : r.reviewDraft ? ', brouillon' : ''}` : 'aucune'}</dd>
-        </div>
-        <div>
-          <dt>CI</dt>
-          <dd className="lib-ci" data-ci={r.ci ?? 'none'}>
-            {r.ci === 'fail' ? 'rouge' : r.ci === 'ok' ? 'verte' : r.ci === 'pending' ? 'en cours' : 'pas encore'}
-          </dd>
-        </div>
-        <div>
-          <dt>Origin</dt>
-          <dd data-warn={!r.pushed}>{r.pushed ? 'à jour' : 'à pousser'}</dd>
-        </div>
-      </dl>
+        <dl className="lib-facts">
+          <div>
+            <dt>Revue</dt>
+            <dd>{r.reviewLabel ? `${r.reviewLabel}${r.reviewState === 'closed' ? ' fermée' : r.reviewDraft ? ', brouillon' : ''}` : 'aucune'}</dd>
+          </div>
+          <div>
+            <dt>CI</dt>
+            <dd className="lib-ci" data-ci={r.ci ?? 'none'}>
+              {r.ci === 'fail' ? 'rouge' : r.ci === 'ok' ? 'verte' : r.ci === 'pending' ? 'en cours' : 'pas encore'}
+            </dd>
+          </div>
+          <div>
+            <dt>Origin</dt>
+            <dd data-warn={!r.pushed}>{r.pushed ? 'à jour' : 'à pousser'}</dd>
+          </div>
+        </dl>
 
-      <div className="row lib-task">
-        <TaskPicker label="Tâche" tasks={tasks} done={done} branches={branches} current={current} noSource={noSource} picked={link} />
-        {r.taskId && (
-          <button type="button" className="btn" onClick={() => link(null)}>
-            Délier
-          </button>
-        )}
+        <div className="row lib-task">
+          <TaskPicker label="Tâche" tasks={tasks} done={done} branches={branches} current={current} noSource={noSource} picked={link} />
+          {r.taskId && (
+            <button type="button" className="btn" onClick={() => link(null)}>
+              Délier
+            </button>
+          )}
+        </div>
+
+        {/* The one thing to do now, and its main action. */}
+        <section className="lib-next" aria-labelledby="lib-next-title">
+          <NextStep
+            row={r}
+            repo={repo}
+            links={links}
+            failed={failed}
+            busy={busy}
+            retryRead={readLinks}
+            push={push}
+            createReview={createReview}
+            ready={ready}
+            merge={merge}
+            retry={retry}
+            setTarget={setTarget}
+          />
+        </section>
+
+        <div className="row lib-actions">
+          {read?.reviewUrl && (
+            <button type="button" className="btn lib-btn-sm" onClick={() => open(read.reviewUrl)}>
+              Voir la {r.review}
+            </button>
+          )}
+          {read?.pipelineUrl && (
+            <button type="button" className="btn lib-btn-sm" onClick={() => open(read.pipelineUrl)}>
+              Voir le pipeline
+            </button>
+          )}
+          {read?.issueUrl && (
+            <button type="button" className="btn lib-btn-sm" onClick={() => open(read.issueUrl)}>
+              Voir l'issue{r.issueNumber ? ` #${r.issueNumber}` : ''}
+            </button>
+          )}
+          {r.forge && (
+            <button type="button" className="btn lib-btn-sm" disabled={busy} onClick={run}>
+              Lancer un pipeline…
+            </button>
+          )}
+          {read?.pipelineUrl && (
+            <button type="button" className="btn lib-btn-sm" aria-haspopup="menu" onClick={(e) => void showJobs(e.currentTarget)}>
+              Jobs manuels ▾
+            </button>
+          )}
+        </div>
       </div>
-
-      {/* The one thing to do now, and its main action. */}
-      <section className="lib-next" aria-labelledby="lib-next-title">
-        <NextStep
-          row={r}
-          repo={repo}
-          links={links}
-          failed={failed}
-          busy={busy}
-          retryRead={readLinks}
-          push={push}
-          createReview={createReview}
-          ready={ready}
-          merge={merge}
-          retry={retry}
-          setTarget={setTarget}
-        />
-      </section>
-
-      <div className="row lib-actions">
-        {read?.reviewUrl && (
-          <button type="button" className="btn lib-btn-sm" onClick={() => open(read.reviewUrl)}>
-            Voir la {r.review}
-          </button>
-        )}
-        {read?.pipelineUrl && (
-          <button type="button" className="btn lib-btn-sm" onClick={() => open(read.pipelineUrl)}>
-            Voir le pipeline
-          </button>
-        )}
-        {read?.issueUrl && (
-          <button type="button" className="btn lib-btn-sm" onClick={() => open(read.issueUrl)}>
-            Voir l'issue{r.issueNumber ? ` #${r.issueNumber}` : ''}
-          </button>
-        )}
-        {r.forge && (
-          <button type="button" className="btn lib-btn-sm" disabled={busy} onClick={run}>
-            Lancer un pipeline…
-          </button>
-        )}
-        {read?.pipelineUrl && (
-          <button type="button" className="btn lib-btn-sm" aria-haspopup="menu" onClick={(e) => void showJobs(e.currentTarget)}>
-            Jobs manuels ▾
-          </button>
-        )}
-      </div>
+      {!narrow && (
+        <footer className="lib-drawer-foot legend">
+          <span>
+            <kbd>↑ ↓</kbd> autre branche
+          </span>
+          <span>
+            <kbd>Menu</kbd> actions
+          </span>
+          <span>
+            <kbd>Échap</kbd> fermer
+          </span>
+        </footer>
+      )}
     </aside>
   )
 }
