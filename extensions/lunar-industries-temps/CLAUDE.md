@@ -59,7 +59,7 @@ Toutes dans `ui/temps.css`, sous `lit-` :
   (lecture en cours ou échec), `lit-week-days`, `lit-week-day` (`today`, `off`), `lit-week-dot` (`hollow`),
   `lit-week-day-name`, `lit-week-day-today`, `lit-week-day-state`, `lit-week-day-total` (`recorded`),
   `lit-week-work`, `lit-week-pending`, `lit-week-pending-text`.
-- Le calendrier : `lit-cal-anchor`, `lit-cal`, `lit-cal-title`, `lit-cal-week`, `lit-cal-letter`, `lit-cal-day`
+- Le calendrier : `lit-cal-anchor`, `lit-cal`, `lit-cal-title`, `lit-cal-grid`, `lit-cal-week`, `lit-cal-letter`, `lit-cal-day`
   (`today`, `future`), `lit-cal-dot`, `lit-cal-key`, `lit-cal-key-dot`.
 - Le jour : `lit-day`, `lit-day-head`, `lit-day-title`, `lit-day-legend`, `lit-alert` (une lecture qui a échoué),
   `lit-problem` (pourquoi la journée ne s'envoie pas), `lit-bar-wrap`, `lit-bar`, `lit-rest`, `lit-scale`, `lit-seg`

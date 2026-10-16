@@ -158,7 +158,8 @@
   z-index: 60;
   top: calc(100% + var(--space-2));
   left: 0;
-  width: 300px;
+  width: 320px;
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -168,10 +169,16 @@
   font-size: var(--fs-xl);
   font-weight: 700;
 }
+/* The weeks and their days apart from each other: a day's background or focus ring never touches its neighbours. */
+.lit-cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
 .lit-cal-week {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
 }
 .lit-cal-letter {
   text-align: center;
@@ -204,21 +211,23 @@
 .lit-cal-day[aria-pressed='true'] {
   background: var(--chip-hover);
 }
+/* The ring inside the day: drawn outside, it would cover the days around it. */
 .lit-cal-day:focus-visible {
   outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .lit-cal-dot {
   width: 4px;
   height: 4px;
 }
-/* What the dots say, under the month. */
+/* What the dots say, under the month: one after the other, each kept whole on its line. */
 .lit-cal-key {
   margin: 0;
   padding: var(--space-2) 0 0;
   border-top: 2px solid var(--card-line);
   list-style: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   font-size: var(--fs-sm);
   color: var(--text-2);
@@ -227,6 +236,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  white-space: nowrap;
 }
 .lit-cal-key-dot {
   width: 8px;
