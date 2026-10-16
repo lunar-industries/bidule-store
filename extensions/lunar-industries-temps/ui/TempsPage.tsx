@@ -1,7 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { busy, Modal, navigate, openDialog, react, useHint, useOn, type Board, type Task } from '@bidule/sdk'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import {
+  busy,
+  errorMessage,
+  Modal,
+  navigate,
+  openDialog,
+  react,
+  useFocusMode,
+  useHint,
+  useMascotClearance,
+  useOn,
+  type Board,
+  type Task,
+} from '@bidule/sdk'
+import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import type { DayLine, DayState, DaySummary, DayView, LineInput, Props, Summary } from '../contract.ts'
-import { api, board as readBoard, errorMessage, moveTask } from './api.ts'
+import { api, board as readBoard, moveTask } from './api.ts'
 import { Calendar, type MonthCursor } from './Calendar.tsx'
 import { latestOf } from './latest.ts'
 import {
@@ -9,17 +23,21 @@ import {
   bshort,
   DAY_SHARES,
   DAYS_SHORT,
+  dayCalled,
   dayKey,
   dayName,
   dayTitle,
   fmtShare,
   hm,
   isoWeekday,
+  kindLabel,
   labelColor,
   monday,
   parseDay,
   PENDING,
+  previousWorkDay,
   sentAtText,
+  SHARE_CHOICES,
   shift,
   STATE_DOT,
   STATE_LABEL,
@@ -27,7 +45,7 @@ import {
   weekRange,
   workText,
 } from './format.ts'
-import { TaskPicker } from './TaskPicker.tsx'
+import { TaskPicker, type TasksProblem } from './TaskPicker.tsx'
 import './temps.css'
 
 // Kept while the app runs: coming back the same date, the page shows the day chosen again.
@@ -38,7 +56,10 @@ const days = new Map<string, DayView>()
 const SAVE_DELAY = 600
 
 // A line as edited on the page, before it is saved.
-type Line = Pick<DayLine, 'taskId' | 'label' | 'share' | 'confirmed' | 'repo' | 'branch' | 'props' | 'tiny' | 'reason' | 'url'> & {
+type Line = Pick<
+  DayLine,
+  'taskId' | 'taskTitle' | 'taskRef' | 'label' | 'share' | 'confirmed' | 'repo' | 'branch' | 'props' | 'tiny' | 'reason' | 'url'
+> & {
   // The saved line it comes from (settling an orphan goes through it), null for a new one.
   id: string | null
   key: string
@@ -54,6 +75,8 @@ const linesOf = (view: DayView | null): Line[] =>
     id: l.id,
     key: l.key,
     taskId: l.taskId,
+    taskTitle: l.taskTitle,
+    taskRef: l.taskRef,
     label: l.label,
     share: l.share,
     confirmed: l.confirmed,
@@ -76,12 +99,39 @@ function inPageOrder(data: DayView, shown: Pick<Line, 'key' | 'label'>[]): DayVi
   return { ...data, lines: [...data.lines].sort((a, b) => rank(a) - rank(b)) }
 }
 
-// A segment's colours, as the CSS variables its style sheet reads.
-const colors = (color: string, ink: string): Record<string, string> => ({ '--c': color, '--on-c': ink })
+// A segment's label colour, as the CSS variable its style sheet mixes with the card.
+const tint = (color: string): Record<string, string> => ({ '--c': color })
 
 const fail = (err: unknown) => react('panic', errorMessage(err), errorMessage(err))
 
 const EDITABLE: DayState[] = ['to_validate', 'modified', 'empty', 'to_fill', 'off']
+
+// Asks before an action that replaces what the user changed by hand; runs it at once when there is nothing to lose.
+function confirmFirst(ask: boolean, o: { title: string; body: string; confirm: string; run: () => void }) {
+  if (!ask) return o.run()
+  openDialog((close) => (
+    <Modal label={o.title} onClose={close}>
+      <h2>{o.title}</h2>
+      <p>{o.body}</p>
+      <div className="row">
+        <span className="grow" />
+        <button type="button" className="btn" onClick={close}>
+          Annuler
+        </button>
+        <button
+          type="button"
+          className="btn-cta"
+          onClick={() => {
+            close()
+            o.run()
+          }}
+        >
+          {o.confirm}
+        </button>
+      </div>
+    </Modal>
+  ))
+}
 
 // Taken from quack-board (pages/temps, Simon's): the week on the left, the chosen day on the right, shared out in
 // twentieths of a day between its lines, then sent to the Time Log.
@@ -90,10 +140,14 @@ export function TempsPage() {
   const returning = chosen?.on === today
   const [day, setDay] = useState(() => (returning && chosen?.day) || today)
   const [view, setView] = useState<DayView | null>(() => days.get(day) ?? null)
-  const [week, setWeek] = useState<DaySummary[] | null>(null)
+  const [dayError, setDayError] = useState<string | null>(null)
+  // The week as read, with the Monday it was read for: another Monday means the week shown is still being read.
+  const [week, setWeek] = useState<{ monday: string; days: DaySummary[] } | null>(null)
+  const [weekError, setWeekError] = useState<string | null>(null)
   const [cal, setCal] = useState<MonthCursor | null>(null)
   const [month, setMonth] = useState<DaySummary[]>([])
   const [taskBoard, setBoard] = useState<Board | null>(null)
+  const [tasksProblem, setTasksProblem] = useState<TasksProblem | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [edits, setEdits] = useState<Line[] | null>(null)
   const [saving, setSaving] = useState(false)
@@ -101,7 +155,7 @@ export function TempsPage() {
   const [savedDay, setSavedDay] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
-  const [moreOpen, setMoreOpen] = useState(false)
+  const [menu, openMenu] = useMenu()
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editsRef = useRef<Line[] | null>(null)
   const viewRef = useRef<DayView | null>(view)
@@ -109,6 +163,8 @@ export function TempsPage() {
   const workingRef = useRef(false)
   const savingRef = useRef(false)
   const bar = useRef<HTMLDivElement>(null)
+  const calToggle = useRef<HTMLButtonElement>(null)
+  const foot = useRef<HTMLElement>(null)
   const drag = useRef<{ x0: number; width: number; scale: number; from: Line[]; left: number; right: number | null } | null>(null)
 
   useEffect(() => {
@@ -129,51 +185,75 @@ export function TempsPage() {
 
   const weekKey = dayKey(monday(parseDay(day)))
   const loadWeek = useCallback(() => {
-    void api.week(weekKey).then(setWeek, () => undefined)
+    void api.week(weekKey).then(
+      (list) => {
+        setWeek({ monday: weekKey, days: list })
+        setWeekError(null)
+      },
+      (err: unknown) => setWeekError(errorMessage(err))
+    )
   }, [weekKey])
   const loadSummary = useCallback(() => void api.summary().then(setSummary, () => undefined), [])
+  // The day shown, read again: what was read before stays in view if it fails.
+  const loadDay = useCallback(
+    (key: string) =>
+      api.day(key).then(
+        (v) => {
+          if (dayRef.current !== key) return
+          setDayError(null)
+          show(v)
+        },
+        (err: unknown) => dayRef.current === key && setDayError(errorMessage(err))
+      ),
+    [show]
+  )
   useEffect(() => {
-    let live = true
     setSelected(null)
-    setMoreOpen(false)
     setLines(null)
-    const cached = days.get(day)
-    if (cached) {
-      viewRef.current = cached
-      setView(cached)
-    }
-    api.day(day).then((v) => live && dayRef.current === day && show(v), fail)
-    return () => {
-      live = false
-    }
-  }, [day, show])
+    setDayError(null)
+    // A day already read shows at once, while it is read again; another shows « Lecture de la journée… ».
+    const cached = days.get(day) ?? null
+    viewRef.current = cached
+    setView(cached)
+    void loadDay(day)
+  }, [day, loadDay])
   useEffect(loadWeek, [loadWeek])
   useEffect(() => {
     if (cal) void api.month(cal.y, cal.m).then(setMonth, fail)
   }, [cal])
   // Read again at each change the core announces: only the last reading asked is kept.
   const [readLatest] = useState(() => latestOf(readBoard))
-  const loadBoard = useCallback(() => void readLatest().then(setBoard), [readLatest])
+  const loadBoard = useCallback(
+    () =>
+      void readLatest().then(
+        (b) => {
+          setBoard(b)
+          setTasksProblem(b ? null : { kind: 'none' })
+        },
+        (err: unknown) => setTasksProblem({ kind: 'failed', message: errorMessage(err) })
+      ),
+    [readLatest]
+  )
   useEffect(() => {
     loadBoard()
     loadSummary()
   }, [loadBoard, loadSummary])
   useOn('objects.changed', ({ type }) => type === 'task' && loadBoard())
 
-  // In the morning, before any activity, the previous work day still to deal with comes first (once a date).
+  // In the morning, before any activity, the previous work day still to deal with comes first (once a date), and the
+  // page says it opened it.
   const decided = useRef(returning)
   useEffect(() => {
     if (decided.current || !summary) return
     decided.current = true
     if (summary.todayState !== 'empty' && summary.todayState !== 'off') return
-    const work = new Set(summary.workDays)
-    let d = addDays(parseDay(today), -1)
-    for (let i = 0; i < 7 && !work.has(d.getDay() || 7); i++) d = addDays(d, -1)
-    const key = dayKey(d)
-    if (!work.has(d.getDay() || 7)) return
+    const key = previousWorkDay(today, summary.workDays)
+    if (!key) return
     void api.week(key).then((list) => {
       const state = list.find((x) => x.day === key)?.state
-      if ((state === 'to_validate' || state === 'to_fill') && dayRef.current === today) go(key)
+      if ((state !== 'to_validate' && state !== 'to_fill') || dayRef.current !== today) return
+      go(key)
+      react('quack', `${dayCalled(key, today)} n'est pas encore ${state === 'to_fill' ? 'rempli' : 'validé'}, je te l'ai ouvert.`)
     }, fail)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary])
@@ -220,7 +300,7 @@ export function TempsPage() {
       savingRef.current = false
       setSaving(false)
     }
-  }, [loadWeek, show])
+  }, [loadWeek, loadSummary, show])
   // Leaving the page saves what is still waiting.
   useEffect(() => () => void flush(), [flush])
 
@@ -263,6 +343,24 @@ export function TempsPage() {
   const isWorkDay = (key: string) => workDays.includes(isoWeekday(key))
   const offWithActivity = showLines && !isWorkDay(shownDay)
   const editing = () => Boolean(editsRef.current || timer.current || savingRef.current || workingRef.current)
+  // What the user changed by hand on this day: an action that replaces the draft asks first.
+  const handMade = Boolean(edits) || Boolean(view?.edited)
+  const sendBar = editable && showLines
+  const focus = useFocusMode()
+
+  // In focus mode the mascot's disc sits at the bottom right: it stays above the send bar.
+  const [footHeight, setFootHeight] = useState(0)
+  const hasFoot = sendBar || recorded
+  useEffect(() => {
+    const el = foot.current
+    if (!el) return setFootHeight(0)
+    const measure = () => setFootHeight(el.offsetHeight)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [hasFoot])
+  useMascotClearance(focus && hasFoot ? footHeight : 0)
 
   // The API announced a change of the days (new activity, the Time Log read again): the lists are read again, and the
   // day shown too, unless the user is changing it.
@@ -310,25 +408,25 @@ export function TempsPage() {
       const branch = l.branch ?? evidence.find((s) => s.branch)?.branch ?? null
       const where = branch ? bshort(branch) : null
       const orphan = !l.taskId && Boolean(l.branch) && !l.confirmed
-      // A task not on the board (someone else's) is still a task, not a label.
-      const title = t?.title ?? (l.taskId ? 'Tâche inconnue' : l.label)
+      // The API names every task, the user's or not; the board, a task just added.
+      const title = l.taskTitle ?? t?.title ?? (l.taskId ? 'Tâche inconnue' : l.label)
       const toDo = t ? columns.find((c) => c.name === t.status)?.group === 'todo' : false
       return {
         ...l,
         index,
         rowId: lineId(l),
-        ...(orphan ? { color: 'var(--bad-dot)', ink: 'var(--bad-ink)' } : labelColor(l.label, labels)),
+        color: orphan ? 'var(--bad-dot)' : labelColor(l.label, labels),
         title,
+        ref: l.taskRef ?? t?.ref ?? null,
         // A line without a task is named by its label; an orphan branch by its branch, until settled.
         name: orphan && where ? where : title,
         where,
         orphan,
-        plain: !l.taskId && !orphan,
         kept: !l.taskId && Boolean(l.branch) && l.confirmed,
         // Commits on a task the source still lists as to do (today's, or those of the last weeks): the status was probably
         // forgotten.
         start: toDo && (evidence.some((s) => s.kind === 'commit') || (l.taskId !== null && (view?.started.includes(l.taskId) ?? false))) ? startColumn : null,
-        evidence: evidence.map((s) => ({ time: hm(s.minute), kind: s.kind, detail: s.detail })),
+        evidence: evidence.map((s) => ({ time: hm(s.minute), kind: kindLabel(s.kind), detail: s.detail })),
       }
     })
   }, [lines, view, tasks, columns, labels])
@@ -349,10 +447,11 @@ export function TempsPage() {
     : null
 
   const weekStart = monday(parseDay(day))
+  const weekLoading = week?.monday !== weekKey
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(weekStart, i)
     const key = dayKey(d)
-    const found = week?.find((x) => x.day === key)
+    const found = weekLoading ? undefined : week?.days.find((x) => x.day === key)
     const st = found?.state ?? 'empty'
     const isToday = key === today
     return {
@@ -360,13 +459,14 @@ export function TempsPage() {
       state: st,
       label: `${DAYS_SHORT[i]} ${d.getDate()}`,
       isToday,
-      aria: `${dayName(key)}${isToday ? ", aujourd'hui" : ''}, ${STATE_LABEL[st]}`,
-      hollow: st === 'empty' || st === 'future',
+      aria: `${dayName(key)}${isToday ? ", aujourd'hui" : ''}, ${weekLoading ? 'en lecture' : STATE_LABEL[st]}`,
+      stateText: weekLoading ? '…' : STATE_LABEL[st],
+      hollow: weekLoading || st === 'empty' || st === 'future',
       off: !isWorkDay(key),
-      total: st === 'absent' ? '—' : found?.total ? `${fmtShare(found.total)} j` : '',
+      total: weekLoading ? '' : st === 'absent' ? '—' : found?.total ? `${fmtShare(found.total)} j` : '',
     }
   })
-  const weekPending = weekDays.filter((d) => PENDING.includes(d.state))
+  const weekPending = weekLoading ? [] : weekDays.filter((d) => PENDING.includes(d.state))
   const nextDay = weekPending.find((d) => d.key !== shownDay) ?? null
 
   // What the mascot says about this day.
@@ -382,7 +482,7 @@ export function TempsPage() {
       ? "Des commits sur une branche sans tâche… c'était pour quoi ?"
       : `J'ai réparti ${shownDay === today ? 'ta journée' : 'cette journée'} d'après git et tes tâches. Tu valides ?`,
   }
-  useHint(view ? hints[state] : null, state === 'recorded' ? 'sleep' : 'listen')
+  useHint(dayError ? "Je n'arrive pas à lire cette journée." : view ? hints[state] : null, state === 'recorded' && !dayError ? 'sleep' : 'listen')
 
   // ---------- editing
 
@@ -390,9 +490,9 @@ export function TempsPage() {
     setLines(change(lines.map((l) => ({ ...l }))))
     queueSave()
   }
-  const step = (index: number, delta: number) =>
+  const setShare = (index: number, share: number) =>
     edit((ls) => {
-      ls[index].share = Math.min(DAY_SHARES, Math.max(0, ls[index].share + delta))
+      ls[index].share = share
       return ls
     })
   const setShares = (from: Line[], left: number, right: number | null, delta: number) => {
@@ -447,10 +547,13 @@ export function TempsPage() {
   }
   // A new line, with a task or without (a meeting, a deployment…), at 0 until given a share.
   const add = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId)
     const line: Line = {
       id: null,
       key: '',
       taskId: taskId || null,
+      taskTitle: task?.title ?? null,
+      taskRef: task?.ref ?? null,
       label: view?.defaultLabel ?? labels[0] ?? '',
       share: 0,
       confirmed: true,
@@ -481,7 +584,6 @@ export function TempsPage() {
   // The actions below replace the draft: what waits to be saved is dropped.
   const act = (call: (d: string) => Promise<DayView>, after?: () => void) => {
     dropPending()
-    setMoreOpen(false)
     void run(async () => {
       show(await call(shownDay))
       loadWeek()
@@ -489,6 +591,47 @@ export function TempsPage() {
       after?.()
     })
   }
+  const name = dayName(shownDay)
+  const markAbsent = () =>
+    confirmFirst(handMade, {
+      title: `Marquer le ${name} absent ?`,
+      body: 'Une seule ligne d’absence remplace tes changements faits à la main sur cette journée.',
+      confirm: 'Marquer absent',
+      run: () => act(api.absent, () => react('quack', `Le ${name} est marqué absent : envoie-le au Time Log quand c’est bon.`)),
+    })
+  const recompute = () =>
+    confirmFirst(handMade, {
+      title: `Recalculer le ${name} ?`,
+      body: 'La journée est refaite depuis git et tes tâches : tes changements faits à la main sont perdus.',
+      confirm: 'Recalculer',
+      run: () => act(api.recompute, () => react('quack', "J'ai tout recalculé depuis git et tes tâches.")),
+    })
+  const discard = () =>
+    confirmFirst(true, {
+      title: `Abandonner les modifications du ${name} ?`,
+      body: 'La journée revient à ce que le Time Log en a.',
+      confirm: 'Abandonner',
+      run: () => act(api.discard),
+    })
+  // Read now, keeping the draft: what waits is saved first.
+  const reread = () =>
+    void (async () => {
+      await flush()
+      await run(async () => {
+        show(await api.reread(shownDay))
+        loadWeek()
+        loadSummary()
+        react('quack', "J'ai relu le Time Log.")
+      })
+    })()
+  const moreEntries = (): MenuEntry[] => [
+    { label: 'Relire le Time Log', run: reread },
+    { label: 'Marquer absent…', run: markAbsent, disabled: state === 'absent' },
+    { label: 'Recalculer depuis git et les tâches…', run: recompute },
+    'separator',
+    state === 'modified' && { label: 'Abandonner les modifications…', run: discard },
+  ]
+
   // Settles a line without a task: attached (which links its branch), or kept as such.
   const resolve = async (index: number, change: { taskId?: string; confirmed?: boolean }) => {
     const line = lines[index]
@@ -558,11 +701,26 @@ export function TempsPage() {
     const v = props[name]
     return v === null || v === undefined ? '' : Array.isArray(v) ? v.join(', ') : String(v)
   }
+  const closeCalendar = () => {
+    setCal(null)
+    calToggle.current?.focus()
+  }
+
+  // A task search, with the choice of no task next to it.
+  const addRow = (className: string): ReactNode => (
+    <div className={`row lit-attach ${className}`}>
+      <TaskPicker tasks={tasks} columns={columns} problem={tasksProblem} label="Chercher une tâche à ajouter" onPick={add} />
+      <button type="button" className="btn" onClick={() => add('')}>
+        Sans tâche
+      </button>
+    </div>
+  )
 
   return (
     <div className="page lit-temps">
+      {menu}
       {/* The week on the left, the chosen day on the right. */}
-      <section className="panel lit-week" aria-label="Choisir un jour">
+      <section className="panel lit-week" aria-label="Choisir un jour" aria-busy={weekLoading}>
         <div className="row lit-week-head">
           <button type="button" className="btn icon" aria-label="Semaine précédente" onClick={() => go(dayKey(addDays(parseDay(day), -7)))}>
             ‹
@@ -581,6 +739,7 @@ export function TempsPage() {
           </button>
           <div className="grow lit-cal-anchor">
             <button
+              ref={calToggle}
               type="button"
               className="btn lit-cal-toggle"
               aria-expanded={cal !== null}
@@ -601,13 +760,29 @@ export function TempsPage() {
                 today={today}
                 onPick={(key) => {
                   go(key)
-                  setCal(null)
+                  closeCalendar()
                 }}
-                onClose={() => setCal(null)}
+                onClose={closeCalendar}
               />
             )}
           </div>
         </div>
+        {weekError ? (
+          <div className="row lit-week-status">
+            <span className="test-result bad grow" role="alert">
+              {weekError}
+            </span>
+            <button type="button" className="btn" onClick={loadWeek}>
+              Réessayer
+            </button>
+          </div>
+        ) : (
+          weekLoading && (
+            <p className="muted lit-week-status" role="status">
+              Lecture de la semaine…
+            </p>
+          )
+        )}
         {/* One stop for Tab, the arrows go to the previous or next day and show it. */}
         <div
           className="lit-week-days"
@@ -616,7 +791,7 @@ export function TempsPage() {
           tabIndex={0}
           aria-activedescendant={`lit-day-${day}`}
           onKeyDown={(e) => {
-            const delta = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
+            const delta = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0
             if (!delta) return
             e.preventDefault()
             go(dayKey(addDays(parseDay(day), delta)))
@@ -632,12 +807,12 @@ export function TempsPage() {
               className={`lit-week-day${d.isToday ? ' today' : ''}${d.off ? ' off' : ''}`}
               onClick={() => go(d.key)}
             >
-              <span className={`dot lit-week-dot${d.hollow ? ' hollow' : ''}`} style={{ background: STATE_DOT[d.state] }} />
+              <span className={`dot lit-week-dot${d.hollow ? ' hollow' : ''}`} style={{ background: d.hollow ? 'transparent' : STATE_DOT[d.state] }} />
               <span className="lit-week-day-name">
                 {d.label}
                 {d.isToday && <span className="lit-week-day-today"> · aujourd'hui</span>}
               </span>
-              <span className="lit-week-day-state">{STATE_LABEL[d.state]}</span>
+              <span className="lit-week-day-state">{d.stateText}</span>
               <span className={`baloo lit-week-day-total${d.state === 'recorded' ? ' recorded' : ''}`}>{d.total}</span>
             </div>
           ))}
@@ -655,14 +830,14 @@ export function TempsPage() {
             <span className="lit-week-pending-text">
               {weekPending.length} journée{weekPending.length > 1 ? 's' : ''} à valider ou à remplir cette semaine
             </span>
-            <button type="button" className="btn-cta" onClick={() => go(weekPending[0].key)}>
-              Ouvrir le plus ancien
+            <button type="button" className="btn" onClick={() => go(weekPending[0].key)}>
+              Ouvrir la plus ancienne
             </button>
           </div>
         )}
       </section>
 
-      <section className="panel lit-day" aria-labelledby="lit-day-title">
+      <section className="panel lit-day" aria-labelledby="lit-day-title" aria-busy={!view && !dayError}>
         <div className="row lit-day-head">
           <h2 id="lit-day-title" className="baloo lit-day-title">
             {dayTitle(shownDay)}
@@ -671,49 +846,45 @@ export function TempsPage() {
           {offWithActivity && <span className="legend">Jour non travaillé d'après tes réglages, mais il y a eu de l'activité.</span>}
           <span className="grow" />
           {editable && (
-            <div className="lit-more">
-              <button
-                type="button"
-                className="btn icon"
-                aria-label="Autres actions"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-                disabled={working}
-                onClick={() => setMoreOpen((o) => !o)}
-              >
-                …
-              </button>
-              {moreOpen && (
-                <div className="menu lit-more-menu" role="menu" onKeyDown={(e) => e.key === 'Escape' && setMoreOpen(false)}>
-                  <button type="button" role="menuitem" className="menu-item" autoFocus onClick={() => act(api.absent)}>
-                    Marquer absent
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="menu-item"
-                    onClick={() => act(api.recompute, () => react('quack', "J'ai tout recalculé depuis git et tes tâches."))}
-                  >
-                    Recalculer depuis git et les tâches
-                  </button>
-                  {state === 'modified' && (
-                    <>
-                      <div className="menu-sep" role="separator" />
-                      <button type="button" role="menuitem" className="menu-item" onClick={() => act(api.discard)}>
-                        Abandonner les modifications
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              className="btn icon"
+              aria-label="Autres actions sur ce jour"
+              aria-haspopup="menu"
+              disabled={working}
+              onClick={(e) => openMenu(e.currentTarget, moreEntries(), 'Autres actions sur ce jour')}
+            >
+              ⋯
+            </button>
           )}
         </div>
+
+        {dayError && (
+          <div className="row lit-alert" role="alert">
+            <span className="test-result bad grow">
+              {dayError}
+              {view ? ' Ce qui suit est la dernière lecture de cette journée.' : ''}
+            </span>
+            <button type="button" className="btn" onClick={() => void loadDay(day)}>
+              Réessayer
+            </button>
+          </div>
+        )}
+        {!view && !dayError && (
+          <p className="muted" role="status">
+            Lecture de la journée…
+          </p>
+        )}
 
         {view?.logProblem && editable && <p className="lit-problem">{view.logProblem}</p>}
 
         {showLines ? (
           <>
+            {editable && (
+              <p className="legend lit-day-legend">
+                Tire une frontière de la barre pour passer du temps d'une ligne à sa voisine, ou choisis la part de chaque ligne dans sa liste.
+              </p>
+            )}
             <div className="lit-bar-wrap">
               <div className="lit-bar" ref={bar}>
                 {rest && (
@@ -727,7 +898,7 @@ export function TempsPage() {
                       type="button"
                       className={`lit-seg${s.row.orphan ? ' orphan' : ''}`}
                       data-size={s.size}
-                      style={{ left: `${s.left}%`, width: `${s.width}%`, ...colors(s.row.color, s.row.ink) }}
+                      style={{ left: `${s.left}%`, width: `${s.width}%`, ...tint(s.row.color) }}
                       title={`${s.row.name} · ${s.row.label} · ${fmtShare(s.row.share)} j`}
                       aria-label={`${s.row.name}, ${s.row.label}, ${fmtShare(s.row.share)} j`}
                       aria-pressed={selected === s.row.rowId}
@@ -787,10 +958,12 @@ export function TempsPage() {
                           ›
                         </span>
                         <span className={`dot lit-chip-dot${r.orphan ? ' orphan' : ''}`} style={r.orphan ? undefined : { background: r.color }} />
+                        {r.ref && !r.orphan && <span className="card-id">{r.ref}</span>}
                         <span className={`ellipsis lit-line-title${r.orphan ? ' mono' : ''}`}>{r.name}</span>
                         {r.where && !r.orphan && <span className="mono ellipsis lit-line-where">{r.where}</span>}
-                        {r.orphan && <span className="tag lit-tone-bad">sans tâche</span>}
-                        {r.kept && <span className="tag lit-tone-neutral">sans tâche, voulu</span>}
+                        {(r.orphan || r.kept || (!r.taskId && !r.branch)) && (
+                          <span className={`tag lit-tone-${r.orphan ? 'bad' : 'neutral'}`}>{r.kept ? 'sans tâche, voulu' : 'sans tâche'}</span>
+                        )}
                         {r.tiny && <span className="tag lit-tone-warn">moins de 0,05 j</span>}
                       </button>
                       {editable ? (
@@ -802,21 +975,18 @@ export function TempsPage() {
                               </option>
                             ))}
                           </select>
-                          <span className="row lit-line-step">
-                            <button type="button" className="btn icon" aria-label={`Retirer 0,05 à ${r.name}`} disabled={!r.share} onClick={() => step(r.index, -1)}>
-                              −
-                            </button>
-                            <span className="baloo lit-line-share">{fmtShare(r.share)}</span>
-                            <button
-                              type="button"
-                              className="btn icon"
-                              aria-label={`Ajouter 0,05 à ${r.name}`}
-                              disabled={r.share >= DAY_SHARES}
-                              onClick={() => step(r.index, 1)}
-                            >
-                              +
-                            </button>
-                          </span>
+                          <select
+                            className="baloo lit-line-share-pick"
+                            aria-label={`Part de ${r.name}`}
+                            value={r.share}
+                            onChange={(e) => setShare(r.index, Number(e.target.value))}
+                          >
+                            {SHARE_CHOICES.map((n) => (
+                              <option key={n} value={n}>
+                                {fmtShare(n)} j
+                              </option>
+                            ))}
+                          </select>
                         </>
                       ) : (
                         <>
@@ -833,7 +1003,13 @@ export function TempsPage() {
                           Des commits sur <span className="mono">{r.where}</span> ne sont liés à aucune tâche. C'était pour quoi ?
                         </p>
                         <div className="row lit-attach">
-                          <TaskPicker tasks={tasks} columns={columns} label="Rattacher à une tâche" onPick={(id) => void resolve(r.index, { taskId: id })} />
+                          <TaskPicker
+                            tasks={tasks}
+                            columns={columns}
+                            problem={tasksProblem}
+                            label="Rattacher à une tâche"
+                            onPick={(id) => void resolve(r.index, { taskId: id })}
+                          />
                           <button type="button" className="btn" disabled={working} onClick={() => void resolve(r.index, { confirmed: true })}>
                             Garder sans tâche
                           </button>
@@ -946,19 +1122,12 @@ export function TempsPage() {
               })}
             </ul>
 
-            {editable && (
-              <div className="row lit-attach lit-add">
-                <TaskPicker tasks={tasks} columns={columns} label="Ajouter une ligne" onPick={add} />
-                <button type="button" className="btn" onClick={() => add('')}>
-                  Sans tâche (réunion, veille…)
-                </button>
-              </div>
-            )}
+            {editable && addRow('lit-add')}
           </>
         ) : (
           view && (
             // A day without lines: what it means, and what can be done about it.
-            <div className="lit-empty">
+            <div className="empty lit-empty">
               {state === 'to_fill' ? (
                 <>
                   <h3 className="baloo">Jour de travail sans activité</h3>
@@ -987,14 +1156,9 @@ export function TempsPage() {
               )}
               {editable && (
                 <>
-                  <div className="row lit-attach lit-empty-add">
-                    <TaskPicker tasks={tasks} columns={columns} label={state === 'off' ? 'Ajouter une ligne quand même' : 'Ajouter une ligne'} onPick={add} />
-                    <button type="button" className="btn" onClick={() => add('')}>
-                      Sans tâche
-                    </button>
-                  </div>
+                  {addRow('lit-empty-add')}
                   {state !== 'off' && (
-                    <button type="button" className="btn" disabled={working} onClick={() => act(api.absent)}>
+                    <button type="button" className="btn" disabled={working} onClick={markAbsent}>
                       Marquer absent
                     </button>
                   )}
@@ -1005,8 +1169,8 @@ export function TempsPage() {
         )}
 
         {/* The day's send bar: what sending needs, then the button; for a recorded day, when it was sent. */}
-        {editable && showLines ? (
-          <footer className="lit-foot">
+        {sendBar ? (
+          <footer className="lit-foot" ref={foot}>
             <ul className="lit-checks">
               {checks.map((c, i) => (
                 <li key={i} className={`lit-check-line${c.ok ? ' ok' : ''}`}>
@@ -1019,8 +1183,8 @@ export function TempsPage() {
               {draftNote}
             </span>
             {state === 'modified' && (
-              <button type="button" className="btn" disabled={working} onClick={() => act(api.discard)}>
-                Annuler les modifications
+              <button type="button" className="btn" disabled={working} onClick={discard}>
+                Abandonner les modifications…
               </button>
             )}
             <button type="button" className="btn-cta" disabled={!canSend} onClick={send}>
@@ -1028,17 +1192,20 @@ export function TempsPage() {
             </button>
           </footer>
         ) : recorded ? (
-          <footer className="lit-foot">
+          <footer className="lit-foot" ref={foot}>
             <span className="lit-check-line ok">
               <span aria-hidden="true">✓</span>
               Envoyée dans le Time Log {sentAtText(view?.sentAt ?? null)}
             </span>
+            <button type="button" className="btn" disabled={working} onClick={reread}>
+              Relire le Time Log
+            </button>
+            <span className="grow" />
             {nextDay && (
               <button type="button" className="btn" onClick={() => go(nextDay.key)}>
                 Jour suivant à valider : {dayName(nextDay.key)}
               </button>
             )}
-            <span className="grow" />
             <button type="button" className="btn" disabled={working} onClick={() => act(api.edit)}>
               Modifier
             </button>

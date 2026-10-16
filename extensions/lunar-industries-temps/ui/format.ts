@@ -93,12 +93,47 @@ export const bshort = (name: string) => name.replace(/^tsk-\d+-/, '')
 
 const LABEL_COLOURS = 5
 // A label's colour, from its place among the Time Log's labels: the same every day (the theme's task colours). With
-// more labels than colours, the 1st and the 6th share one; an unknown label has none.
-export function labelColor(label: string, labels: string[]): { color: string; ink: string } {
+// more labels than colours, the 1st and the 6th share one; an unknown label has none. The bar mixes it with the card,
+// under the theme's text: readable on every theme, light or dark.
+export function labelColor(label: string, labels: string[]): string {
   const i = labels.indexOf(label)
-  if (i < 0) return { color: 'var(--chip-hover)', ink: 'var(--text)' }
-  return { color: `var(--task-${(i % LABEL_COLOURS) + 1})`, ink: 'var(--on-coral)' }
+  return i < 0 ? 'var(--chip-hover)' : `var(--task-${(i % LABEL_COLOURS) + 1})`
 }
+
+// The shares a line can be given in its list: 0 (a line not given any yet) to the whole day, by twentieths.
+export const SHARE_CHOICES = Array.from({ length: DAY_SHARES + 1 }, (_, i) => i)
+
+// How a signal behind a line reads (the kinds of the core's activity, as the engine names them).
+const KINDS: Record<string, string> = {
+  commit: 'commit',
+  checkout: 'changement de branche',
+  branch: 'nouvelle branche',
+  edit: 'fichier modifié',
+  task: 'tâche modifiée',
+  status: 'statut changé',
+}
+export const kindLabel = (kind: string) => KINDS[kind] ?? kind
+
+/**
+ * Where the calendar goes when the arrows leave its month: -1 to the month before, 1 to the one after, 0 when the day
+ * is in the month shown. Year and month together: from 1 January, the day before is in December of the year before.
+ */
+export function monthStep(cursor: { y: number; m: number }, d: Date): -1 | 0 | 1 {
+  const at = d.getFullYear() * 12 + d.getMonth()
+  const shown = cursor.y * 12 + cursor.m
+  return at < shown ? -1 : at > shown ? 1 : 0
+}
+
+// The work day before a day (seven days back at most), or null when the week has none.
+export function previousWorkDay(key: string, workDays: number[]): string | null {
+  let d = addDays(parseDay(key), -1)
+  for (let i = 0; i < 7; i++, d = addDays(d, -1)) if (workDays.includes(d.getDay() || 7)) return dayKey(d)
+  return null
+}
+
+// « Hier », or the day's name: how the page says it opened a day still to deal with.
+export const dayCalled = (key: string, today: string) =>
+  key === dayKey(addDays(parseDay(today), -1)) ? 'Hier' : capital(dayName(key))
 
 /**
  * Moves a border of the bar: the two neighbours trade twentieths, each keeping at least one so neither leaves the bar

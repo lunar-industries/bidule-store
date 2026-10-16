@@ -51,6 +51,12 @@ export default class DaysController {
     return days.view(params.day)
   }
 
+  async reread({ request }: HttpContext) {
+    const { params } = await request.validateUsing(dayValidator)
+    await edit(() => days.reread(params.day))
+    return days.view(params.day)
+  }
+
   async replace({ request }: HttpContext) {
     const { params, lines } = await request.validateUsing(draftValidator)
     const input: LineInput[] = lines.map((l) => ({ ...l, props: l.props ?? {} }))

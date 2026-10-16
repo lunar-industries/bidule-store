@@ -48,7 +48,9 @@
 .lit-week-actions {
   gap: var(--space-2);
 }
-.lit-week-actions .btn {
+/* « Aujourd'hui » and « Calendrier » share the row (not the calendar's own buttons, which hang below). */
+.lit-week-actions > .btn,
+.lit-cal-anchor > .btn {
   width: 100%;
 }
 /* The calendar hangs under its button. */
@@ -123,6 +125,13 @@
 .lit-week-work {
   gap: var(--space-2);
   padding-left: var(--space-3);
+}
+/* « Lecture de la semaine… », or why it could not be read, with Réessayer. */
+.lit-week-status {
+  margin: 0;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  font-size: var(--fs-sm);
 }
 .lit-nowrap {
   white-space: nowrap;
@@ -202,6 +211,27 @@
   width: 4px;
   height: 4px;
 }
+/* What the dots say, under the month. */
+.lit-cal-key {
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  border-top: 2px solid var(--card-line);
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.lit-cal-key li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.lit-cal-key-dot {
+  width: 8px;
+  height: 8px;
+}
 
 /* ---------- the day */
 /* No padding at the bottom: the send bar closes the panel. */
@@ -218,22 +248,17 @@
   font-weight: 700;
   line-height: 1.1;
 }
-.lit-more {
-  position: relative;
+/* How the bar is used, under the day's title. */
+.lit-day-legend {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  font-weight: 600;
 }
-.lit-more-menu {
-  position: absolute;
-  z-index: 60;
-  top: calc(100% + var(--space-1));
-  right: 0;
-  min-width: 260px;
-}
-.lit-more-menu .menu-item {
-  width: 100%;
-  border: none;
-  background: transparent;
-  font: inherit;
-  text-align: left;
+/* A reading that failed, with Réessayer: above what was read before, if anything. */
+.lit-alert {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bad-wash);
 }
 /* Why the day cannot be sent (no Time Log that writes whole days): said above the lines. */
 .lit-problem {
@@ -278,8 +303,9 @@
   display: flex;
   justify-content: space-between;
 }
-/* The label's colour comes in --c, its text colour in --on-c. data-size (lg/md/sm) says what fits: title and share,
-   the share, or the colour only. The border in the panel's colour leaves a gap between two segments. */
+/* The label's colour comes in --c, mixed with the card under the theme's text: readable on every theme, light or dark.
+   data-size (lg/md/sm) says what fits: title and share, the share, or the colour only. The border in the panel's colour
+   leaves a gap between two segments. */
 .lit-seg {
   position: absolute;
   top: 0;
@@ -287,8 +313,8 @@
   padding: 0 var(--space-2);
   border: 2px solid var(--card);
   border-radius: var(--radius-md);
-  background: var(--c);
-  color: var(--on-c);
+  background: color-mix(in srgb, var(--c) 40%, var(--card));
+  color: var(--text);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -413,19 +439,24 @@
 .lit-line.zero .lit-line-share {
   color: var(--text-off);
 }
-.lit-line-label {
-  width: 170px;
+/* A line's label and share: chosen in lists drawn as the core's fields (`.field select`). */
+.lit-line-label,
+.lit-line-share-pick {
   height: 40px;
   padding: 0 var(--space-3);
-  border: 2px solid var(--card-line);
   border-radius: var(--radius-md);
-  background: var(--card);
+  border: 2px solid var(--card-line);
+  background: var(--bg);
   color: var(--text);
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  font-size: var(--fs-md);
+  font-weight: 600;
 }
-.lit-line-step {
-  gap: var(--space-1);
+.lit-line-label {
+  width: 170px;
+}
+.lit-line-share-pick {
+  width: 96px;
+  font-weight: 700;
 }
 .lit-line-share {
   min-width: 44px;
@@ -527,27 +558,34 @@
   align-items: center;
   gap: var(--space-2);
 }
-.lit-picker-item[aria-selected='true'] {
-  background: var(--chip);
+/* The result the arrows are on (as the palette's list). */
+.lit-picker-list .menu-item.active {
+  background: var(--chip-hover);
 }
-/* A day without lines: a dashed frame in the middle, what the day means and what can be done. */
+/* Nothing to pick: why, in the list's place. */
+.lit-picker-note {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--fs-md);
+}
+/* A day without lines, in the core's `empty` frame: what the day means and what can be done. */
 .lit-empty {
   align-self: center;
   width: min(600px, 100%);
   margin: var(--space-6) auto;
-  padding: var(--space-5);
-  border: 2px dashed var(--card-line);
-  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  text-align: center;
 }
 .lit-empty h3 {
   margin: 0;
   font-size: var(--fs-xl);
   font-weight: 700;
+  color: var(--text);
 }
 .lit-empty p {
   margin: 0;
@@ -611,8 +649,58 @@
     flex-wrap: wrap;
   }
 }
+/* Narrower still: the week goes above the day, its seven days on one row (the state is in each day's name for screen
+   readers, its dot and total in view), its other controls side by side. */
 @media (max-width: 900px) {
   .page.lit-temps {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .panel.lit-week {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+  }
+  .lit-week > *:not(.lit-week-head, .lit-week-actions) {
+    grid-column: 1 / -1;
+  }
+  .lit-week-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+  .lit-week-day {
+    min-height: 0;
+    padding: var(--space-2);
+    border: 2px solid var(--card-line);
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-1);
+    row-gap: 2px;
+  }
+  .lit-week-day-name {
+    grid-column: 1 / -1;
+    font-size: var(--fs-sm);
+  }
+  .lit-week-day-today,
+  .lit-week-day-state {
+    display: none;
+  }
+  .lit-week-dot {
+    grid-row: 2;
+  }
+  .lit-week-day-total {
+    grid-row: 2;
+    grid-column: 2;
+    font-size: var(--fs-md);
+  }
+  .lit-week-pending {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  /* « Calendrier » is at the right edge now: the calendar hangs from its right side. */
+  .lit-cal {
+    left: auto;
+    right: 0;
   }
 }

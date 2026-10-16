@@ -312,12 +312,19 @@ export class Days {
     const fromLog = state === 'recorded' || state === 'absent'
     const logged = fromLog ? await this.#store.logged([day]) : []
     const drafts = fromLog ? [] : await this.#store.drafts(day)
+    // Every task the core has, not only the user's: a line on someone else's task still says which one.
+    const tasks = await this.deps.work.tasks().catch(() => new Map<string, WorkTask>())
+    const named = (taskId: string | null) => {
+      const task = taskId ? tasks.get(taskId) : undefined
+      return { taskTitle: task?.title ?? null, taskRef: task?.ref ?? null }
+    }
     const lines: DayLine[] = fromLog
       ? logged.map((r) => ({
           id: r.id,
           key: lineKeyOf({ ...r, repo: null, branch: null }),
           source: 'log',
           taskId: r.taskId,
+          ...named(r.taskId),
           label: r.label,
           share: r.share,
           repo: null,
@@ -333,6 +340,7 @@ export class Days {
           key: lineKeyOf(d),
           source: 'draft',
           taskId: d.taskId,
+          ...named(d.taskId),
           label: d.label,
           share: d.share,
           repo: d.repo,
@@ -376,6 +384,7 @@ export class Days {
       isToday: day === this.#today(),
       state,
       total: lines.reduce((a, l) => a + l.share, 0),
+      edited: !fromLog && (await this.#store.edited(day)),
       sentAt:
         logged
           .map((r) => r.lastEdited)
@@ -393,6 +402,14 @@ export class Days {
   }
 
   // ---------- the user's actions
+
+  // « Relire le Time Log »: read now, however lately it was; a reading that fails is the user's to know.
+  async reread(day: string): Promise<void> {
+    await this.readLog(day, day, true)
+    if (this.#readProblem) throw new DraftError(this.#readProblem)
+    await this.refreshDraft(day)
+    this.deps.changed()
+  }
 
   // « Modifier »: the day's Time Log lines become a draft the user can change and send again.
   async edit(day: string): Promise<void> {

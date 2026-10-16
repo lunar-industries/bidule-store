@@ -1,19 +1,25 @@
 import { useId, useMemo, useState } from 'react'
-import type { Task, TaskColumn } from '@bidule/sdk'
+import { navigate, type Task, type TaskColumn } from '@bidule/sdk'
 
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
+// Why there is no task to pick from: no extension provides tasks, or they could not be read (its message).
+export type TasksProblem = { kind: 'none' } | { kind: 'failed'; message: string }
+
 // Taken from quack-board (components/task-picker, Simon's): a task found by its title or reference, eight at most,
-// the tasks not done first. A combobox: the arrows go through the results, Enter picks one.
+// the tasks not done first. A combobox: the arrows go through the results, Enter picks one. When nothing can be
+// picked, the list says why instead of staying shut.
 export function TaskPicker({
   tasks,
   columns,
   label,
+  problem,
   onPick,
 }: {
   tasks: Task[]
   columns: TaskColumn[]
   label: string
+  problem: TasksProblem | null
   onPick: (taskId: string) => void
 }) {
   const id = useId()
@@ -33,21 +39,37 @@ export function TaskPicker({
     setQuery('')
     setOpen(false)
   }
+  const listed = open && results.length > 0
+  // What the list says when it has nothing to offer: only once the field is in use.
+  const note = !open
+    ? null
+    : problem?.kind === 'none'
+      ? 'none'
+      : problem?.kind === 'failed'
+        ? `Les tâches n'ont pas pu être lues : ${problem.message}`
+        : !results.length && query.trim()
+          ? `Aucune tâche ne correspond à « ${query.trim()} ».`
+          : null
   return (
-    <div className="lit-picker">
+    // The list closes when the focus leaves the picker, not when it goes to the button the list holds.
+    <div
+      className="lit-picker"
+      onBlur={(e) => {
+        if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) setOpen(false)
+      }}
+    >
       <label className="field">
         {label}
         <input
           type="text"
           role="combobox"
-          aria-expanded={open && results.length > 0}
+          aria-expanded={listed}
           aria-controls={`${id}-list`}
-          aria-activedescendant={open && results[active] ? `${id}-${active}` : undefined}
+          aria-activedescendant={listed && results[active] ? `${id}-${active}` : undefined}
           autoComplete="off"
-          placeholder="Titre ou référence de la tâche…"
+          placeholder="Titre ou référence"
           value={query}
           onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
           onChange={(e) => {
             setQuery(e.target.value)
             setActive(0)
@@ -61,7 +83,7 @@ export function TaskPicker({
             } else if (e.key === 'ArrowUp') {
               e.preventDefault()
               setActive((a) => Math.max(a - 1, 0))
-            } else if (e.key === 'Enter' && open && results[active]) {
+            } else if (e.key === 'Enter' && listed && results[active]) {
               e.preventDefault()
               pick(results[active])
             } else if (e.key === 'Escape') {
@@ -70,7 +92,7 @@ export function TaskPicker({
           }}
         />
       </label>
-      {open && results.length > 0 && (
+      {listed && (
         <ul className="menu lit-picker-list" role="listbox" id={`${id}-list`} aria-label={label}>
           {results.map((t, i) => (
             <li
@@ -78,7 +100,7 @@ export function TaskPicker({
               id={`${id}-${i}`}
               role="option"
               aria-selected={i === active}
-              className="menu-item lit-picker-item"
+              className={`menu-item lit-picker-item${i === active ? ' active' : ''}`}
               // Before the field's blur closes the list.
               onMouseDown={(e) => {
                 e.preventDefault()
@@ -86,12 +108,26 @@ export function TaskPicker({
               }}
               onMouseEnter={() => setActive(i)}
             >
-              <span className="ellipsis">{t.title}</span>
-              {t.ref && <span className="mono legend">{t.ref}</span>}
+              {t.ref && <span className="card-id">{t.ref}</span>}
+              <span className="ellipsis grow">{t.title}</span>
               {done.has(t.status) && <span className="legend">terminée</span>}
             </li>
           ))}
         </ul>
+      )}
+      {note && (
+        <div className="menu lit-picker-list lit-picker-note" role="status">
+          {note === 'none' ? (
+            <>
+              <span className="muted">Aucun fournisseur de tâches : active Notion ou un autre outil de tâches.</span>
+              <button type="button" className="btn" onClick={() => navigate('/reglages/extensions')}>
+                Réglages › Extensions
+              </button>
+            </>
+          ) : (
+            <span className="muted">{note}</span>
+          )}
+        </div>
       )}
     </div>
   )

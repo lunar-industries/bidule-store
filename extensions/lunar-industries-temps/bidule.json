@@ -1,8 +1,8 @@
 {
   "id": "lunar-industries-temps",
-  "version": "0.4.6",
+  "version": "0.5.0",
   "title": "Temps",
-  "engine": "^0.3.0",
+  "engine": "^0.3.1",
   "conflicts": ["temps"],
   "dependencies": {
     "lunar-industries-common": "^0.1.0"
@@ -46,6 +46,28 @@
       "lunar-industries-temps.changed"
     ],
     "background": true,
+    "shortcuts": [
+      {
+        "keys": "↑ ↓ ← →",
+        "title": "Passer au jour précédent ou suivant",
+        "where": "dans les jours de la semaine"
+      },
+      {
+        "keys": "← →",
+        "title": "Déplacer la frontière de 0,05 j",
+        "where": "sur une frontière de la barre"
+      },
+      {
+        "keys": "↑ ↓ ← →",
+        "title": "Passer d’un jour ou d’une semaine à l’autre",
+        "where": "dans le calendrier"
+      },
+      {
+        "keys": "Échap",
+        "title": "Fermer le calendrier",
+        "where": "dans le calendrier"
+      }
+    ],
     "settings": {
       "title": "Temps",
       "panel": true,

@@ -145,6 +145,24 @@ describe('Time log', () => {
     expect((await store.logged([DAY])).map((r) => [r.taskId, r.share])).toEqual([['t1', 20]])
   })
 
+  test('« Relire le Time Log » reads it again at once, and says why when it cannot', async () => {
+    const log = new FakeTimeLog()
+    const { store, days } = setup({ now: NEXT_DAY, log })
+    await store.draft(DAY, [{ taskId: 't1', share: 20 }])
+    await days.send(DAY)
+    await days.readLog(DAY, DAY)
+    log.entries[0].share = 0.5
+    // Read moments ago: an ordinary reading keeps the mirror, « Relire » does not wait.
+    await days.readLog(DAY, DAY)
+    expect((await store.logged([DAY])).map((r) => r.share)).toEqual([20])
+    await days.reread(DAY)
+    expect((await store.logged([DAY])).map((r) => r.share)).toEqual([10])
+    log.read = async () => {
+      throw new Error('Notion 502')
+    }
+    await expect(days.reread(DAY)).rejects.toThrow(/Time Log non relu : Notion 502/)
+  })
+
   test('two readings asked together wait for the same one: nobody sees a mirror not yet filled', async () => {
     class SlowTimeLog extends FakeTimeLog {
       release: () => void = () => {}
@@ -165,6 +183,37 @@ describe('Time log', () => {
     log.release()
     await Promise.all([first, waiting])
     expect((await store.logged([DAY])).map((r) => r.taskId)).toEqual(['t1'])
+  })
+
+  test('each line says its task’s title and reference, a task the user has no role in included', async () => {
+    const { store, tasks, days } = setup({ now: NEXT_DAY })
+    // The core's tasks: the user's, and Camille's, whose branch the user committed on.
+    tasks.list = [
+      { id: 't1', title: 'Export CSV', ref: 'TSK-412' },
+      { id: 't2', title: 'Paiement en trois fois', ref: 'TSK-398' },
+    ]
+    await days.replace(DAY, [
+      { taskId: 't1', label: 'Développement', share: 10 },
+      { taskId: 't2', label: 'Développement', share: 5 },
+      { taskId: 't9', label: 'Développement', share: 5 },
+      { taskId: null, label: 'Réunion', share: 0, confirmed: true },
+    ])
+    const view = await days.view(DAY)
+    expect(view.lines.map((l) => [l.taskId, l.taskTitle, l.taskRef])).toEqual([
+      ['t1', 'Export CSV', 'TSK-412'],
+      ['t2', 'Paiement en trois fois', 'TSK-398'],
+      ['t9', null, null],
+      [null, null, null],
+    ])
+  })
+
+  test('a draft the user changed says so, until it is dropped', async () => {
+    const { days } = setup({ now: NEXT_DAY })
+    expect((await days.view(DAY)).edited).toBe(false)
+    await days.replace(DAY, [{ taskId: 't1', label: 'Développement', share: 20 }])
+    expect((await days.view(DAY)).edited).toBe(true)
+    await days.discard(DAY)
+    expect((await days.view(DAY)).edited).toBe(false)
   })
 
   test('« Modifier » makes a recorded day a draft again, sent back over the same entries', async () => {

@@ -9,6 +9,7 @@ export default function routes(router: Router) {
   router.post('days/:day/edit', [days, 'edit']).as('days.edit')
   router.post('days/:day/absent', [days, 'absent']).as('days.absent')
   router.post('days/:day/send', [days, 'send']).as('days.send')
+  router.post('days/:day/reread', [days, 'reread']).as('days.reread')
   router.put('days/:day/draft', [days, 'replace']).as('drafts.replace')
   router.delete('days/:day/draft', [days, 'discard']).as('drafts.discard')
   router.patch('days/:day/draft/:id', [days, 'resolve']).as('drafts.resolve')

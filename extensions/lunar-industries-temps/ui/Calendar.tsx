@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DaySummary } from '../contract.ts'
-import { dayKey, monthTitle, STATE_DOT, STATE_LABEL } from './format.ts'
+import { dayKey, monthStep, monthTitle, parseDay, STATE_DOT, STATE_LABEL } from './format.ts'
 
 export type MonthCursor = { y: number; m: number }
 
@@ -14,8 +14,19 @@ const LETTERS = [
   { short: 'D', name: 'dimanche' },
 ]
 
+// What the dots say, under the month.
+const KEY = [
+  { color: STATE_DOT.recorded, text: 'dans le Time Log' },
+  { color: STATE_DOT.to_validate, text: 'à valider ou à remplir' },
+  { color: STATE_DOT.modified, text: 'modifié, non envoyé' },
+  { color: STATE_DOT.absent, text: 'absent' },
+]
+
+const inMonth = (key: string, c: MonthCursor) => monthStep(c, parseDay(key)) === 0
+
 // Taken from quack-board (pages/temps/calendar, Simon's): a month, a dot of each day's state; a click picks the day.
-// The arrows move day by day and week by week; Escape closes it.
+// One stop for Tab, the day shown (else the first of the month); the arrows move day by day and week by week, into the
+// next month or the one before; Escape closes it. Changing month by its buttons leaves the focus on the button.
 export function Calendar({
   cursor,
   onCursor,
@@ -34,11 +45,23 @@ export function Calendar({
   onClose: () => void
 }) {
   const box = useRef<HTMLDivElement>(null)
+  const [focusKey, setFocusKey] = useState(day)
+  // The day the arrows went to: it takes the focus once drawn (in a month just turned to, after it renders).
+  const goTo = useRef<string | null>(null)
+  const first = dayKey(new Date(cursor.y, cursor.m, 1))
+  const tabKey = inMonth(focusKey, cursor) ? focusKey : inMonth(day, cursor) ? day : first
+  const dayButton = (key: string) => box.current?.querySelector<HTMLButtonElement>(`[data-day="${key}"]`)
+
+  // Opened: the day shown takes the focus.
   useEffect(() => {
-    // The day shown takes the focus, else the first of the month.
-    const target = box.current?.querySelector<HTMLButtonElement>('.lit-cal-day[aria-pressed="true"]') ?? box.current?.querySelector<HTMLButtonElement>('.lit-cal-day')
-    target?.focus()
-  }, [cursor.y, cursor.m])
+    dayButton(tabKey)?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (!goTo.current) return
+    dayButton(goTo.current)?.focus()
+    goTo.current = null
+  })
   useEffect(() => {
     const away = (e: MouseEvent) => {
       const target = e.target
@@ -47,6 +70,7 @@ export function Calendar({
     addEventListener('mousedown', away)
     return () => removeEventListener('mousedown', away)
   }, [onClose])
+
   const states = new Map(month.map((d) => [d.day, d.state]))
   const lead = (new Date(cursor.y, cursor.m, 1).getDay() + 6) % 7
   const count = new Date(cursor.y, cursor.m + 1, 0).getDate()
@@ -58,10 +82,13 @@ export function Calendar({
     onCursor({ y: x.getFullYear(), m: x.getMonth() })
   }
   const move = (from: string, delta: number) => {
-    const d = new Date(Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1, Number(from.slice(8)) + delta)
+    const d = parseDay(from)
+    d.setDate(d.getDate() + delta)
     const key = dayKey(d)
-    if (d.getMonth() !== cursor.m) shift(d.getMonth() > cursor.m || d.getFullYear() > cursor.y ? 1 : -1)
-    queueMicrotask(() => box.current?.querySelector<HTMLButtonElement>(`[data-day="${key}"]`)?.focus())
+    const step = monthStep(cursor, d)
+    if (step) shift(step)
+    setFocusKey(key)
+    goTo.current = key
   }
   return (
     <div
@@ -95,18 +122,20 @@ export function Calendar({
         </div>
         {Array.from({ length: cells.length / 7 }, (_, w) => (
           <div key={w} className="lit-cal-week" role="row">
-            {cells.slice(w * 7, w * 7 + 7).map((key, i) =>
-              key ? (
+            {cells.slice(w * 7, w * 7 + 7).map((key, i) => {
+              if (!key) return <span key={`x${w}-${i}`} role="gridcell" />
+              const state = states.get(key) ?? 'empty'
+              return (
                 <span key={key} role="gridcell">
                   <button
                     type="button"
                     data-day={key}
+                    tabIndex={key === tabKey ? 0 : -1}
                     className={`lit-cal-day${key === today ? ' today' : ''}${key > today ? ' future' : ''}`}
                     aria-pressed={key === day}
-                    aria-label={`${Number(key.slice(8))}${
-                      ['empty', 'future', 'off'].includes(states.get(key) ?? 'empty') ? '' : `, ${STATE_LABEL[states.get(key)!]}`
-                    }`}
+                    aria-label={`${Number(key.slice(8))}${['empty', 'future', 'off'].includes(state) ? '' : `, ${STATE_LABEL[state]}`}`}
                     onClick={() => onPick(key)}
+                    onFocus={() => setFocusKey(key)}
                     onKeyDown={(e) => {
                       const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key]
                       if (step === undefined) return
@@ -115,16 +144,22 @@ export function Calendar({
                     }}
                   >
                     {Number(key.slice(8))}
-                    <span className="dot lit-cal-dot" style={{ background: STATE_DOT[states.get(key) ?? 'empty'] }} />
+                    <span className="dot lit-cal-dot" style={{ background: STATE_DOT[state] }} />
                   </button>
                 </span>
-              ) : (
-                <span key={`x${w}-${i}`} role="gridcell" />
               )
-            )}
+            })}
           </div>
         ))}
       </div>
+      <ul className="lit-cal-key" aria-label="Les points de couleur">
+        {KEY.map((k) => (
+          <li key={k.text}>
+            <span className="dot lit-cal-key-dot" style={{ background: k.color }} />
+            {k.text}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

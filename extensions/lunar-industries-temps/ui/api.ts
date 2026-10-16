@@ -22,6 +22,7 @@ export const api = {
   edit: (day: string) => send<DayView>('POST', `days/${day}/edit`),
   absent: (day: string) => send<DayView>('POST', `days/${day}/absent`),
   send: (day: string) => send<DayView>('POST', `days/${day}/send`),
+  reread: (day: string) => send<DayView>('POST', `days/${day}/reread`),
   replace: (day: string, lines: LineInput[]) => send<DayView>('PUT', `days/${day}/draft`, { lines }),
   discard: (day: string) => send<DayView>('DELETE', `days/${day}/draft`),
   resolve: (day: string, id: string, change: { taskId?: string; confirmed?: boolean }) =>
@@ -32,13 +33,11 @@ export const api = {
 }
 
 // The user's tasks in the core (its `task` objects): those a line goes to, and the statuses (« passer en … »); null
-// without a provider of tasks, or when they cannot be read.
+// without a provider of tasks. A reading that fails throws: the page says it.
 export async function board(): Promise<Board | null> {
-  const b = await readTasks().catch(() => null)
-  return b && b.source !== null ? b : null
+  const b = await readTasks()
+  return b.source !== null ? b : null
 }
 
 // Its provider writes a task's new status in its tool (« passer en … »).
 export const moveTask = (id: string, status: string) => act('task', 'task.move', id, { status })
-
-export const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err))

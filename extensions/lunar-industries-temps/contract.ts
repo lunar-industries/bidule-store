@@ -9,6 +9,7 @@
 //   POST   days/:day/edit            DayView « Modifier » (a recorded day becomes a draft)
 //   POST   days/:day/absent          DayView « Marquer absent »
 //   POST   days/:day/send            DayView, sent to the Time Log
+//   POST   days/:day/reread          DayView « Relire le Time Log » (read again now, however lately it was read)
 //   PUT    days/:day/draft           { lines: LineInput[] } → DayView
 //   DELETE days/:day/draft           DayView, back to the Time Log's lines or the proposal
 //   PATCH  days/:day/draft/:id       { taskId } or { confirmed: true } → DayView (a line without a task settled)
@@ -41,6 +42,10 @@ export type DayLine = {
   key: string
   source: 'log' | 'draft'
   taskId: string | null
+  // The task's title and reference, whoever it belongs to (a task the user has no role in but worked on); null
+  // without a task, or for one the core no longer has.
+  taskTitle: string | null
+  taskRef: string | null
   label: string
   share: number
   repo: string | null
@@ -69,6 +74,8 @@ export type DayView = {
   isToday: boolean
   state: DayState
   total: number
+  // The draft holds the user's own changes (made by hand, or « Modifier » on a recorded day): replacing it asks first.
+  edited: boolean
   // When the Time Log last changed the day's lines: when it was sent, or edited there since.
   sentAt: string | null
   lines: DayLine[]
