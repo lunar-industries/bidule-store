@@ -850,6 +850,24 @@
               "signature": "tRGcc4S0mhAgmW8OSEsfdrABB44a78zF2cuZL2+6jFbPTDIZsXvZ+Akw0nOip76HgbnBqq4Jp8VwhZZUDkVSBw=="
             }
           }
+        },
+        "0.6.1": {
+          "engine": "^0.3.1",
+          "dependencies": {
+            "lunar-industries-common": "^0.1.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-temps-0.6.1/lunar-industries-temps-0.6.1.tgz",
+              "size": 37773,
+              "sha256": "b990c863360b8733f4345741cd5c1e5ef7b9bf93949c3bfe737418c8080f2368",
+              "signature": "GLYl6v8P/axsUMGpk1eA/TkYKtsSxPyWG3X1K0g7X5LjFL11cvNiW5LX1ohcYV86guk7hhITweYK+XlNR0GLDg=="
+            }
+          }
         }
       }
     },
