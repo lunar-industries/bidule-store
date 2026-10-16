@@ -27,7 +27,7 @@ type RepoFields = RepoOverrides & { reviewTarget?: string }
 const FIELDS: { key: keyof RepoFields; title: string; placeholder?: string; hint?: string }[] = [
   {
     key: 'reviewTarget',
-    title: 'Branche cible des MR',
+    title: 'Branche cible des revues (MR ou PR)',
     placeholder: 'develop',
     hint: 'La même que dans la page Branches. Vide : celle de Réglages › Commun.',
   },
@@ -119,7 +119,7 @@ export function SettingsPanel() {
           <h3 id="lc-settings-places" className="grow">
             Claude Code
           </h3>
-          <button type="button" className="btn lc-btn-sm" disabled={checking} onClick={() => void check()}>
+          <button type="button" className="btn lunar-btn-sm" disabled={checking} onClick={() => void check()}>
             {checking ? 'Vérification…' : 'Vérifier'}
           </button>
         </div>

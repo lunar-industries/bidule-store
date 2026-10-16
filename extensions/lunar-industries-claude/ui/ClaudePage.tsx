@@ -15,7 +15,8 @@ import type { ClaudePlace, SessionStatus } from '../contract.ts'
 import { api } from './api.ts'
 import { Conversation } from './Conversation.tsx'
 import { relTime, STATUS } from './events.ts'
-import { Icon } from './Icon.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
+import { Alert, Empty } from '@bidule/ext-lunar-industries-common/ui/states'
 import { openNewSession } from './newSession.tsx'
 import { SessionContext } from './SessionContext.tsx'
 import {
@@ -215,12 +216,9 @@ function Sessions() {
     return (
       <div className="page fill with-tools lc-page">
         {tools}
-        <section className="panel lc-none" role="alert">
-          <p className="lc-error">Les sessions n’ont pas pu être lues : {listError}</p>
-          <button type="button" className="btn" onClick={retrySessions}>
-            Réessayer
-          </button>
-        </section>
+        <Empty title="Les sessions n’ont pas pu être lues." failed action={{ label: 'Réessayer', run: retrySessions }}>
+          {listError}
+        </Empty>
       </div>
     )
 
@@ -245,14 +243,7 @@ function Sessions() {
               <Icon name="left" size={16} />
             </button>
           </div>
-          {listError && (
-            <div className="row lc-alert" role="alert">
-              <span className="grow">Les sessions n’ont pas pu être relues.</span>
-              <button type="button" className="btn lc-btn-sm" onClick={retrySessions}>
-                Réessayer
-              </button>
-            </div>
-          )}
+          {listError && <Alert retry={retrySessions}>Les sessions n’ont pas pu être relues : {listError}</Alert>}
           <div className="lc-groups" role="listbox" aria-label="Sessions">
             {groups.map((g) => (
               <div key={g.label} role="group" aria-label={g.label} className="lc-group">
@@ -399,25 +390,26 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
 
   return (
     <div className="page lc-empty">
-      <section className="empty lc-empty-head">
-        <p>Aucune session Claude pour l’instant</p>
-        <p className="legend">
-          Lance une session depuis une tâche en cours : Claude reçoit la tâche en contexte et travaille dans des worktrees
-          à part.
-        </p>
-        <button type="button" className="btn-cta" onClick={() => start(null)}>
-          Nouvelle session
-        </button>
-      </section>
+      <Empty
+        title="Aucune session Claude pour l’instant"
+        action={
+          <button type="button" className="btn-cta" onClick={() => start(null)}>
+            Nouvelle session
+          </button>
+        }
+      >
+        Lance une session depuis une tâche en cours : Claude reçoit la tâche en contexte et travaille dans des worktrees à
+        part.
+      </Empty>
       <div className="lc-empty-grid">
         <section className="panel" aria-labelledby="lc-checks">
           <h2 id="lc-checks">Vérifications</h2>
           <Places places={places} checking={checking} error={checkError} />
           <div className="row">
-            <button type="button" className="btn lc-btn-sm" disabled={checking} onClick={() => void check()}>
+            <button type="button" className="btn lunar-btn-sm" disabled={checking} onClick={() => void check()}>
               Vérifier à nouveau
             </button>
-            <button type="button" className="btn lc-btn-sm" onClick={() => navigate('/reglages/lunar-industries-claude')}>
+            <button type="button" className="btn lunar-btn-sm" onClick={() => navigate('/reglages/lunar-industries-claude')}>
               Réglages de Claude
             </button>
           </div>
@@ -431,7 +423,7 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
                   <strong className="ellipsis">{t.title}</strong>
                   <span className="legend">{t.ref ?? ''}</span>
                 </span>
-                <button type="button" className="btn lc-btn-sm" aria-label={`Lancer une session sur ${t.title}`} onClick={() => start(t.id)}>
+                <button type="button" className="btn lunar-btn-sm" aria-label={`Lancer une session sur ${t.title}`} onClick={() => start(t.id)}>
                   Lancer
                 </button>
               </div>
@@ -450,16 +442,14 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
 export function Places({ places, checking, error }: { places: ClaudePlace[] | null; checking: boolean; error: string | null }) {
   if (error)
     return (
-      <p className="lc-alert" role="alert">
-        La vérification a échoué : {error}
-      </p>
+      <Alert>La vérification a échoué : {error}</Alert>
     )
   if (!places?.length) return <span className="legend">{checking || !places ? 'Recherche de Claude Code…' : 'Aucun Claude Code trouvé.'}</span>
   return (
     <>
       {places.map((p) => (
         <div key={p.where} className="lc-check">
-          <span className={`tag lc-tone-${p.error ? 'bad' : p.loggedIn || p.apiKey ? 'ok' : 'warn'}`}>
+          <span className={`tag lunar-tone-${p.error ? 'bad' : p.loggedIn || p.apiKey ? 'ok' : 'warn'}`}>
             {p.error ? 'introuvable' : p.loggedIn || p.apiKey ? 'prêt' : 'à connecter'}
           </span>
           <span className="lc-check-text">

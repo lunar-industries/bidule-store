@@ -92,8 +92,8 @@
 
 /* A column: its head (fold chevron, dot, name, count), then its cards, scrolling under the head. */
 .lik-column {
-  width: 252px;
-  flex: 0 0 252px;
+  width: var(--lik-col, 252px);
+  flex: 0 0 var(--lik-col, 252px);
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -117,7 +117,8 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: 0;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  /* Inside the column's 2 px border: its rounded corners follow the border's inner curve. */
+  border-radius: calc(var(--radius-md) - 2px) calc(var(--radius-md) - 2px) 0 0;
   background: transparent;
   color: var(--text);
   font-size: var(--fs-md);

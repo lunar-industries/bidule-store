@@ -111,6 +111,32 @@ export function moveCandidates(task: Pick<Task, 'provider'>, column: string, mer
 // The hidden setting that keeps the columns' order (a JSON list of statuses' names), set in Réglages › Kanban.
 export const ORDER = 'lunar-industries-kanban.order'
 
+// The columns' width, the same for every column (setting `lunar-industries-kanban.columnWidth`, chosen in Réglages ›
+// Kanban): sharing the board's width (`auto`, between COLUMN_MIN and COLUMN_MAX), or a fixed one.
+export const WIDTH = 'lunar-industries-kanban.columnWidth'
+export type ColumnWidth = 'auto' | 'narrow' | 'medium' | 'wide'
+export const WIDTHS: { value: ColumnWidth; label: string }[] = [
+  { value: 'auto', label: 'Automatique : les colonnes se partagent la largeur' },
+  { value: 'narrow', label: 'Étroite (252 px)' },
+  { value: 'medium', label: 'Moyenne (320 px)' },
+  { value: 'wide', label: 'Large (400 px)' },
+]
+export const COLUMN_MIN = 252
+export const COLUMN_MAX = 480
+const FIXED: Record<Exclude<ColumnWidth, 'auto'>, number> = { narrow: 252, medium: 320, wide: 400 }
+export const widthOf = (raw: unknown): ColumnWidth => WIDTHS.find((w) => w.value === raw)?.value ?? 'auto'
+
+/**
+ * A column's width in pixels. Automatic: what the board's width leaves to the open columns once the rest is taken
+ * (`fixed`: the folded columns and the gaps), shared equally, between COLUMN_MIN (the board then scrolls sideways)
+ * and COLUMN_MAX (a few columns on a wide window stay readable).
+ */
+export function columnWidth(choice: ColumnWidth, board: number, fixed: number, open: number): number {
+  if (choice !== 'auto') return FIXED[choice]
+  if (open <= 0) return COLUMN_MIN
+  return Math.max(COLUMN_MIN, Math.min(COLUMN_MAX, Math.floor((board - fixed) / open)))
+}
+
 /**
  * The columns in the order the user chose (setting `lunar-industries-kanban.order`, the statuses' names), from the
  * source's order (`names`). A status the saved order does not have yet (a new one in the tool) comes right after the

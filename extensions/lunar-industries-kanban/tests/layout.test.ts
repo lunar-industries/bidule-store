@@ -10,6 +10,8 @@ import {
   branchLabel,
   choiceOf,
   columnColor,
+  columnWidth,
+  widthOf,
   columnOf,
   groupsOf,
   linkRows,
@@ -365,5 +367,16 @@ describe('columnColor', () => {
     expect(columnColor({ name: 'En cours', color: 'butter', group: 'doing' })).toBe('var(--col-doing)')
     expect(columnColor({ name: 'Prod', color: 'mint', group: 'done' })).toBe('var(--col-prod)')
     expect(columnColor({ name: 'Idées', color: 'pink', group: 'todo' })).toBe('var(--pink)')
+  })
+
+  test('the columns’ width: the board shared equally between its open columns, within bounds, or a fixed one', () => {
+    // 1 600 px, 100 px of gaps and folded columns, 5 open columns: 300 px each.
+    expect(columnWidth('auto', 1600, 100, 5)).toBe(300)
+    expect(columnWidth('auto', 900, 100, 5)).toBe(252)
+    expect(columnWidth('auto', 2560, 100, 3)).toBe(480)
+    expect(columnWidth('auto', 1600, 100, 0)).toBe(252)
+    expect(columnWidth('wide', 900, 100, 5)).toBe(400)
+    expect(widthOf('medium')).toBe('medium')
+    expect(widthOf('n’importe quoi')).toBe('auto')
   })
 })

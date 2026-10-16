@@ -5,7 +5,8 @@ fichier ne dit que ce qui est propre à ce module.
 
 Ce module porte ce que les modules Lunar Industries partagent. Côté serveur, ce sont les branches telles que le cœur
 les a (tâche, revue, CI), le lien d'une branche à une tâche fait à la main, et les réglages communs (branches
-d'intégration, cibles des MR, nommage des branches). Les autres modules les demandent par ses commandes
+d'intégration, cibles des revues, nommage des branches). Une revue s'appelle MR sur GitLab et PR sur GitHub ; un
+texte qui vaut pour les deux dit « revue (MR ou PR) ». Les autres modules les demandent par ses commandes
 (`lunar-industries-common.branches`, `.link`, `.settings`, `.setTarget`) et n'importent de lui que des types
 (`contract.ts`) : une fois empaquetés, les modules ne se voient pas.
 
@@ -36,7 +37,9 @@ paquet. L'import par le nom du paquet marche de la même façon quand les module
   module range où il veut.
 - Le menu prend aussi une ligne à soi (`MenuRow` : `{ row, label }`, les couleurs d'un onglet), dont les boutons de
   rôle `menuitemradio` ou `menuitemcheckbox` sont parcourus par les flèches comme les entrées, et s'ouvre au-dessus
-  d'un élément avec `{ above: true }` (un champ en bas de la page).
+  d'un élément avec `{ above: true }` (un champ en bas de la page). Une entrée peut avoir une `icon` devant son libellé
+  et une `hint` dessous (la description d'une commande) ; `{ wide: true }` donne une liste large qui défile (les
+  commandes de Claude).
 - **`ui/panel.tsx`** : `SidePanel`, le panneau latéral, par-dessus la page au bord droit de la fenêtre, sous la barre
   de titre : l'ouvrir ou le fermer ne déplace rien. Son en-tête (le titre, `mono` pour un nom de branche, les
   `actions` avant la ×, le `subtitle`), son corps qui défile, ses `keys` au pied (cachées sous 1 000 px). Échap ou la
@@ -68,6 +71,7 @@ Ses tests sont à côté (`ui/*.test.tsx`), lancés par le Vitest de Bidule quan
 
 Toutes dans `ui/common.css`, sous `lunar-` :
 
+- Le menu : `lunar-menu-icon`, `lunar-menu-hint`, `lunar-menu-wide`.
 - Le panneau latéral : `lunar-panel`, `lunar-panel-head`, `lunar-panel-title` (`mono`), `lunar-panel-body`,
   `lunar-panel-foot`.
 - Le choix d'une tâche : `lunar-tasks` (`floating`), `lunar-tasks-list`, `lunar-tasks-item` (`active`, `done`),

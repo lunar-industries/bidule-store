@@ -246,7 +246,7 @@ export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
   return [
     define({
       name: 'list_repos',
-      description: 'Les dépôts git que l’application connaît : chemin, nom et branche cible des MR.',
+      description: 'Les dépôts git que l’application connaît : chemin, nom et branche cible des revues (MR ou PR).',
       schema: {},
       write: false,
       run: async () => {
@@ -313,11 +313,11 @@ export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
     define({
       name: 'start_task',
       description:
-        'Démarre une tâche dans un ou plusieurs dépôts : issue si besoin, branche sur la forge, MR en brouillon, branche locale (sans changer la branche du checkout principal), liaison à la tâche.',
+        'Démarre une tâche dans un ou plusieurs dépôts : issue si besoin, branche sur la forge, MR (GitLab) ou PR (GitHub) en brouillon, branche locale (sans changer la branche du checkout principal), liaison à la tâche.',
       schema: {
         task: z.string(),
         repos: z
-          .array(z.object({ repo: z.string().describe('Chemin ou nom du dépôt'), base: z.string().optional().describe('Branche de départ et cible de la MR') }))
+          .array(z.object({ repo: z.string().describe('Chemin ou nom du dépôt'), base: z.string().optional().describe('Branche de départ et cible de la revue (MR ou PR)') }))
           .min(1),
         slug: z.string().optional().describe('Titre court de la branche ; par défaut, celui de la tâche'),
         issue: z.boolean().default(false),
@@ -325,7 +325,7 @@ export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
         inProgress: z.boolean().default(true).describe('Passer la tâche au premier statut « en cours »'),
       },
       write: true,
-      detail: ({ task, repos }) => `Démarrer ${task} dans ${repos.map((r) => r.repo).join(', ')} (issue, branche, MR brouillon)`,
+      detail: ({ task, repos }) => `Démarrer ${task} dans ${repos.map((r) => r.repo).join(', ')} (issue, branche, revue brouillon)`,
       run: async ({ task, repos, slug, issue, review, inProgress }) => {
         const t = await findTask(task)
         const s = await deps.settings()
@@ -460,13 +460,13 @@ export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
       schema: {
         repo: z.string(),
         branch: z.string(),
-        target: z.string().optional().describe('Branche cible ; par défaut, la branche cible des MR du dépôt'),
+        target: z.string().optional().describe('Branche cible ; par défaut, la branche cible des revues du dépôt'),
         title: z.string().optional().describe('Par défaut, le titre de la tâche liée'),
         description: z.string().optional().describe('Texte placé avant la fermeture de l’issue et le lien de la tâche'),
         draft: z.boolean().default(true),
       },
       write: true,
-      detail: ({ repo, branch, target, draft }) => `Ouvrir la MR${draft ? ' brouillon' : ''} de ${branch}${target ? ` vers ${target}` : ''} dans ${repo}`,
+      detail: ({ repo, branch, target, draft }) => `Ouvrir la revue${draft ? ' brouillon' : ''} (MR ou PR) de ${branch}${target ? ` vers ${target}` : ''} dans ${repo}`,
       run: async ({ repo, branch, target, title, description, draft }) => {
         const r = await findRepo(repo)
         const s = await deps.settings()
@@ -599,16 +599,17 @@ export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
     define({
       name: 'merge_review',
       description:
-        'Accepte la MR (GitLab) ou la PR (GitHub) ouverte d’une branche : la merge sur la forge, comme son bouton. Une MR en brouillon est refusée, sauf avec `ready: true`, qui la sort d’abord du brouillon.',
-      schema: { repo: z.string(), branch: z.string(), ready: z.boolean().default(false).describe('Sortir la MR du brouillon avant de la merger') },
+        'Accepte la MR (GitLab) ou la PR (GitHub) ouverte d’une branche : la merge sur la forge, comme son bouton. Une revue en brouillon est refusée, sauf avec `ready: true`, qui la sort d’abord du brouillon.',
+      schema: { repo: z.string(), branch: z.string(), ready: z.boolean().default(false).describe('Sortir la revue du brouillon avant de la merger') },
       write: true,
-      detail: ({ repo, branch, ready }) => `Merger la MR de ${branch} sur la forge (${repo})${ready ? ', sortie du brouillon' : ''}`,
+      detail: ({ repo, branch, ready }) => `Merger la revue (MR ou PR) de ${branch} sur la forge (${repo})${ready ? ', sortie du brouillon' : ''}`,
       run: async ({ repo, branch, ready }) => {
         const r = await findRepo(repo)
         const client = await forgeOf(r)
+        const word = client.kind === 'github' ? 'PR' : 'MR'
         const review = await client.review(branch)
-        if (!review || review.state !== 'open') throw new ToolError(`${branch} n'a pas de MR ouverte (voir create_review)`)
-        if (review.draft && !ready) throw new ToolError(`La MR ${review.url} est en brouillon : la sortir du brouillon avec ready: true`)
+        if (!review || review.state !== 'open') throw new ToolError(`${branch} n'a pas de ${word} ouverte (voir create_review)`)
+        if (review.draft && !ready) throw new ToolError(`La ${word} ${review.url} est en brouillon : la sortir du brouillon avec ready: true`)
         if (review.draft) await client.markReady(review.number)
         await client.mergeReview(review.number)
         await readForge(r.path, branch)
@@ -635,7 +636,7 @@ export function workspaceTools(deps: ToolDeps): WorkspaceTool[] {
     define({
       name: 'workspace_settings',
       description:
-        'Les réglages utiles au travail : nommage des branches, et pour chaque dépôt sa branche cible des MR et son déploiement (branches de staging et de production, jobs de déploiement dont le `{env}` est l’environnement, environnements de staging et celui par défaut, statut d’une tâche en test). Une valeur null n’est pas réglée : la demander.',
+        'Les réglages utiles au travail : nommage des branches, et pour chaque dépôt sa branche cible des revues (MR ou PR) et son déploiement (branches de staging et de production, jobs de déploiement dont le `{env}` est l’environnement, environnements de staging et celui par défaut, statut d’une tâche en test). Une valeur null n’est pas réglée : la demander.',
       schema: {},
       write: false,
       run: async () => {

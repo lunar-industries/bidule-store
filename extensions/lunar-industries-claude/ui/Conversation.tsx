@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
-import { errorMessage, Modal, openDialog, react, useOn } from '@bidule/sdk'
+import { errorMessage, react, useOn } from '@bidule/sdk'
+import { confirm } from '@bidule/ext-lunar-industries-common/ui/confirm'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import {
   IMAGE_TYPES,
@@ -15,9 +17,7 @@ import {
 import { api } from './api.ts'
 import { Decided, DecisionCard } from './DecisionCard.tsx'
 import { decidedOf, itemsOf, merge, pendingOf, STATUS, type Permission } from './events.ts'
-import { Icon } from './Icon.tsx'
 import { md } from './markdown.ts'
-import { MenuButton } from './Menu.tsx'
 import { DEFAULT, effortOf, effortOptions, effortsOf, modelOptions, modeOf, MODES, summaryOf } from './models.ts'
 import { refreshSessions, select, useModels, useTemplates } from './state.ts'
 import { ToolCalls } from './ToolCall.tsx'
@@ -247,30 +247,16 @@ export function Conversation({
   const interrupt = () => act(() => api.interrupt(sid))
   const stopNow = () => act(() => api.stop(sid)).then(refreshSessions)
   // While Claude works, stopping loses the turn going on: asked first.
-  const stop = () => {
+  // The common confirmation: the turn going on is lost, so the focus starts on « Annuler ».
+  const stop = async () => {
     if (status !== 'running') return void stopNow()
-    openDialog((close) => (
-      <Modal label="Arrêter la session" onClose={close}>
-        <h2>Arrêter la session pendant que Claude travaille ?</h2>
-        <p>Le tour en cours est perdu. Tu pourras reprendre la session plus tard avec un message.</p>
-        <div className="row">
-          <span className="grow" />
-          <button type="button" className="btn" onClick={close}>
-            Annuler
-          </button>
-          <button
-            type="button"
-            className="btn-cta"
-            onClick={() => {
-              close()
-              void stopNow()
-            }}
-          >
-            Arrêter
-          </button>
-        </div>
-      </Modal>
-    ))
+    const yes = await confirm({
+      title: 'Arrêter la session pendant que Claude travaille ?',
+      text: 'Le tour en cours est perdu. Tu pourras reprendre la session plus tard avec un message.',
+      action: 'Arrêter',
+      danger: true,
+    })
+    if (yes) void stopNow()
   }
   const canInterrupt = !busy && runHere && (status === 'running' || status === 'waiting')
   const canStop = !busy && runHere
@@ -383,23 +369,23 @@ export function Conversation({
             <div className="row lc-conv-repos">
               <span className="legend">dans</span>
               {repoLabels.map((label) => (
-                <span key={label} className="tag lc-tone-neutral">
+                <span key={label} className="tag lunar-tone-neutral">
                   {label}
                 </span>
               ))}
             </div>
           )}
         </div>
-        <span className={`tag lc-tone-${info.tone} lc-conv-status`}>
+        <span className={`tag lunar-tone-${info.tone} lc-conv-status`}>
           {status === 'running' && <span className="lc-working" aria-hidden="true" />}
           {info.label}
         </span>
         {!narrow && (
           <>
-            <button type="button" className="btn lc-btn-sm" title={INTERRUPT_TIP} disabled={!canInterrupt} onClick={() => void interrupt()}>
+            <button type="button" className="btn lunar-btn-sm" title={INTERRUPT_TIP} disabled={!canInterrupt} onClick={() => void interrupt()}>
               Interrompre
             </button>
-            <button type="button" className="btn lc-btn-sm" title={STOP_TIP} disabled={!canStop} onClick={stop}>
+            <button type="button" className="btn lunar-btn-sm" title={STOP_TIP} disabled={!canStop} onClick={() => void stop()}>
               Arrêter…
             </button>
           </>
@@ -484,14 +470,14 @@ export function Conversation({
 
       <div className="lc-compose">
         {away && (
-          <button type="button" className="btn lc-btn-sm lc-to-end" onClick={toEnd}>
+          <button type="button" className="btn lunar-btn-sm lc-to-end" onClick={toEnd}>
             Revenir en bas
           </button>
         )}
         {unfollowed === sid && !fromApp && (
           <div className="row">
             <span className="legend grow">Suivi en direct indisponible ici : relis avec le bouton.</span>
-            <button type="button" className="btn lc-btn-sm" onClick={() => void refresh()}>
+            <button type="button" className="btn lunar-btn-sm" onClick={() => void refresh()}>
               Relire
             </button>
           </div>
@@ -538,50 +524,44 @@ export function Conversation({
                 e.target.value = ''
               }}
             />
-            <MenuButton
-              label="Ajouter"
+            {/* The common menu, above its button: the message box sits at the bottom of the window. */}
+            <button
+              type="button"
+              className="icon-btn lc-icon-sm"
+              aria-label="Ajouter"
+              title="Ajouter"
+              aria-haspopup="menu"
               disabled={pending.length > 0}
-              content={(close) => (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="menu-item lc-menu-icon"
-                  onClick={() => {
-                    close()
-                    file.current?.click()
-                  }}
-                >
-                  <Icon name="paperclip" size={16} />
-                  Joindre un fichier ou une image
-                </button>
-              )}
+              onClick={(e) =>
+                openMenu(e.currentTarget, [{ label: 'Joindre un fichier ou une image', icon: 'paperclip', run: () => file.current?.click() }], 'Ajouter', {
+                  above: true,
+                })
+              }
             >
               <Icon name="plus" size={18} />
-            </MenuButton>
-            <MenuButton
-              label="Commandes et skills"
-              menuClass="lc-commands"
+            </button>
+            <button
+              type="button"
+              className="icon-btn lc-icon-sm"
+              aria-label="Commandes et skills"
+              title="Commandes et skills"
+              aria-haspopup="menu"
               disabled={!templates.length}
-              content={(close) =>
-                templates.map((t) => (
-                  <button
-                    key={t.name}
-                    type="button"
-                    role="menuitem"
-                    className="menu-item lc-command-item"
-                    onClick={() => {
-                      close()
-                      insertCommand(t.name)
-                    }}
-                  >
-                    <span className="ellipsis">/{t.name}</span>
-                    {t.description && <span className="legend">{summaryOf(t.description)}</span>}
-                  </button>
-                ))
+              onClick={(e) =>
+                openMenu(
+                  e.currentTarget,
+                  templates.map((t) => ({
+                    label: `/${t.name}`,
+                    hint: t.description ? summaryOf(t.description) : undefined,
+                    run: () => insertCommand(t.name),
+                  })),
+                  'Commandes et skills',
+                  { above: true, wide: true }
+                )
               }
             >
               <Icon name="slash" size={18} />
-            </MenuButton>
+            </button>
             <select className="lc-select" aria-label="Modèle" value={model ?? DEFAULT} onChange={(e) => void changeModel(e.target.value)}>
               {modelOptions(models).map((o) => (
                 <option key={o.value} value={o.value}>

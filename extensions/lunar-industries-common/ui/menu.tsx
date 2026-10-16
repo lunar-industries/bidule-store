@@ -10,6 +10,8 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { errorMessage, react } from '@bidule/sdk'
+import { Icon, type IconName } from './icons.tsx'
+import './common.css'
 
 /**
  * The menu the Lunar Industries modules share (a row's « ⋯ », its right click, the Menu key), as a desktop app's: the
@@ -20,25 +22,27 @@ import { errorMessage, react } from '@bidule/sdk'
  */
 
 // An item: what it says, what it does. `disabled` keeps it in the menu, reachable but off, with the reason as its
-// tooltip when it is a text; `shortcut` shows its keys on the right. `null` and `false` are left out, so that a menu
-// is written with conditions inline.
+// tooltip when it is a text; `shortcut` shows its keys on the right; `icon` goes before the label, `hint` under it (a
+// command's description). `null` and `false` are left out, so that a menu is written with conditions inline.
 export type MenuItem = {
   label: string
   run: () => unknown
   disabled?: boolean | string
   shortcut?: string
+  icon?: IconName
+  hint?: string
 }
 // A row of the module's own among the items (a tab's colours): its buttons with the role `menuitemradio` or
 // `menuitemcheckbox` are reached by the arrows like the items.
 export type MenuRow = { row: ReactNode; label: string }
 export type MenuEntry = MenuItem | MenuRow | 'separator' | null | false | undefined
 // Where a menu opens from an element: under it (above when there is no room below), or above it (a field at the
-// bottom of the page).
-export type MenuOptions = { above?: boolean }
+// bottom of the page). `wide`: a long list of items with their hint (commands), wider and scrolling.
+export type MenuOptions = { above?: boolean; wide?: boolean }
 
 // Where a menu opens: at the pointer, or under an element (above it when there is no room below), and what gets the
 // focus back once it closes. `toggle`: opened from a button, which closes it when clicked again.
-type Place = { x: number; y: number; flipY: number; opener: HTMLElement | null; toggle: boolean; above?: boolean }
+type Place = { x: number; y: number; flipY: number; opener: HTMLElement | null; toggle: boolean; above?: boolean; wide?: boolean }
 
 // The Menu key, or Shift+F10: they open the menu of what has the focus.
 export const isMenuKey = (e: { key: string; shiftKey: boolean }) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
@@ -159,7 +163,7 @@ export function Menu({
   return createPortal(
     <div
       ref={box}
-      className="menu floating"
+      className={`menu floating${place.wide ? ' lunar-menu-wide' : ''}`}
       role="menu"
       aria-label={label}
       style={{ left: at.left, top: at.top }}
@@ -179,12 +183,20 @@ export function Menu({
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className={entry.shortcut ? 'menu-item menu-shortcut' : 'menu-item'}
+            className={`menu-item${entry.shortcut ? ' menu-shortcut' : ''}${entry.icon ? ' lunar-menu-icon' : ''}${entry.hint ? ' lunar-menu-hint' : ''}`}
             aria-disabled={entry.disabled ? true : undefined}
             title={typeof entry.disabled === 'string' ? entry.disabled : undefined}
             onClick={() => run(entry)}
           >
-            {entry.label}
+            {entry.icon && <Icon name={entry.icon} />}
+            {entry.hint ? (
+              <>
+                <span className="ellipsis">{entry.label}</span>
+                <span className="legend">{entry.hint}</span>
+              </>
+            ) : (
+              entry.label
+            )}
             {entry.shortcut && <kbd>{entry.shortcut}</kbd>}
           </button>
         ),
@@ -211,7 +223,7 @@ export function useMenu(): [
     if (source instanceof HTMLElement) {
       if (open?.place.opener === source) return setOpen(null)
       const rect = source.getBoundingClientRect()
-      place = { x: rect.left, y: rect.bottom + 4, flipY: rect.top - 4, opener: source, toggle: true, above: options.above }
+      place = { x: rect.left, y: rect.bottom + 4, flipY: rect.top - 4, opener: source, toggle: true, ...options }
     } else {
       source.preventDefault()
       source.stopPropagation()

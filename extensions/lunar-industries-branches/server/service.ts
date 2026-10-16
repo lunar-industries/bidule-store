@@ -184,7 +184,7 @@ export class BranchesService {
     const { b, client } = await this.#branch(repo, name)
     const s = await this.deps.shared.settings()
     const into = target || s.targets[repo] || s.reviewTarget
-    if (!into) throw new BranchesError('Choisis la branche cible de la MR')
+    if (!into) throw new BranchesError(`Choisis la branche cible de la ${client.kind === 'github' ? 'PR' : 'MR'}`)
     const task = b.taskId ? await this.deps.objects.get('task', b.taskId).catch(() => null) : null
     await this.#act(b, async () => {
       // A number in the name is no proof of an issue (2024-cleanup): « Closes # » would close one the branch has nothing

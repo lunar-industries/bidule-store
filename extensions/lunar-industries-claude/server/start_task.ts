@@ -78,7 +78,7 @@ export async function startTask(
       if (input.review && client.kind === 'github') {
         // GitHub refuses a pull request without commits (422), and the new branch is its base's commit.
         result.steps.push({
-          step: 'MR brouillon',
+          step: 'PR brouillon',
           ok: true,
           skipped: true,
           detail: 'GitHub refuse une PR sans commit : à créer après un premier push (create_review)',
@@ -86,7 +86,7 @@ export async function startTask(
       } else if (input.review) {
         const description = [issue ? `Closes #${issue.number}` : '', taskLine(task)].filter(Boolean).join('\n\n')
         await step(
-          'MR brouillon',
+          `${client.kind === 'github' ? 'PR' : 'MR'} brouillon`,
           () => client.createReview({ source: name, target: base, title: task.title, description, draft: true }),
           (r) => `${client.kind === 'gitlab' ? '!' : '#'}${r.number} vers ${base}`
         )

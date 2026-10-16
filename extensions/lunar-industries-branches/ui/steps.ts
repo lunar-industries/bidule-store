@@ -34,17 +34,19 @@ export type State = { text: string; tone: Tone; yours: boolean }
  * What the table says of a branch, in words. A review whose real state is not read yet (no draft known) is « Revue
  * ouverte », never « Prête à fusionner ».
  */
+const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
+
 export function stateOf(b: ListedBranch, step: Step, review: string): State {
   if (step === 'task') return { text: 'Sans tâche', tone: 'warn', yours: true }
   if (step === 'done') return { text: 'Fusionnée', tone: 'neutral', yours: false }
   if (!b.forge) return { text: 'Liée, sans forge', tone: 'neutral', yours: false }
   if (step === 'review') {
-    if (b.reviewState === 'closed') return { text: `${review} fermée`, tone: 'bad', yours: true }
+    if (b.reviewState === 'closed') return { text: `${capital(review)} fermée`, tone: 'bad', yours: true }
     return b.pushed ? { text: 'À proposer', tone: 'warn', yours: true } : { text: 'À pousser', tone: 'warn', yours: true }
   }
   if (b.ci === 'fail') return { text: 'CI rouge', tone: 'bad', yours: true }
   if (b.ci === 'pending') return { text: 'CI en cours', tone: 'info', yours: false }
-  if (b.reviewDraft === true) return { text: `${review} en brouillon`, tone: 'warn', yours: true }
+  if (b.reviewDraft === true) return { text: `${capital(review)} en brouillon`, tone: 'warn', yours: true }
   if (b.reviewDraft === false) return { text: 'Prête à fusionner', tone: 'ok', yours: true }
   return { text: 'Revue ouverte', tone: 'neutral', yours: false }
 }
@@ -65,7 +67,8 @@ export const branchKey = (b: { repo: string; name: string }) => `${b.repo}\u0000
 
 // A branch with what the table and the drawer show.
 export function rowOf(b: ListedBranch, tasks: Task[]) {
-  const review = (b.forge && REVIEW[b.forge]) || 'MR'
+  // A merge request on GitLab, a pull request on GitHub, a review when the forge is not known.
+  const review = (b.forge && REVIEW[b.forge]) || 'revue'
   const step = stepOf(b)
   const reached = step === 'done' ? STEPS.length : STEPS.findIndex((s) => s.id === step)
   const stateAt = (i: number): StepState => (i < reached ? 'done' : i === reached ? 'current' : 'todo')

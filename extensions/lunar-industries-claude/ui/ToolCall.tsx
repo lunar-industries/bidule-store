@@ -12,7 +12,7 @@ export function ToolCall({ call, result }: { call: ToolCallEvent; result: ToolRe
         <summary className="row">
           <span className="lc-call-name">{toolLabel(call.name)}</span>
           <span className="mono ellipsis grow">{call.detail}</span>
-          {result?.ok === false && <span className="tag lc-tone-bad">erreur</span>}
+          {result?.ok === false && <span className="tag lunar-tone-bad">erreur</span>}
           {!result && <span className="legend">en cours…</span>}
         </summary>
         {result && <pre className="mono lc-call-output selectable">{result.text || '(rien)'}</pre>}
@@ -45,7 +45,7 @@ export function ToolCalls({ tools }: { tools: Tools }) {
     <details className="lc-disclosure lc-tools">
       <summary className="row">
         <span className="lc-call-name grow">{summary.label}</span>
-        {summary.failed && <span className="tag lc-tone-bad">erreur</span>}
+        {summary.failed && <span className="tag lunar-tone-bad">erreur</span>}
         {summary.running && <span className="legend">en cours…</span>}
       </summary>
       <div className="lc-tools-body">

@@ -39,10 +39,14 @@ et l'aperçu de l'option choisie, `annotationsOf`).
   l'aperçu des options s'affiche à côté et suit l'option survolée ou choisie ; « Autre » donne un champ ; « + Ajouter
   une précision pour Claude » un texte ; « Répondre » attend une réponse à chaque question.
 - **Le contexte** à droite (`ui/SessionContext.tsx`) : la tâche (« Changer de tâche… » et « Rattacher à une tâche… »
-  ouvrent une boîte avec recherche, `ui/TaskPick.tsx` : rien n'est rattaché avant d'avoir validé), les worktrees, les
-  fichiers modifiés, le créneau exécutable, la session et ses tokens.
+  ouvrent `pickTask` de `lunar-industries-common` : rien n'est rattaché avant d'avoir validé, et une lecture des tâches
+  qui échoue y est dite), les worktrees, les fichiers modifiés, le créneau exécutable, la session et ses tokens.
 - **Les échecs** ne passent jamais pour du vide : une liste illisible, un contexte illisible ou une vérification de
-  Claude Code qui échoue sont dits, avec Réessayer.
+  Claude Code qui échoue sont dits (`Alert` et `Empty` communs), avec Réessayer.
+- **Les composants communs** (`lunar-industries-common`) : les menus « Ajouter » et « Commandes et skills » sont le
+  menu commun, ouvert au-dessus de son bouton (les commandes avec leur description, `wide`) ; « Arrêter » pendant que
+  Claude travaille est la confirmation commune, le focus sur « Annuler » ; les icônes et les teintes des étiquettes
+  sont les communes. Une revue s'appelle MR sur GitLab et PR sur GitHub.
 - **La première visite** : les vérifications et les tâches en cours, sur une colonne sous 1 000 px.
 
 Ce qui se calcule sans rien dessiner est dans `ui/events.ts` et `ui/models.ts`, testé dans `ui/events.test.ts` ; la
@@ -52,9 +56,7 @@ carte des questions est essayée dans `ui/DecisionCard.test.tsx`.
 
 Toutes dans `ui/claude.css`, sous `lc-` :
 
-- Communes : les tons `lc-tone-ok`, `lc-tone-warn`, `lc-tone-bad`, `lc-tone-info`, `lc-tone-neutral` ; `lc-btn-sm`,
-  `lc-icon-sm`, `lc-icon-xs`, `lc-select`, `lc-textarea`, `lc-menu-icon`, `lc-disclosure`, `lc-alert` (une lecture
-  qui a échoué), `lc-error`.
+- Communes : `lc-icon-sm`, `lc-icon-xs`, `lc-select`, `lc-textarea`, `lc-disclosure`, `lc-error`.
 - La page : `lc-page`, `lc-none`, `lc-list`, `lc-groups`, `lc-group`, `lc-group-title`, `lc-item`, `lc-item-text`,
   `lc-when`, `lc-archived`, `lc-rail`, `lc-rail-item`, `lc-dot`.
 - La conversation : `lc-conv` (`wide`), `lc-conv-head`, `lc-conv-title`, `lc-conv-title-line`, `lc-conv-ref`,
@@ -65,11 +67,10 @@ Toutes dans `ui/claude.css`, sous `lc-` :
   `lc-options`, `lc-option` (`data-checked`, `other`), `lc-option-text`, `lc-option-input`, `lc-question-split`,
   `lc-preview`, `lc-add-note`, `lc-questions-left`.
 - Le message : `lc-compose`, `lc-to-end`, `lc-box`, `lc-field`, `lc-bar`, `lc-send` (`ready`), `lc-attached`,
-  `lc-attachment`, `lc-commands`, `lc-command-item`.
+  `lc-attachment`.
 - Le contexte : `lc-context`, `lc-ctx-panel`, `lc-ctx-title`, `lc-ctx-task`, `lc-ctx-attach`, `lc-ctx-worktree`,
-  `lc-ctx-path`, `lc-ctx-line`, `lc-added`, `lc-removed`, `lc-task-field` ; la boîte « Rattacher » : `lc-pick`,
-  `lc-pick-list`, `lc-pick-item`.
-- Éteint, première visite : `lc-off`, `lc-empty`, `lc-empty-head`, `lc-empty-grid`, `lc-check`, `lc-check-text`,
+  `lc-ctx-path`, `lc-ctx-line`, `lc-added`, `lc-removed`, `lc-task-field`.
+- Éteint, première visite : `lc-off`, `lc-empty`, `lc-empty-grid`, `lc-check`, `lc-check-text`,
   `lc-task`.
 - La nouvelle session : `lc-new`, `lc-new-head`, `lc-new-body`, `lc-new-section`, `lc-new-textarea`,
   `lc-new-settings`.

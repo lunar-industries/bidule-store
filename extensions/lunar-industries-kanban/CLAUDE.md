@@ -39,6 +39,10 @@ déclare comme l'officiel (`ui/points.ts`) ; chaque pastille est dessinée dans 
   les statuts masqués.
 - **Les icônes** (synchroniser, replier une colonne, la coche d'une carte choisie) et les teintes des étiquettes sont
   les communes.
+- **La largeur des colonnes** (Réglages › Kanban, réglage caché `lunar-industries-kanban.columnWidth`) est la même
+  pour toutes : automatique, les colonnes ouvertes se partagent la largeur du tableau entre 252 et 480 px
+  (`columnWidth` de `ui/layout.ts`, mesurée sur le tableau quand la fenêtre change de taille ou qu'une colonne se
+  replie, posée en `--lik-col`) ; sinon étroite (252 px), moyenne (320 px) ou large (400 px).
 - **La fenêtre étroite** (moins de 1 000 px) : une étape à la fois, choisie par des onglets.
 - **La partie de fond** (`ui/index.tsx`, `Count`) met sur l'onglet le nombre de tâches en retard ou à rendre
   aujourd'hui.

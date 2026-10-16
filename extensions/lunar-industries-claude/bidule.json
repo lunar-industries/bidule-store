@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-claude",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "title": "Claude",
   "engine": "^0.3.1",
   "dependencies": {

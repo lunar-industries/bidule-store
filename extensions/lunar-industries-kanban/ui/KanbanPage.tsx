@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react'
 import {
   BannerTools,
   busy,
@@ -43,6 +54,8 @@ import {
   branchKey,
   columnColor,
   columnOf,
+  columnWidth,
+  COLUMN_MIN,
   dayKey,
   FILTER_LABELS,
   groupsOf,
@@ -55,6 +68,8 @@ import {
   parseList,
   parseMerges,
   sortTasks,
+  WIDTH,
+  widthOf,
   type Column,
   type Mark,
   type TaskContext,
@@ -246,6 +261,31 @@ export function Kanban() {
   }, [])
   const shownStage = narrow ? (stages.find((s) => s.key === stage) ?? stages.find((s) => s.columns.some((c) => !c.folded)) ?? stages[0]) : null
   const shownStages = shownStage ? [shownStage] : stages
+
+  // The columns' width, the same for all (Réglages › Kanban): automatic, it is measured on the board, again when the
+  // window changes size or a column is folded. What is not an open column (the gaps, the folded columns) is measured
+  // as laid out, so that one pass is enough.
+  const widthChoice = widthOf(values?.[WIDTH])
+  const boardRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(COLUMN_MIN)
+  const layoutKey = shownStages.map((s) => s.columns.map((c) => (c.folded ? 'f' : 'o')).join('')).join('|')
+  useLayoutEffect(() => {
+    const el = boardRef.current
+    if (!el) return
+    const measure = () => {
+      const open = [...el.querySelectorAll<HTMLElement>('.lik-column')]
+      const current = open[0]?.getBoundingClientRect().width ?? 0
+      const stagesShown = [...el.querySelectorAll<HTMLElement>(':scope > .lik-stage')]
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0
+      const content = stagesShown.reduce((sum, s) => sum + s.getBoundingClientRect().width, 0) + gap * Math.max(0, stagesShown.length - 1)
+      setWidth(columnWidth(widthChoice, el.clientWidth, content - open.length * current, open.length))
+    }
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [widthChoice, layoutKey, board])
+
   // The cards the arrows go through: the open columns shown, and their cards in the order shown.
   const grid = shownStages.flatMap((s) => s.columns.filter((c) => !c.folded).map((c) => ({ column: c, tasks: shownTasks(c) })))
   const firstCard = grid.find((g) => g.tasks.length)?.tasks[0]?.id ?? null
@@ -729,7 +769,7 @@ export function Kanban() {
           ))}
         </div>
       )}
-      <div className={`lik-board${dragging ? ' dragging' : ''}`}>
+      <div ref={boardRef} className={`lik-board${dragging ? ' dragging' : ''}`} style={{ '--lik-col': `${width}px` } as CSSProperties}>
         {shownStages.map((s) => (
           <section key={s.key} className="lik-stage" aria-label={s.label}>
             {!narrow && (

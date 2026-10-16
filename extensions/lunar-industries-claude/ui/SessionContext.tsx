@@ -3,9 +3,10 @@ import { errorMessage, react, useOn } from '@bidule/sdk'
 import type { SessionContext as Context } from '../contract.ts'
 import { api } from './api.ts'
 import { cost, tokens } from './events.ts'
-import { Icon } from './Icon.tsx'
-import { refreshSessions, useBoard } from './state.ts'
-import { pickTask } from './TaskPick.tsx'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
+import { Alert, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
+import { pickTask, useTaskBoard } from '@bidule/ext-lunar-industries-common/ui/tasks'
+import { refreshSessions } from './state.ts'
 
 // Kept across visits while the app runs: coming back, the panel shows what it had while it reads again.
 const kept = new Map<string, Context>()
@@ -20,7 +21,8 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
   // Why the context could not be read: said with Réessayer, never taken for a session without a task.
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const tasks = useBoard()?.tasks ?? []
+  // The user's tasks, for the dialog that attaches the session to one (a reading that failed is said there).
+  const board = useTaskBoard()
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const load = () =>
@@ -76,8 +78,17 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
 
   // The task chosen in a dialog with a search: nothing is attached before the user confirms one.
   const change = async () => {
-    const taskId = await pickTask(tasks, context?.task?.id ?? null)
-    if (taskId) await attach(taskId)
+    const current = context?.task?.id ?? null
+    const task = await pickTask({
+      title: 'Rattacher la session à une tâche',
+      action: 'Rattacher',
+      tasks: board.tasks,
+      done: board.done,
+      problem: board.problem,
+      retry: board.retry,
+      exclude: current ? [current] : [],
+    })
+    if (task) await attach(task.id)
   }
 
   const c = context
@@ -109,35 +120,28 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
           </button>
         </div>
         {error && (
-          <div className="row lc-alert" role="alert">
-            <span className="grow">{c ? 'Le contexte n’a pas pu être relu.' : 'Le contexte n’a pas pu être lu.'}</span>
-            <button type="button" className="btn lc-btn-sm" onClick={() => void load()}>
-              Réessayer
-            </button>
-          </div>
+          <Alert retry={() => void load()}>
+            {c ? `Le contexte n’a pas pu être relu : ${error} Voici la dernière lecture.` : `Le contexte n’a pas pu être lu : ${error}`}
+          </Alert>
         )}
-        {!c && !error && (
-          <span className="legend" role="status">
-            Lecture du contexte…
-          </span>
-        )}
+        {!c && !error && <Loading>Lecture du contexte…</Loading>}
         {c?.task ? (
           <>
             <strong className="lc-ctx-task">{c.task.title}</strong>
             <div className="row">
-              <span className="tag lc-tone-info">{c.task.status}</span>
+              <span className="tag lunar-tone-info">{c.task.status}</span>
               {c.task.url && (
                 // A button, as the design system draws them: a link with `btn` would lose the button's shape.
-                <button type="button" className="btn lc-btn-sm" onClick={() => c.task?.url && window.open(c.task.url, '_blank', 'noopener')}>
+                <button type="button" className="btn lunar-btn-sm" onClick={() => c.task?.url && window.open(c.task.url, '_blank', 'noopener')}>
                   Ouvrir la tâche
                 </button>
               )}
             </div>
             <div className="row">
-              <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => void change()}>
+              <button type="button" className="btn lunar-btn-sm" disabled={busy} onClick={() => void change()}>
                 Changer de tâche…
               </button>
-              <button type="button" className="btn lc-btn-sm" disabled={busy} onClick={() => void attach(null)}>
+              <button type="button" className="btn lunar-btn-sm" disabled={busy} onClick={() => void attach(null)}>
                 Détacher
               </button>
             </div>
@@ -146,7 +150,7 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
           c && (
             <>
               <span className="legend">Session sans tâche</span>
-              <button type="button" className="btn lc-btn-sm lc-ctx-attach" disabled={busy} onClick={() => void change()}>
+              <button type="button" className="btn lunar-btn-sm lc-ctx-attach" disabled={busy} onClick={() => void change()}>
                 Rattacher à une tâche…
               </button>
             </>
@@ -208,7 +212,7 @@ export function SessionContext({ sessionId, cwd, collapse }: { sessionId: string
           {c.slot.map((l) => (
             <div key={l.repo} className="row lc-ctx-line">
               <span className="grow">{l.repo}</span>
-              <span className={`tag lc-tone-${l.mine ? 'ok' : l.alive ? 'warn' : 'neutral'}`}>
+              <span className={`tag lunar-tone-${l.mine ? 'ok' : l.alive ? 'warn' : 'neutral'}`}>
                 {l.mine ? 'tenu par cette session' : l.alive ? l.session || 'autre session' : 'libre à reprendre'}
               </span>
             </div>

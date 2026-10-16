@@ -10,6 +10,9 @@ import {
   ORDER,
   parseList,
   parseMerges,
+  WIDTH,
+  widthOf,
+  WIDTHS,
   withChoice,
   type StatusChoice,
 } from './layout.ts'
@@ -98,6 +101,20 @@ export function KanbanSettings() {
 
   return (
     <div className="fields">
+      <label className="field wide">
+        Largeur des colonnes
+        <select value={widthOf(values[WIDTH])} onChange={(e) => save({ [WIDTH]: e.target.value })}>
+          {WIDTHS.map((w) => (
+            <option key={w.value} value={w.value}>
+              {w.label}
+            </option>
+          ))}
+        </select>
+        <span className="hint">
+          Toutes les colonnes ont la même largeur. En automatique, elles se partagent la largeur de la fenêtre, entre 252 et
+          480 px ; plus étroites, le tableau défile de côté.
+        </span>
+      </label>
       <div className="field wide">
         Colonnes du Kanban
         {!columns.length && !missing.length && (

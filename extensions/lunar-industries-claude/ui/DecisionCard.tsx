@@ -7,7 +7,7 @@ import { md } from './markdown.ts'
 export function Decided({ card, decision }: { card: Permission; decision: DecisionEvent }) {
   return (
     <div className="row lc-decided">
-      <span className={`tag lc-tone-${decision.allow ? 'ok' : 'bad'}`}>
+      <span className={`tag lunar-tone-${decision.allow ? 'ok' : 'bad'}`}>
         {decision.always ? 'Autorisé pour la session' : decision.allow ? 'Autorisé' : 'Refusé'}
       </span>
       <span className="mono ellipsis grow">{card.ask === 'plan' ? 'Plan' : card.detail}</span>
@@ -195,7 +195,7 @@ function QuestionField({ question: q, answer: a, change }: { question: Question;
   return (
     <fieldset className="lc-question">
       <legend className="row">
-        {q.header && <span className="tag lc-tone-neutral">{q.header}</span>}
+        {q.header && <span className="tag lunar-tone-neutral">{q.header}</span>}
         <span>{q.question}</span>
         {q.multiSelect && <span className="legend">plusieurs choix possibles</span>}
       </legend>

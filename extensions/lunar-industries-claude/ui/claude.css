@@ -5,35 +5,9 @@
   --lc-warn-ink: color-mix(in srgb, var(--butter) 45%, var(--text));
   /* Light enough for --bad-ink to read on it at 4.5:1, Capy's and Clo's themes included. */
   --lc-bad-bg: color-mix(in srgb, var(--bad-ink) 10%, var(--card));
-  --lc-info-bg: color-mix(in srgb, var(--blue) 24%, var(--card));
 }
 
-/* ---------- tags and small controls */
-.lc-tone-ok {
-  background: var(--ok-bg);
-  color: var(--ok-ink);
-}
-.lc-tone-warn {
-  background: var(--lc-warn-bg);
-  color: var(--lc-warn-ink);
-}
-.lc-tone-bad {
-  background: var(--lc-bad-bg);
-  color: var(--bad-ink);
-}
-.lc-tone-info {
-  background: var(--lc-info-bg);
-  color: var(--text);
-}
-.lc-tone-neutral {
-  background: var(--chip);
-  color: var(--text-2);
-}
-.btn.lc-btn-sm {
-  height: 32px;
-  padding: 0 var(--space-3);
-  font-size: var(--fs-sm);
-}
+/* ---------- small controls (the tags' tones and the small buttons are lunar-industries-common's) */
 .icon-btn.lc-icon-sm {
   width: 32px;
   height: 32px;
@@ -67,11 +41,6 @@
     sans-serif;
   line-height: 1.55;
   resize: vertical;
-}
-.lc-menu-icon {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* A disclosure: its summary is a row with a chevron that turns when open. */
@@ -134,17 +103,6 @@
 .lc-list h2 {
   margin: 0;
   font-size: var(--fs-xl);
-}
-/* A reading that failed, with Réessayer: above what was read before, if anything. */
-.lc-alert {
-  margin: 0;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--lc-bad-bg);
-  color: var(--bad-ink);
-  font-size: var(--fs-sm);
-  font-weight: 700;
 }
 .lc-groups {
   display: flex;
@@ -664,30 +622,6 @@
 .lc-questions-left {
   text-align: right;
 }
-/* « Rattacher la session à une tâche »: a search, the tasks found. */
-.lc-pick {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.lc-pick > h2 {
-  margin: 0;
-}
-.lc-pick-list {
-  margin: 0;
-  padding: var(--space-1);
-  list-style: none;
-  border: 2px solid var(--card-line);
-  border-radius: var(--radius-md);
-}
-.lc-pick-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.lc-pick-list .menu-item.active {
-  background: var(--chip-hover);
-}
 .lc-decided {
   gap: var(--space-2);
   font-size: var(--fs-xs);
@@ -778,19 +712,6 @@
   font-size: var(--fs-xs);
   color: var(--text-2);
 }
-/* The skills' descriptions are long sentences: the list keeps a reading width. */
-.menu.lc-commands {
-  width: 480px;
-  max-width: calc(100vw - 2 * var(--space-4));
-  max-height: min(440px, 60vh);
-  overflow-y: auto;
-}
-.lc-command-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
 
 /* ---------- the context, on the right */
 .lc-context {
@@ -859,15 +780,6 @@
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-}
-.lc-empty-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-}
-.lc-empty-head p {
-  margin: 0;
 }
 .lc-empty-grid {
   display: grid;

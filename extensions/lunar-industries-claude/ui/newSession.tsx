@@ -84,7 +84,7 @@ function NewSession({ options, done }: { options: Options; done: (id: string | n
           <h2>{title}</h2>
           <p className="legend">
             {options.skill
-              ? 'Claude déroule la tâche avec le skill de l’équipe : plan, issue et MR, travail dans des worktrees à part (vos dépôts restent sur leur branche actuelle), puis mise en staging.'
+              ? 'Claude déroule la tâche avec le skill de l’équipe : plan, issue et revue (MR ou PR), travail dans des worktrees à part (vos dépôts restent sur leur branche actuelle), puis mise en staging.'
               : 'Claude travaille dans des worktrees à part : vos dépôts restent sur leur branche actuelle.'}
           </p>
         </header>
