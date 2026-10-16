@@ -526,6 +526,22 @@
               "signature": "jnVQTabXvCUVHDtmPJgYOLjhovtGu2WYFcslyPfpPRcAlefixuOs3OyjM9en0fkjvgLyss/JUucbe7UwcJNACQ=="
             }
           }
+        },
+        "0.1.2": {
+          "engine": "^0.3.0",
+          "dependencies": {},
+          "permissions": [],
+          "kind": "connectors",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-plane-0.1.2/lunar-industries-plane-0.1.2.tgz",
+              "size": 10063,
+              "sha256": "cec61fe09ea69a45084976404ebef7b852ac2340aa90615f31d1ff3f65c65448",
+              "signature": "lPjLvqv0KR9TwEXQnh3ybhLztwYpfa7unW/8gzB0WibHGsB52um5AuqYiFG7fPHlie5i6+dqLsBNX5Kx9eq/CQ=="
+            }
+          }
         }
       }
     },
