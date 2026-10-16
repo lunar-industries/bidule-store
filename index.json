@@ -480,6 +480,24 @@
               "signature": "oKjcOMPp1NkYXWe87MRxB1bIFGDAi/JpXkx6xmeDahtVCtj362mXVPjtJzcz09uYODXvtVumnl1jlQcQxwpxCQ=="
             }
           }
+        },
+        "0.5.0": {
+          "engine": "^0.3.1",
+          "dependencies": {
+            "docker": ">=0.2.0"
+          },
+          "permissions": [],
+          "kind": "modules",
+          "unofficial": true,
+          "released": "2026-10-16",
+          "packages": {
+            "any": {
+              "url": "https://github.com/lunar-industries/bidule-store/releases/download/lunar-industries-containers-0.5.0/lunar-industries-containers-0.5.0.tgz",
+              "size": 37897,
+              "sha256": "13c62980b868ef15beff3707e7ca124ce966de6ccc14ac417ecab1a24e3e6ad7",
+              "signature": "pwr6qP+k+VKw6jJSCKVJda1Xl1jh4f0l2395eByD1ok9k8AXzkSBoLKmHvcXZfM7ubU43g550agH59Yfvx8FCw=="
+            }
+          }
         }
       }
     },
