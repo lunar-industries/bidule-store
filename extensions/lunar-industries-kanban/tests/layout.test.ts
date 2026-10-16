@@ -8,7 +8,6 @@ import {
   boardColumns,
   branchKey,
   branchLabel,
-  branchWords,
   choiceOf,
   columnColor,
   columnOf,
@@ -26,7 +25,6 @@ import {
   parseMerges,
   shortBranch,
   sortTasks,
-  tasksForBranch,
   withChoice,
   type TaskContext,
 } from '../ui/layout.ts'
@@ -325,18 +323,6 @@ describe('branches', () => {
     expect(rows[0].checked).toBe(true)
     expect(rows[2].note).toBe('liée à Une autre')
     expect(linkRows(list, 't', 'LIB', () => '', new Set()).map((r) => r.name)).toEqual(['elsewhere'])
-  })
-
-  test('a branch’s task: those whose title or reference has its words first, the unfinished before the others', () => {
-    expect(branchWords('feat/TSK-142-export-csv')).toEqual(['tsk', '142', 'export', 'csv'])
-    const tasks = [
-      task('a', 'À faire', { title: 'Traduire les messages' }),
-      task('b', 'Terminé', { title: 'Export PDF des factures', ref: 'TSK-97' }),
-      task('c', 'À faire', { title: 'Exporter les temps en CSV', ref: 'TSK-142' }),
-    ]
-    const done = (t: Task) => t.status === 'Terminé'
-    expect(tasksForBranch(tasks, 'feat/TSK-142-export-csv', '', done).map((t) => t.id)).toEqual(['c', 'b', 'a'])
-    expect(tasksForBranch(tasks, 'feat/TSK-142-export-csv', 'trad', done).map((t) => t.id)).toEqual(['a'])
   })
 })
 

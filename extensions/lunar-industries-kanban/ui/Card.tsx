@@ -1,15 +1,17 @@
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { ExtensionBoundary, type Task } from '@bidule/sdk'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import type { KanbanBranch } from '../contract.ts'
 import { badgeOf, branchLabel, marksOf, noteOf, type Mark, type Tone } from './layout.ts'
 
+// The tags' tones, the same in every Lunar Industries module (lunar-industries-common).
 const TONE_CLASS: Record<Tone, string> = {
-  ok: 'lik-tone-ok',
-  bad: 'lik-tone-bad',
-  warn: 'lik-tone-warn',
-  info: 'lik-tone-info',
-  neutral: 'lik-tone-neutral',
-  accent: 'lik-tone-accent',
+  ok: 'lunar-tone-ok',
+  bad: 'lunar-tone-bad',
+  warn: 'lunar-tone-warn',
+  info: 'lunar-tone-info',
+  neutral: 'lunar-tone-neutral',
+  accent: 'lunar-tone-accent',
 }
 
 // What another extension gives a card: its badges, drawn by its own interface.
@@ -84,9 +86,7 @@ export function Card({
       <div className="row lik-card-head">
         {selected && (
           <span className="lik-check-mark" aria-hidden="true">
-            <svg width="11" height="11" viewBox="0 0 12 12">
-              <path d="M2.5 6.2l2.3 2.3 4.7-5" stroke="currentColor" strokeWidth="1.9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <Icon name="check" size={11} />
           </span>
         )}
         {task.ref && <span className="mono lik-ref">{task.ref}</span>}

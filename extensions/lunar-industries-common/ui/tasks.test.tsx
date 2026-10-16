@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Task } from '@bidule/sdk'
-import { findTasks, TaskField } from './tasks.tsx'
+import { branchWords, findTasks, TaskField } from './tasks.tsx'
 
 afterEach(cleanup)
 
@@ -26,8 +26,10 @@ describe('Recherche d’une tâche', () => {
     expect(ids(findTasks(tasks, '', { done, exclude: ['2', '3'] }))).toEqual(['4', '1'])
   })
 
-  it('puts first the tasks sharing the most words with a branch’s name', () => {
+  it('puts first the tasks sharing the most words with a branch’s name, its kind and its short words aside', () => {
+    expect(branchWords('feat/TSK-142-export-csv')).toEqual(['tsk', '142', 'export', 'csv'])
     expect(ids(findTasks(tasks, '', { done, hint: 'feat/export-factures' }))[0]).toBe('4')
+    expect(ids(findTasks(tasks, '', { done, hint: 'fix/tsk-398-paiement-3x' }))).toEqual(['3', '1', '2', '4'])
   })
 })
 

@@ -31,7 +31,13 @@ export type TaskSearch = {
 }
 
 const MAX = 8
-const words = (text: string) => fold(text).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1)
+// The words a branch's name brings to find its task: its parts (`feat/TSK-142-export-csv` → tsk, 142, export, csv),
+// without its kind (feat, fix…) and the words too short to mean anything.
+const KINDS = new Set(['feat', 'feature', 'fix', 'hotfix', 'chore', 'docs', 'doc', 'refactor', 'test', 'tests', 'ci', 'build', 'perf', 'style'])
+export const branchWords = (name: string) =>
+  fold(name)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 3 && !KINDS.has(w))
 
 /**
  * The tasks a query finds: every word typed in the title, the reference or `also`, without accents; those sharing the
@@ -39,7 +45,7 @@ const words = (text: string) => fold(text).split(/[^\p{L}\p{N}]+/u).filter((w) =
  */
 export function findTasks(tasks: readonly Task[], query: string, { done, also, hint, exclude }: TaskSearch): Task[] {
   const typed = fold(query).split(/\s+/).filter(Boolean)
-  const hinted = hint ? words(hint) : []
+  const hinted = hint ? branchWords(hint) : []
   const text = (t: Task) => fold(`${t.ref ?? ''} ${t.title} ${also?.(t) ?? ''}`)
   return tasks
     .filter((t) => !exclude?.includes(t.id))

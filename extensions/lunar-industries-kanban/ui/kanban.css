@@ -4,18 +4,6 @@
   gap: var(--space-3);
 }
 
-/* A reading that failed, above the board already read: why, and Réessayer. */
-.lik-alert {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 2px solid var(--accent-line);
-  border-radius: var(--radius-md);
-  background: var(--card-urgent);
-  font-size: var(--fs-sm);
-}
-
 /* « À surveiller »: late, due today, failing CI, each a button that filters the board (pressed while it does). */
 .lik-attention-row {
   flex-wrap: wrap;
@@ -290,33 +278,7 @@
   font-size: var(--fs-xs);
 }
 
-/* The tones of a badge or a mark. */
-.lik-tone-ok {
-  background: var(--ok-bg);
-  color: var(--ok-ink);
-}
-.lik-tone-bad {
-  background: var(--bad-wash);
-  color: var(--bad-ink);
-}
-.lik-tone-warn {
-  background: color-mix(in srgb, var(--butter) 16%, transparent);
-  color: var(--butter);
-}
-.lik-tone-info {
-  background: color-mix(in srgb, var(--blue) 16%, transparent);
-  color: var(--blue);
-}
-.lik-tone-neutral {
-  background: var(--chip);
-  color: var(--text-2);
-}
-.lik-tone-accent {
-  background: var(--coral);
-  color: var(--on-coral);
-}
-
-/* The states without a board: loading (hollow columns), and the empty ones with what to do next. */
+/* The states without a board: loading (hollow columns), and the empty ones' actions (the common Empty draws them). */
 .lik-loading {
   display: flex;
   flex-direction: column;
@@ -333,58 +295,15 @@
   border-radius: var(--radius-md);
   background: var(--card-done);
 }
-.lik-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-}
-.lik-empty strong {
-  color: var(--text);
-  font-family: 'Baloo 2', sans-serif;
-  font-size: var(--fs-xl);
-}
 .lik-empty-actions {
   gap: var(--space-2);
 }
 
-/* The branches without a task (maquette, Lier des branches): a panel at the window's right edge, under the title bar. */
-.lik-panel {
-  position: fixed;
-  z-index: 30;
-  top: 40px;
-  right: 0;
-  bottom: 0;
-  width: min(460px, 100vw);
-  display: flex;
-  flex-direction: column;
-  border-left: 2px solid var(--card-line);
-  background: var(--banner);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
-}
-.lik-panel-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-5) var(--space-3);
-  border-bottom: 2px solid var(--card-line);
-}
-.lik-panel-head h2 {
-  margin: 0;
-  font-family: 'Baloo 2', sans-serif;
-  font-size: var(--fs-xl);
-}
-.lik-panel-head p {
-  margin: 0;
-}
-.lik-panel-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+/* The branches without a task (maquette, Lier des branches), in the common side panel: by repo. */
+.lik-panel-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
 }
 .lik-panel-repo h3 {
   margin: 0 var(--space-2) var(--space-1);
@@ -428,51 +347,8 @@
   color: var(--butter);
   font-size: var(--fs-xs);
 }
-.lik-panel-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  border-top: 2px solid var(--card-line);
-}
-.lik-panel-foot kbd {
-  font-family: 'JetBrains Mono', monospace;
-}
-/* The search of a branch's task: a field, then the tasks found (the chosen one `active`). */
-.lik-picker {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+.lik-panel-row .lunar-tasks {
   cursor: default;
-}
-.lik-picker input {
-  height: 36px;
-  padding: 0 var(--space-3);
-  border: 2px solid var(--accent-line);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  font-size: var(--fs-md);
-}
-.lik-picker-list {
-  margin: 0;
-  padding: var(--space-1);
-  list-style: none;
-  border: 2px solid var(--card-line);
-  border-radius: var(--radius-sm);
-  background: var(--card);
-}
-.lik-picker-item {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  cursor: pointer;
-}
-.lik-picker-item.active {
-  background: var(--chip-hover);
-}
-.lik-picker-none {
-  padding: var(--space-2);
 }
 
 /* « Lier des branches… »: a form (Enter saves), its ticked rows grouped by repo. */

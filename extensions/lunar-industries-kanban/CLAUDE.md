@@ -27,19 +27,24 @@ déclare comme l'officiel (`ui/points.ts`) ; chaque pastille est dessinée dans 
   sont déclarés dans le manifeste (`contributes.shortcuts`).
 - **Déplacer** : par le menu, Alt+flèche ou un glisser, une carte ou toute la sélection. Le tableau change aussitôt,
   revient en arrière si l'outil refuse, et une notification propose d'annuler pendant 8 s (`toast` du SDK).
-- **Les branches sans tâche** (`ui/BranchPanel.tsx`) : un panneau au bord droit de la fenêtre, ouvert depuis le bord du
-  bandeau. Les branches récentes qu'aucune carte ne réclame, par dépôt ; on en glisse une sur une carte, ou Entrée
-  ouvre une recherche de tâche où viennent d'abord celles dont le titre ou la référence a les mots de la branche
-  (`tasksForBranch`). Une liaison s'annule depuis sa notification.
-- **Les états sans tableau** : « Lecture des tâches… » pendant le chargement ; une erreur avec Réessayer (au-dessus du
-  tableau déjà lu quand il y en a un) ; sans source, un bouton vers Réglages › Extensions ; une source non configurée,
-  un bouton vers ses réglages ; aucune tâche, Synchroniser et les statuts masqués.
+- **Les branches sans tâche** (`ui/BranchPanel.tsx`) : le panneau latéral commun (`SidePanel` de
+  `lunar-industries-common`), par-dessus le tableau, ouvert depuis le bord du bandeau. Échap ou sa × le ferment et
+  rendent le focus au bouton du bandeau ; un clic en dehors le ferme aussi, sauf sur ce bouton, qui le referme
+  lui-même. Les branches récentes qu'aucune carte ne réclame, par dépôt ; on en glisse une sur une carte, ou Entrée
+  ouvre le champ de tâche commun (`TaskField`, toujours ouvert dans la ligne), où viennent d'abord les tâches dont le
+  titre ou la référence a les mots de la branche (`hint`). Une liaison s'annule depuis sa notification.
+- **Les états sans tableau** (`Empty` et `Alert` communs) : « Lecture des tâches… » et des colonnes vides pendant le
+  chargement ; une erreur avec Réessayer (au-dessus du tableau déjà lu quand il y en a un) ; sans source, un bouton
+  vers Réglages › Extensions ; une source non configurée, un bouton vers ses réglages ; aucune tâche, Synchroniser et
+  les statuts masqués.
+- **Les icônes** (synchroniser, replier une colonne, la coche d'une carte choisie) et les teintes des étiquettes sont
+  les communes.
 - **La fenêtre étroite** (moins de 1 000 px) : une étape à la fois, choisie par des onglets.
 - **La partie de fond** (`ui/index.tsx`, `Count`) met sur l'onglet le nombre de tâches en retard ou à rendre
   aujourd'hui.
 
 Ce qui se calcule sans rien dessiner est dans `ui/layout.ts` (colonnes, réunions de statuts, ordre, badges, notes,
-marques, filtres, tri, recherche d'une tâche pour une branche) et testé dans `tests/layout.test.ts`.
+marques, filtres, tri) et testé dans `tests/layout.test.ts`.
 
 `server/stale_days.ts` reste : une migration déjà livrée (`…_stale_days_from_kanban.ts`) l'importe.
 
@@ -47,19 +52,17 @@ marques, filtres, tri, recherche d'une tâche pour une branche) et testé dans `
 
 Toutes dans `ui/kanban.css`, sous `lik-` :
 
-- La page : `lik-page`, `lik-alert` (une lecture qui a échoué, au-dessus du tableau), `lik-attention-row`,
+- La page : `lik-page`, `lik-attention-row`,
   `lik-attention-title`, `lik-attention` (`lik-attention-late`, `lik-attention-today`, `lik-attention-ci` ;
   `aria-pressed` quand il filtre), `lik-stage-tabs` (fenêtre étroite).
 - Le tableau : `lik-board` (`dragging` pendant un glisser), `lik-stage`, `lik-stage-title`, `lik-stage-columns`,
   `lik-column` (`drop-over`), `lik-column-head`, `lik-column-toggle`, `lik-cards`, `lik-folded` (une colonne repliée),
   `lik-folded-name`, `lik-drop-hint`.
 - La carte : `lik-card` (`late`, `selected`, `done`, `branch-over`), `lik-card-head`, `lik-check-mark`, `lik-ref`,
-  `lik-tool`, `lik-branch`, `lik-link-hint`, `lik-marks`, `lik-mark`, `lik-note`, et les tons `lik-tone-ok`,
-  `lik-tone-bad`, `lik-tone-warn`, `lik-tone-info`, `lik-tone-neutral`, `lik-tone-accent`.
-- Les états sans tableau : `lik-loading`, `lik-skeleton`, `lik-empty`, `lik-empty-actions`.
-- Le panneau des branches : `lik-panel`, `lik-panel-head`, `lik-panel-body`, `lik-panel-repo`, `lik-panel-list`,
-  `lik-panel-row` (`picking`), `lik-panel-line`, `lik-panel-note`, `lik-panel-foot`, `lik-picker`, `lik-picker-list`,
-  `lik-picker-item` (`active`), `lik-picker-none`.
+  `lik-tool`, `lik-branch`, `lik-link-hint`, `lik-marks`, `lik-mark`, `lik-note`.
+- Les états sans tableau : `lik-loading`, `lik-skeleton`, `lik-empty-actions`.
+- Le contenu du panneau des branches : `lik-panel-toggle` (son bouton au bord du bandeau), `lik-panel-content`,
+  `lik-panel-repo`, `lik-panel-list`, `lik-panel-row` (`picking`), `lik-panel-line`, `lik-panel-note`.
 - « Lier des branches… » : `lik-link-form`, `lik-checks`, `lik-check-group`, `lik-check`, `lik-check-name`,
   `lik-check-note`.
 - Réglages › Kanban : `lik-statuses`, `lik-status` (`off`, `dragging`, `drop-before`, `drop-after`),

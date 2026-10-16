@@ -389,31 +389,6 @@ export function attentionOf(tasks: readonly Task[], ctx: TaskContext): { late: n
   }
 }
 
-// The words a branch's name brings to find its task: its parts (`feat/TSK-142-export-csv` → tsk, 142, export, csv),
-// without its kind (feat, fix…) and the words too short to mean anything.
-const KINDS = new Set(['feat', 'feature', 'fix', 'hotfix', 'chore', 'docs', 'doc', 'refactor', 'test', 'tests', 'ci', 'build', 'perf', 'style'])
-export function branchWords(name: string): string[] {
-  return fold(name)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((w) => w.length >= 3 && !KINDS.has(w))
-}
-
-/**
- * The tasks to offer for a branch, best first: those whose title or reference has the most of the branch's words, the
- * unfinished ones before the others; only those matching every word typed (`query`), eight at most.
- */
-export function tasksForBranch(tasks: readonly Task[], branch: string, query: string, done: (task: Task) => boolean): Task[] {
-  const words = branchWords(branch)
-  const typed = fold(query).split(/\s+/).filter(Boolean)
-  const text = (t: Task) => fold(`${t.ref ?? ''} ${t.title}`)
-  return tasks
-    .filter((t) => typed.every((w) => text(t).includes(w)))
-    .map((task, i) => ({ task, i, score: words.filter((w) => text(task).includes(w)).length, done: done(task) }))
-    .sort((a, b) => b.score - a.score || Number(a.done) - Number(b.done) || a.i - b.i)
-    .slice(0, 8)
-    .map(({ task }) => task)
-}
-
 // A column's cards: the late ones first (the longest overdue first), then by due date, then those without one, each
 // keeping the order the core gave otherwise.
 export function sortTasks(tasks: readonly Task[], today: string): Task[] {

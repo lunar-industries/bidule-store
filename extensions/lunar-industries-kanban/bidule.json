@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-kanban",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "title": "Kanban",
   "engine": "^0.3.1",
   "dependencies": {

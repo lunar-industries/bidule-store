@@ -20,8 +20,10 @@ import {
   type ObjectProvider,
   type Task,
 } from '@bidule/sdk'
+import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { nextTicks } from '@bidule/ext-lunar-industries-common/ui/list'
+import { Alert, Empty } from '@bidule/ext-lunar-industries-common/ui/states'
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
 import {
   board as readBoard,
@@ -574,7 +576,7 @@ export function Kanban() {
         <button
           ref={panelButton}
           type="button"
-          className="banner-button"
+          className="banner-button lik-panel-toggle"
           aria-expanded={panel}
           title="Les branches récentes sans tâche"
           onClick={() => setPanel(!panel)}
@@ -583,9 +585,7 @@ export function Kanban() {
         </button>
       )}
       <button type="button" className="banner-button round" aria-label="Synchroniser" title="Synchroniser les tâches" onClick={sync}>
-        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <Icon name="sync" />
       </button>
     </BannerTools>
   )
@@ -595,18 +595,14 @@ export function Kanban() {
     return (
       <div className="page">
         {error ? (
-          <section className="panel extension-error" role="alert">
-            <p>Le Kanban n'a pas pu lire tes tâches.</p>
-            <p className="test-result bad selectable">{error}</p>
-            <div className="row">
-              <button type="button" className="btn" onClick={reload}>
-                Réessayer
-              </button>
-            </div>
-          </section>
+          <Empty title="Le Kanban n'a pas pu lire tes tâches." failed action={{ label: 'Réessayer', run: reload }}>
+            {error}
+          </Empty>
         ) : (
           <div className="lik-loading">
-            <p className="muted">Lecture des tâches…</p>
+            <p className="muted" role="status">
+              Lecture des tâches…
+            </p>
             <div className="lik-skeleton" aria-hidden="true">
               <span />
               <span />
@@ -622,44 +618,50 @@ export function Kanban() {
     return (
       <div className="page">
         {tools}
-        <div className="empty lik-empty">
-          {board.source === null ? (
-            <>
-              <strong>Aucune source de tâches</strong>
-              <span>Le Kanban montre les tâches d'une extension comme Notion ou Plane.</span>
+        {board.source === null ? (
+          <Empty
+            title="Aucune source de tâches"
+            action={
               <button type="button" className="btn-cta" onClick={() => navigate('/reglages/extensions')}>
                 Installer une source de tâches
               </button>
-            </>
-          ) : !board.configured ? (
-            <>
-              <strong>{board.source} n'est pas encore branché</strong>
-              <span>Le Kanban lit tes tâches dans {board.source}. Donne-lui ce qu'il demande dans ses réglages.</span>
+            }
+          >
+            Le Kanban montre les tâches d'une extension comme Notion ou Plane.
+          </Empty>
+        ) : !board.configured ? (
+          <Empty
+            title={`${board.source} n'est pas encore branché`}
+            action={
               <button type="button" className="btn-cta" onClick={() => navigate(settingsOf ? `/reglages/${settingsOf}` : '/reglages')}>
                 Ouvrir les réglages de {board.source}
               </button>
-            </>
-          ) : (
-            <>
-              <strong>Aucune tâche où tu as un rôle</strong>
-              <span>
-                {board.source} n'a aucune tâche où tu es responsable ou participant. Si tu viens d'en créer une, relis{' '}
-                {board.source}.
-              </span>
-              <div className="row lik-empty-actions">
-                <button type="button" className="btn" onClick={sync}>
-                  Synchroniser
-                </button>
-                {hidden.length > 0 && (
-                  <button type="button" className="btn" onClick={() => navigate('/reglages/lunar-industries-kanban')}>
-                    Voir les statuts masqués
+            }
+          >
+            Le Kanban lit tes tâches dans {board.source}. Donne-lui ce qu'il demande dans ses réglages.
+          </Empty>
+        ) : (
+          <Empty
+            title="Aucune tâche où tu as un rôle"
+            action={
+              <>
+                <div className="row lik-empty-actions">
+                  <button type="button" className="btn" onClick={sync}>
+                    Synchroniser
                   </button>
-                )}
-              </div>
-            </>
-          )}
-          {readAt && <span className="legend">Lu {relTime(new Date(readAt).toISOString())}</span>}
-        </div>
+                  {hidden.length > 0 && (
+                    <button type="button" className="btn" onClick={() => navigate('/reglages/lunar-industries-kanban')}>
+                      Voir les statuts masqués
+                    </button>
+                  )}
+                </div>
+                {readAt && <span className="legend">Lu {relTime(new Date(readAt).toISOString())}</span>}
+              </>
+            }
+          >
+            {board.source} n'a aucune tâche où tu es responsable ou participant. Si tu viens d'en créer une, relis {board.source}.
+          </Empty>
+        )}
       </div>
     )
   }
@@ -681,24 +683,12 @@ export function Kanban() {
     <div className="page fill lik-page">
       {tools}
       {error && (
-        <div className="lik-alert" role="alert">
-          <span className="grow">
-            <strong>Les tâches n'ont pas pu être relues.</strong> {error} Le tableau montre la lecture{' '}
-            {readAt ? relTime(new Date(readAt).toISOString()) : "d'avant"}.
-          </span>
-          <button type="button" className="btn" onClick={reload}>
-            Réessayer
-          </button>
-        </div>
+        <Alert retry={reload}>
+          Les tâches n'ont pas pu être relues : {error} Le tableau montre la lecture{' '}
+          {readAt ? relTime(new Date(readAt).toISOString()) : "d'avant"}.
+        </Alert>
       )}
-      {gitError && (
-        <div className="lik-alert" role="alert">
-          <span className="grow">Les branches n'ont pas pu être lues : {gitError}</span>
-          <button type="button" className="btn" onClick={reloadGit}>
-            Réessayer
-          </button>
-        </div>
-      )}
+      {gitError && <Alert retry={reloadGit}>Les branches n'ont pas pu être lues : {gitError}</Alert>}
       <div className="row lik-attention-row" role="group" aria-label="À surveiller">
         {(attentionCount.late > 0 || attentionCount.today > 0 || attentionCount.ci > 0) && <span className="lik-attention-title">À surveiller</span>}
         {chip('late', attentionCount.late, plural(attentionCount.late, 'en retard', 'en retard'))}
@@ -774,12 +764,10 @@ export function Kanban() {
                   >
                     <h3 className="lik-column-head">
                       <button type="button" className="lik-column-toggle" aria-expanded="true" title={mergedTip(col) ?? `Replier ${columnLabel(col.name)}`} onClick={() => toggleFold(col.name)}>
-                        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" fill="none" />
-                        </svg>
+                        <Icon name="down" size={12} />
                         <span className="dot" style={{ background: columnColor(col) }} />
                         <span className="grow ellipsis">{columnLabel(col.name)}</span>
-                        {col.unknown && <span className="tag lik-tone-warn">absent de {ready!.source}</span>}
+                        {col.unknown && <span className="tag lunar-tone-warn">absent de {ready!.source}</span>}
                         <span className="pill-count">{tasks.length}</span>
                       </button>
                     </h3>
@@ -831,10 +819,7 @@ export function Kanban() {
           done={ctx.done}
           link={linkBranch}
           drag={dragBranch}
-          close={() => {
-            setPanel(false)
-            panelButton.current?.focus()
-          }}
+          close={() => setPanel(false)}
         />
       )}
       {menu}
