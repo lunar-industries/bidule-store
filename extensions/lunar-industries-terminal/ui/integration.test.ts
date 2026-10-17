@@ -13,6 +13,15 @@ describe('Terminal (Lunar Industries) · the shell integration marks', () => {
     expect(folderOf('nonsense')).toBeNull()
   })
 
+  it('reads a Windows folder of PowerShell’s OSC 7: a drive’s or a share’s', () => {
+    expect(folderOf('file:///C:/Users/teddy/mon%20d%C3%A9p%C3%B4t')).toBe('C:\\Users\\teddy\\mon dépôt')
+    expect(folderOf('file:///D:/')).toBe('D:\\')
+    expect(folderOf('file:///C:')).toBe('C:\\')
+    expect(folderOf('file:////wsl.localhost/Debian/home/teddy')).toBe('\\\\wsl.localhost\\Debian\\home\\teddy')
+    // A host before the path: a POSIX shell's, kept as it is.
+    expect(folderOf('file://pc/C:/x')).toBe('/C:/x')
+  })
+
   it('tracks a command from its start to its end, its marks coming twice (Fedora adds its own)', () => {
     const t = new CommandTracker()
     t.mark('A', 0)

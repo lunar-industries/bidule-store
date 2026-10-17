@@ -15,15 +15,21 @@ export function commandLineOf(data: string): string | null {
   )
 }
 
-// The folder of OSC 7 (`file://host/path`, its `%` escaped): the path, decoded; null for anything else.
+// The folder of OSC 7 (`file://host/path`, its `%` escaped): the path, decoded; null for anything else. Without a host,
+// a Windows folder (PowerShell's integration writes them): a drive's (`file:///C:/Users`) or a share's
+// (`file:////wsl.localhost/Debian/home`), given back with its backslashes.
 export function folderOf(data: string): string | null {
-  const m = /^file:\/\/[^/]*(\/.*)$/.exec(data.trim())
+  const m = /^file:\/\/([^/]*)(\/.*)$/.exec(data.trim())
   if (!m) return null
+  let path: string
   try {
-    return decodeURIComponent(m[1])
+    path = decodeURIComponent(m[2])
   } catch {
-    return m[1]
+    path = m[2]
   }
+  if (m[1] === '' && /^\/[A-Za-z]:(\/|$)/.test(path)) return `${path.slice(1, 3)}\\${path.slice(4).replace(/\//g, '\\')}`
+  if (m[1] === '' && path.startsWith('//')) return path.replace(/\//g, '\\')
+  return path
 }
 
 /**

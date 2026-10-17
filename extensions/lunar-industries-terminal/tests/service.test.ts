@@ -65,10 +65,12 @@ describe('Terminal (Lunar Industries) · from the core', () => {
   }
 
   it("opens a task's shell in the repo of its latest branch, named after the task", async () => {
-    const prepared: { cwd: string }[] = []
+    const prepared: { cwd: string; shell?: boolean }[] = []
     const terminal = serviceOn(objects, prepared)
     expect(await terminal.taskShell('t1')).toEqual({ session: 'session', title: 'TSK-1', folder: '/app' })
     expect(prepared[0].cwd).toBe('/app')
+    // The user's shell, which the core starts with the shell integration.
+    expect(prepared[0].shell).toBe(true)
     await expect(terminal.taskShell('t2')).rejects.toThrow(/pas encore de branche/)
   })
 

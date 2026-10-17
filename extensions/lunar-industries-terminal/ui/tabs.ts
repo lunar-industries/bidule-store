@@ -112,6 +112,8 @@ export class TerminalPane {
   shellPlace: ShellPlace | null = null
   // Where its shell is (OSC 7, from the shell integration): its links resolve from there. Null without integration.
   cwd: string | null = null
+  // Where its shell starts, as the shell sees it (a split's second pane: the first one's folder); null, the home folder.
+  startIn: string | null = null
   // Its commands, from the marks of the shell integration.
   readonly commands = new CommandTracker()
   // The marks of the shell integration, read in its output (ghostty-web does not hand them over).
@@ -147,6 +149,7 @@ export class TerminalPane {
   // The folder links and scripts are read from: its shell's, else the one it was opened in (as its shell sees it).
   get place(): string | null {
     if (this.cwd) return this.cwd
+    if (this.startIn) return this.startIn
     if (!this.folder) return null
     return this.wsl ? (parseWslPath(this.folder)?.linux ?? this.folder) : this.folder
   }
@@ -478,7 +481,8 @@ export class TerminalTabs {
 
   /**
    * Splits the tab: a second pane with the user's shell, side by side (`row`) or stacked (`column`), which takes the
-   * focus. Already split, the tab only turns the other way: two panes at most.
+   * focus and starts in the first pane's folder (what its shell last said, else the folder the tab was opened in).
+   * Already split, the tab only turns the other way: two panes at most.
    */
   async split(direction: SplitDirection, tab = this.active): Promise<void> {
     if (!tab) return
@@ -495,6 +499,7 @@ export class TerminalTabs {
     if (tab.split || !this.tabs.includes(tab)) return
     tab.ratio = 0.5
     const pane = this.#newPane(ghostty, tab, `${tab.fallbackTitle} · 2`)
+    pane.startIn = tab.panes[0].place
     tab.panes = [...tab.panes, pane]
     tab.focused = 1
     if (this.active === tab) this.#layout(tab)
@@ -547,7 +552,7 @@ export class TerminalTabs {
       if (!pane.target) pane.shellPlace = await askShellPlace()
       pane.pty = pane.target
         ? await b.open(pane.term.cols, pane.term.rows, pane.target)
-        : await b.open(pane.term.cols, pane.term.rows, undefined, pane.shellPlace ?? undefined)
+        : await b.open(pane.term.cols, pane.term.rows, undefined, pane.shellPlace ?? undefined, pane.startIn ?? undefined)
     } catch (err) {
       // What could not start (a command missing, an expired session) is said in the pane, which can be restarted.
       const message = (err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')

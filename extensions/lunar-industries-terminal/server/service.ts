@@ -49,6 +49,13 @@ const inside = (folder: string, path: string) => {
 // The interactive login shell of the user, there (getent where it exists, else $SHELL).
 const LOGIN_SHELL = 's=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7); exec "${s:-${SHELL:-/bin/sh}}" -l'
 
+// The user's shell in a folder (PowerShell on Windows without WSL): started by the core as a tab's own, with the shell
+// integration (`shell`); the argv is for a core that does not know `shell`.
+function userShell(place: Pick<TerminalLaunch, 'wsl'>): Pick<TerminalLaunch, 'argv' | 'shell'> {
+  if (process.platform === 'win32' && !place.wsl) return { argv: ['powershell.exe', '-NoLogo'], shell: true }
+  return { argv: ['sh', '-c', LOGIN_SHELL], shell: true }
+}
+
 /**
  * What the terminal reads of the other roles: the repo a tab's folder is in (git), what it can run (its package.json
  * scripts, Makefile targets, justfile recipes), the address of one of its reviews (its forge), a task's folder.
@@ -223,8 +230,7 @@ export class TerminalService {
     if (!known || !branch) throw new TerminalError('Branche inconnue', 404)
     const folder = await this.#folderOf(known.path, name)
     const place = this.#place(folder)
-    const argv = process.platform === 'win32' && !place.wsl ? ['powershell.exe', '-NoLogo'] : ['sh', '-c', LOGIN_SHELL]
-    const session = this.ctx.terminal.prepare({ argv, ...place })
+    const session = this.ctx.terminal.prepare({ ...userShell(place), ...place })
     return { session, title: name, folder }
   }
 
@@ -244,8 +250,7 @@ export class TerminalService {
     const folder = await this.#folderOf(repo.path, branch.name)
     const task = await this.ctx.objects.get('task', taskId).catch(() => null)
     const place = this.#place(folder)
-    const argv = process.platform === 'win32' && !place.wsl ? ['powershell.exe', '-NoLogo'] : ['sh', '-c', LOGIN_SHELL]
-    const session = this.ctx.terminal.prepare({ argv, ...place })
+    const session = this.ctx.terminal.prepare({ ...userShell(place), ...place })
     return { session, title: task?.ref ?? task?.title ?? branch.name, folder }
   }
 }
