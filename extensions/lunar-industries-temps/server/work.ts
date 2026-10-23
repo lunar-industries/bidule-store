@@ -15,11 +15,13 @@ type LinkByHand = (args: { repo: string; name: string; taskId: string | null }) 
  */
 export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
   const has = (type: StoredType) => objects.providers(type).length > 0
-  // The task of each branch, deleted ones included (a branch deleted since still says which task it was for).
-  const taskOfBranch = async () =>
-    new Map(
-      (await objects.relations({ kind: 'branch', fromType: 'task', toType: 'branch' })).map((l) => [l.to.id, l.from.id])
-    )
+  // The tasks of each branch, deleted ones included (a branch deleted since still says which tasks it was for).
+  const tasksOfBranch = async () => {
+    const out = new Map<string, string[]>()
+    for (const l of await objects.relations({ kind: 'branch', fromType: 'task', toType: 'branch' }))
+      out.set(l.to.id, [...(out.get(l.to.id) ?? []), l.from.id])
+    return out
+  }
 
   return {
     async repos() {
@@ -30,10 +32,10 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
     // With the core's `noTask` mark of the branches the user unlinked by hand (a link from the branch to itself).
     async branches() {
       if (!has('branch') || !has('repository')) return []
-      const [repos, branches, taskOf, marks] = await Promise.all([
+      const [repos, branches, tasksOf, marks] = await Promise.all([
         objects.list('repository', { withDeleted: true }),
         objects.list('branch'),
-        taskOfBranch(),
+        tasksOfBranch(),
         objects.relations({ kind: 'noTask', fromType: 'branch', toType: 'branch' }),
       ])
       const pathOf = new Map(repos.map((r) => [r.id, r.path]))
@@ -41,18 +43,18 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
       return branches.flatMap((b): WorkBranch[] => {
         const repo = pathOf.get(b.repositoryId)
         if (!repo) return []
-        return [{ repo, name: b.name, taskId: taskOf.get(b.id) ?? null, isDefault: b.isDefault, noTask: unlinked.has(b.id) }]
+        return [{ repo, name: b.name, taskIds: tasksOf.get(b.id) ?? [], isDefault: b.isDefault, noTask: unlinked.has(b.id) }]
       })
     },
 
     async events(since, until) {
       if (!has('activity')) return []
       const gitThere = has('branch') && has('repository')
-      const [activity, repos, branches, taskOf, toBranch, toRepo, toTask, columns, tasks] = await Promise.all([
+      const [activity, repos, branches, tasksOf, toBranch, toRepo, toTask, columns, tasks] = await Promise.all([
         objects.list('activity', { between: { field: 'at', from: since, to: until } }),
         gitThere ? objects.list('repository', { withDeleted: true }) : [],
         gitThere ? objects.list('branch', { withDeleted: true }) : [],
-        gitThere ? taskOfBranch() : new Map<string, string>(),
+        gitThere ? tasksOfBranch() : new Map<string, string[]>(),
         gitThere ? objects.relations({ kind: 'branch', fromType: 'activity', toType: 'branch' }) : [],
         gitThere ? objects.relations({ kind: 'repository', fromType: 'activity', toType: 'repository' }) : [],
         has('task') ? objects.relations({ kind: 'task', fromType: 'activity', toType: 'task' }) : [],
@@ -82,11 +84,11 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
               repo: repo.path,
               branch: branch?.name ?? null,
               detail: a.detail ?? '',
-              taskId: branch ? alive(taskOf.get(branch.id)) : null,
+              taskIds: branch ? (tasksOf.get(branch.id) ?? []).filter((id) => live.has(id)) : [],
             },
           ]
         if (task && a.kind === 'edit')
-          return [{ at: a.at, kind: 'task', repo: null, branch: null, detail: a.detail ?? 'Tâche modifiée', taskId: task }]
+          return [{ at: a.at, kind: 'task', repo: null, branch: null, detail: a.detail ?? 'Tâche modifiée', taskIds: [task] }]
         if (task && a.kind === 'status')
           return [
             {
@@ -96,7 +98,7 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
               branch: null,
               // The status it went to (the one it left is the provider's own).
               detail: `→ ${a.detail ?? ''}`,
-              taskId: task,
+              taskIds: [task],
               toGroup: groups.get(a.detail ?? '') ?? null,
             },
           ]

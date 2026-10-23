@@ -1,6 +1,6 @@
 {
   "id": "lunar-industries-common",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "title": "Commun",
   "engine": "^0.3.0",
   "contributes": {
@@ -35,6 +35,11 @@
       {
         "id": "lunar-industries-common.link",
         "title": "Lier une branche à une tâche",
+        "hidden": true
+      },
+      {
+        "id": "lunar-industries-common.setTasks",
+        "title": "Choisir les tâches d’une branche",
         "hidden": true
       },
       {

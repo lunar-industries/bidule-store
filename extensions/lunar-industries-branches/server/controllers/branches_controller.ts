@@ -28,8 +28,8 @@ export default class BranchesController {
   }
 
   async link({ request }: HttpContext) {
-    const { repo, name, taskId } = await request.validateUsing(linkValidator)
-    await service.link(repo, name, taskId)
+    const { repo, name, taskIds } = await request.validateUsing(linkValidator)
+    await service.link(repo, name, taskIds)
     return ok
   }
 

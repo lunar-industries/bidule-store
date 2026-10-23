@@ -18,7 +18,9 @@ export type KanbanBranch = {
   repo: string
   repoLabel: string
   name: string
+  // The first of `taskIds` (linked by hand first); a branch can serve several tasks.
   taskId: string | null
+  taskIds: string[]
   isDefault: boolean
   lastCommitAt: string | null
   reviewNumber: number | null

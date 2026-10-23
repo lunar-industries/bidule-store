@@ -17,6 +17,8 @@ export type SharedBranch = {
   integration: boolean
   // The task linked by hand first, else the one the core's rule linked; null without one.
   taskId: string | null
+  // Every task it is linked to, those linked by hand first: a branch can serve several tasks.
+  taskIds: string[]
   lastCommitAt: string | null
   // Its last commit here: the one CI ran on.
   headSha: string | null
@@ -54,6 +56,9 @@ declare module '@bidule/sdk/contracts' {
     // A branch linked to a task by hand, or marked as having none (taskId null): its other tasks and the opposite mark
     // go. False when the core knows neither the branch nor the task.
     'lunar-industries-common.link': (args: { repo: string; name: string; taskId: string | null }) => { linked: boolean }
+    // A branch's tasks are exactly these now, linked by hand; none: marked as having none. False when the core knows
+    // neither the branch nor one of the tasks.
+    'lunar-industries-common.setTasks': (args: { repo: string; name: string; taskIds: string[] }) => { linked: boolean }
     'lunar-industries-common.settings': (args: void) => SharedSettings
     // A repo's own review target (null: back to the shared one); refused (404) for a repo the core does not know.
     'lunar-industries-common.setTarget': (args: { repo: string; target: string | null }) => void

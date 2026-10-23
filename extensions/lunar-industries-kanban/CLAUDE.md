@@ -33,6 +33,10 @@ déclare comme l'officiel (`ui/points.ts`) ; chaque pastille est dessinée dans 
   lui-même. Les branches récentes qu'aucune carte ne réclame, par dépôt ; on en glisse une sur une carte, ou Entrée
   ouvre le champ de tâche commun (`TaskField`, toujours ouvert dans la ligne), où viennent d'abord les tâches dont le
   titre ou la référence a les mots de la branche (`hint`). Une liaison s'annule depuis sa notification.
+- **Les branches d'une tâche** (« Lier des branches… », `ui/LinkBranches.tsx`) : une branche peut servir plusieurs
+  tâches. En cocher une qui est déjà à une autre tâche (« liée à … », ou « aussi liée à … » pour une branche que la
+  tâche a déjà) l'ajoute à celle-ci sans la retirer de l'autre ; en décocher une ne la retire que de cette tâche.
+  Glisser une branche sur une carte fait de même. Une branche a sa carte dès qu'une de ses tâches est sur le tableau.
 - **Les états sans tableau** (`Empty` et `Alert` communs) : « Lecture des tâches… » et des colonnes vides pendant le
   chargement ; une erreur avec Réessayer (au-dessus du tableau déjà lu quand il y en a un) ; sans source, un bouton
   vers Réglages › Extensions ; une source non configurée, un bouton vers ses réglages ; aucune tâche, Synchroniser et

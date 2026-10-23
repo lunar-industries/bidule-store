@@ -63,7 +63,8 @@ const branch = (name: string, patch: Partial<KanbanBranch> = {}): KanbanBranch =
   repo: '/r/app',
   repoLabel: 'app',
   name,
-  taskId: null,
+  taskId: patch.taskIds?.[0] ?? null,
+  taskIds: [],
   isDefault: false,
   lastCommitAt: new Date().toISOString(),
   reviewNumber: null,
@@ -281,7 +282,7 @@ describe('branches', () => {
     const list = [
       branch('recent', { lastCommitAt: '2026-09-30T12:00:00Z' }),
       branch('old', { lastCommitAt: '2026-09-01T12:00:00Z' }),
-      branch('linked', { lastCommitAt: '2026-09-30T12:00:00Z', taskId: 't' }),
+      branch('linked', { lastCommitAt: '2026-09-30T12:00:00Z', taskIds: ['t'] }),
       branch('merged', { lastCommitAt: '2026-09-30T12:00:00Z', reviewState: 'merged' }),
     ]
     expect(orphansOf(list, now).map((b) => b.name)).toEqual(['recent'])
@@ -290,8 +291,9 @@ describe('branches', () => {
   test('a branch linked to a task the board does not show is in the panel too', () => {
     const now = Date.parse('2026-10-01T12:00:00Z')
     const list = [
-      branch('shown', { lastCommitAt: '2026-09-30T12:00:00Z', taskId: 't1' }),
-      branch('hidden-task', { lastCommitAt: '2026-09-30T12:00:00Z', taskId: 'gone' }),
+      branch('shown', { lastCommitAt: '2026-09-30T12:00:00Z', taskIds: ['t1'] }),
+      branch('hidden-task', { lastCommitAt: '2026-09-30T12:00:00Z', taskIds: ['gone'] }),
+      branch('one-shown', { lastCommitAt: '2026-09-30T12:00:00Z', taskIds: ['gone', 't1'] }),
     ]
     expect(orphansOf(list, now, new Set(['t1'])).map((b) => b.name)).toEqual(['hidden-task'])
   })
@@ -315,15 +317,18 @@ describe('branches', () => {
   test('the dialog lists the task’s branches first, then free ones, then the others’, merged last', () => {
     const list = [
       branch('merged', { reviewState: 'merged' }),
-      branch('other', { taskId: 'x' }),
+      branch('other', { taskIds: ['x'] }),
       branch('free'),
-      branch('mine', { taskId: 't' }),
+      branch('mine', { taskIds: ['t'] }),
       branch('elsewhere', { repo: '/r/lib', repoLabel: 'lib' }),
+      branch('both', { taskIds: ['x', 't'], lastCommitAt: '2020-01-01T00:00:00Z' }),
     ]
-    const rows = linkRows(list, 't', '', () => 'Une autre', new Set([branchKey(list[3])]))
-    expect(rows.map((r) => r.name)).toEqual(['mine', 'free', 'other', 'merged', 'elsewhere'])
+    const titles: Record<string, string> = { x: 'Une autre' }
+    const rows = linkRows(list, 't', '', (id) => titles[id] ?? '', new Set([branchKey(list[3]), branchKey(list[5])]))
+    expect(rows.map((r) => r.name)).toEqual(['mine', 'both', 'free', 'other', 'merged', 'elsewhere'])
     expect(rows[0].checked).toBe(true)
-    expect(rows[2].note).toBe('liée à Une autre')
+    expect(rows[1].note).toBe('aussi liée à Une autre')
+    expect(rows[3].note).toBe('liée à Une autre')
     expect(linkRows(list, 't', 'LIB', () => '', new Set()).map((r) => r.name)).toEqual(['elsewhere'])
   })
 })

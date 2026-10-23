@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { linkByHand, sharedBranches } from '../server/branches.ts'
+import { linkByHand, setTasksByHand, sharedBranches } from '../server/branches.ts'
 import { branch, fakeCore, linked, pipeline, review, task } from './fakes.ts'
 
 const NONE = new Set<string>()
@@ -33,10 +33,10 @@ describe('the branches as the core has them', () => {
       links: [linked('x', 'a', 'ref'), linked('t', 'a', 'manual'), linked('x', 'b', 'ref')],
     })
     const { branches } = await sharedBranches(objects, NONE, {})
-    expect(branches.map((b) => [b.name, b.taskId])).toEqual([
-      ['a', 't'],
-      ['b', 'x'],
-      ['c', null],
+    expect(branches.map((b) => [b.name, b.taskId, b.taskIds])).toEqual([
+      ['a', 't', ['t', 'x']],
+      ['b', 'x', ['x']],
+      ['c', null, []],
     ])
   })
 
@@ -110,6 +110,39 @@ describe('a link by hand', () => {
     expect(await linkByHand(objects, '/r/app', 'nope', 't')).toBe(false)
     expect(await linkByHand(objects, '/elsewhere', 'feat/b', 't')).toBe(false)
     expect(await linkByHand(objects, '/r/app', 'feat/b', 'gone')).toBe(false)
+    expect(calls).toEqual([])
+  })
+})
+
+describe('a branch’s tasks, set by hand', () => {
+  test('several: each linked by hand, the one the rule linked kept that way, the others go', async () => {
+    const { objects, linksOf } = fakeCore({
+      branches: [branch('b', 'id-7-paiement')],
+      tasks: [task('t7', 'id-7'), task('t1'), task('x')],
+      links: [linked('t7', 'b', 'ref'), linked('x', 'b', 'manual')],
+    })
+    expect(await setTasksByHand(objects, '/r/app', 'id-7-paiement', ['t7', 't1', 't1'])).toBe(true)
+    expect(linksOf('b').sort()).toEqual([
+      ['branch', 't1', 'manual'],
+      ['branch', 't7', 'manual'],
+    ])
+  })
+
+  test('none: marked so; then one again, and the mark goes', async () => {
+    const { objects, linksOf } = fakeCore({
+      branches: [branch('b', 'feat/b')],
+      tasks: [task('t1'), task('t2')],
+      links: [linked('t1', 'b', 'manual'), linked('t2', 'b', 'manual')],
+    })
+    expect(await setTasksByHand(objects, '/r/app', 'feat/b', [])).toBe(true)
+    expect(linksOf('b')).toEqual([['noTask', 'b', 'manual']])
+    expect(await setTasksByHand(objects, '/r/app', 'feat/b', ['t2'])).toBe(true)
+    expect(linksOf('b')).toEqual([['branch', 't2', 'manual']])
+  })
+
+  test('one unknown task among them changes nothing', async () => {
+    const { objects, calls } = fakeCore({ branches: [branch('b', 'feat/b')], tasks: [task('t1')] })
+    expect(await setTasksByHand(objects, '/r/app', 'feat/b', ['t1', 'gone'])).toBe(false)
     expect(calls).toEqual([])
   })
 })

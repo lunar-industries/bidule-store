@@ -38,7 +38,7 @@ const LOG_AHEAD_DAYS = 60
 const FRESH_MS = 10 * 60_000
 
 // A branch of the user's repos, with the task it is linked to; `noTask`: the user unlinked it by hand (the core's mark).
-export type WorkBranch = { repo: string; name: string; taskId: string | null; isDefault: boolean; noTask: boolean }
+export type WorkBranch = { repo: string; name: string; taskIds: string[]; isDefault: boolean; noTask: boolean }
 
 /** The user's work as the core has it (server/work.ts reads it from the core's objects). */
 export interface Work {
@@ -143,8 +143,7 @@ export class Days {
     for (const e of events) {
       if (e.kind !== 'commit') continue
       const branch = e.repo && e.branch ? branches?.get(placeKey(e.repo, e.branch)) : undefined
-      const taskId = branch?.taskId ?? e.taskId
-      if (taskId) tasks.add(taskId)
+      for (const taskId of branch?.taskIds.length ? branch.taskIds : e.taskIds) tasks.add(taskId)
     }
     return [...tasks].sort()
   }
@@ -153,11 +152,11 @@ export class Days {
     const { work } = this.deps
     const [branches, repos, events] = await Promise.all([work.branches(), work.repos(), this.#signals(day, day)])
     const labels = new Map(repos.map((r) => [r.path, r.label]))
-    // The branches git has, and, for the ones it forgot (merged, then deleted), the task they had when it knew them.
-    await this.#store.rememberBranches(branches.map((b) => ({ repo: b.repo, branch: b.name, taskId: b.taskId })))
+    // The branches git has, and, for the ones it forgot (merged, then deleted), the tasks they had when it knew them.
+    await this.#store.rememberBranches(branches.map((b) => ({ repo: b.repo, branch: b.name, taskIds: b.taskIds })))
     const known = new Map<string, BranchInfo>()
-    for (const r of await this.#store.rememberedBranches()) known.set(placeKey(r.repo, r.branch), { taskId: r.taskId, isDefault: false })
-    for (const b of branches) known.set(placeKey(b.repo, b.name), { taskId: b.taskId, isDefault: b.isDefault })
+    for (const r of await this.#store.rememberedBranches()) known.set(placeKey(r.repo, r.branch), { taskIds: r.taskIds, isDefault: false })
+    for (const b of branches) known.set(placeKey(b.repo, b.name), { taskIds: b.taskIds, isDefault: b.isDefault })
     return {
       events,
       branches: known,
@@ -476,7 +475,7 @@ export class Days {
       if (line.repo && line.branch) {
         const { work } = this.deps
         const branch = (await work.branches()).find((b) => b.repo === line.repo && b.name === line.branch)
-        if (branch && !branch.isDefault && !branch.taskId && !branch.noTask) await work.link(line.repo, line.branch, taskId)
+        if (branch && !branch.isDefault && !branch.taskIds.length && !branch.noTask) await work.link(line.repo, line.branch, taskId)
       }
       const twin = rows.find((r) => r.id !== line.id && r.taskId === taskId && r.label === line.label)
       next = twin

@@ -130,16 +130,17 @@ describe('on the forge', () => {
 })
 
 describe('the task and the target', () => {
-  test('a branch linked by hand, or unlinked, through lunar-industries-common; an unknown branch or task said', async () => {
+  test('a branch’s tasks set by hand, or none, through lunar-industries-common; an unknown branch or task said', async () => {
     const { world } = fakeWorld(all(), null)
-    const { s, links } = service(world, { tasks: [task('t1', 'Écran de connexion')] })
-    await s.link(app, 'tsk-7-paiement', 't1')
-    expect((await s.list()).branches.find((b) => b.name === 'tsk-7-paiement')?.taskId).toBe('t1')
-    await s.link(app, 'tsk-7-paiement', null)
-    expect((await s.list()).branches.find((b) => b.name === 'tsk-7-paiement')?.taskId).toBeNull()
-    expect(links).toEqual(['tsk-7-paiement→t1', 'tsk-7-paiement→null'])
-    await expect(s.link(app, 'nope', 't1')).rejects.toMatchObject({ status: 404 })
-    await expect(s.link(app, 'tsk-7-paiement', 'gone')).rejects.toMatchObject({ status: 404 })
+    const { s, links } = service(world, { tasks: [task('t1', 'Écran de connexion'), task('t2', 'Paiement')] })
+    await s.link(app, 'tsk-7-paiement', ['t1', 't2'])
+    const listedOf = async () => (await s.list()).branches.find((b) => b.name === 'tsk-7-paiement')
+    expect(await listedOf()).toMatchObject({ taskId: 't1', taskIds: ['t1', 't2'] })
+    await s.link(app, 'tsk-7-paiement', [])
+    expect(await listedOf()).toMatchObject({ taskId: null, taskIds: [] })
+    expect(links).toEqual(['tsk-7-paiement→t1,t2', 'tsk-7-paiement→'])
+    await expect(s.link(app, 'nope', ['t1'])).rejects.toMatchObject({ status: 404 })
+    await expect(s.link(app, 'tsk-7-paiement', ['t1', 'gone'])).rejects.toMatchObject({ status: 404 })
   })
 
   test('a target kept per repo by lunar-industries-common; the review goes there, else to the shared one', async () => {

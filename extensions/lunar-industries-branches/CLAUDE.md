@@ -31,9 +31,11 @@ sont listées dans `contract.ts`.
   tableau : l'ouvrir ou le fermer ne déplace rien. Échap ou sa × rendent le focus au tableau, sur la ligne qui était
   ouverte, sans le faire défiler. Un clic en dehors le ferme, sauf sur une ligne du tableau (qui l'ouvre à cette
   ligne). Les flèches du tableau le font suivre la ligne choisie. Il montre la frise (étapes faites, en cours, à
-  venir), trois cases (revue, CI, origin), le champ Tâche (`TaskField` commun, qui cherche aussi dans le nom des
-  branches liées ; une tâche inconnue est dite par le début de son identifiant), l'étape à faire (`NextStep` : pousser
-  puis créer la revue brouillon vers la « Branche cible », les jobs en échec d'une CI rouge et les relancer, sortir du
+  venir), trois cases (revue, CI, origin), les tâches de la branche, chacune avec « Délier » (une tâche inconnue est
+  dite par le début de son identifiant), puis le champ qui en ajoute une (`TaskField` commun, « Tâche » tant qu'elle
+  n'en a pas, « Ajouter une tâche » ensuite, qui cherche aussi dans le nom des branches liées et laisse de côté celles
+  qu'elle a déjà) : une branche peut servir plusieurs tâches, et le tableau montre la première et le nombre des
+  autres. Le tiroir montre ensuite l'étape à faire (`NextStep` : pousser puis créer la revue brouillon vers la « Branche cible », les jobs en échec d'une CI rouge et les relancer, sortir du
   brouillon, fusionner) et les autres actions (voir la revue, le pipeline, l'issue, lancer un pipeline, les jobs
   manuels par le menu commun). « Lecture de la forge… » pendant que les liens sont lus, l'erreur avec Réessayer s'ils
   ne le sont pas.

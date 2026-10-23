@@ -94,7 +94,11 @@ export function BranchPanel({
                         </span>
                         <span className="legend">{relTime(b.lastCommitAt)}</span>
                       </div>
-                      {b.taskId && <span className="lik-panel-note">liée à {titleOf(b.taskId)}, que le tableau ne montre pas</span>}
+                      {b.taskIds.length > 0 && (
+                        <span className="lik-panel-note">
+                          liée à {b.taskIds.map(titleOf).join(', ')}, que le tableau ne montre pas
+                        </span>
+                      )}
                       {picking === key && (
                         // A click in the field stays in the field: not a click on the row.
                         <div onClick={(e) => e.stopPropagation()}>

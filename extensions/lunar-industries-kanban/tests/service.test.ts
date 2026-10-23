@@ -12,7 +12,8 @@ const branch = (name: string, patch: Partial<SharedBranch> = {}): SharedBranch =
   name,
   isDefault: false,
   integration: false,
-  taskId: null,
+  taskId: patch.taskIds?.[0] ?? null,
+  taskIds: [],
   lastCommitAt: null,
   headSha: `sha-${name}`,
   reviewNumber: null,
@@ -23,7 +24,8 @@ const branch = (name: string, patch: Partial<SharedBranch> = {}): SharedBranch =
   ...patch,
 })
 
-// The core as the module sees it: lunar-industries-common's commands (each link said: `branch→task`), a task, a forge.
+// The core as the module sees it: lunar-industries-common's commands (each branch's tasks said: `branch→t,x`), a
+// task, a forge.
 function fakeCore(init: { branches?: SharedBranch[]; available?: boolean; forge?: Partial<ForgeClient> } = {}) {
   const branches = init.branches ?? []
   const written: string[] = []
@@ -32,10 +34,10 @@ function fakeCore(init: { branches?: SharedBranch[]; available?: boolean; forge?
       available: init.available ?? true,
       branches: branches.filter((b) => (!filter.repo || b.repo === filter.repo) && (!filter.name || b.name === filter.name)),
     }),
-    link: async ({ name, taskId }) => {
+    setTasks: async ({ name, taskIds }) => {
       const b = branches.find((x) => x.name === name)
-      if (b) b.taskId = taskId
-      written.push(`${name}→${taskId}`)
+      if (b) Object.assign(b, { taskIds, taskId: taskIds[0] ?? null })
+      written.push(`${name}→${taskIds.join(',')}`)
       return { linked: Boolean(b) }
     },
   }
@@ -55,7 +57,7 @@ describe('the cards’ branches', () => {
 
   test('the repos’ default branches and the integration ones are left out', async () => {
     const { service } = fakeCore({
-      branches: [branch('main', { isDefault: true }), branch('develop', { integration: true }), branch('feat/a', { taskId: 't' })],
+      branches: [branch('main', { isDefault: true }), branch('develop', { integration: true }), branch('feat/a', { taskIds: ['t'] })],
     })
     const { branches } = await service.branches()
     expect(branches).toEqual([
@@ -64,6 +66,7 @@ describe('the cards’ branches', () => {
         repoLabel: 'app',
         name: 'feat/a',
         taskId: 't',
+        taskIds: ['t'],
         isDefault: false,
         lastCommitAt: null,
         reviewNumber: null,
@@ -76,21 +79,27 @@ describe('the cards’ branches', () => {
     ])
   })
 
-  test('a task’s branches are exactly those given: others unlinked, new ones linked, kept ones untouched', async () => {
+  test('a task’s branches are exactly those given: others leave it, new ones linked to it too, kept ones untouched', async () => {
     const { service, written } = fakeCore({
-      branches: [branch('kept', { taskId: 't' }), branch('dropped', { taskId: 't' }), branch('new', { taskId: 'x' })],
+      branches: [
+        branch('kept', { taskIds: ['t'] }),
+        branch('dropped', { taskIds: ['t'] }),
+        branch('shared', { taskIds: ['x', 't'] }),
+        branch('new', { taskIds: ['x'] }),
+      ],
     })
     const after = await service.setBranches('t', [
       { repo: '/r/app', name: 'kept' },
       { repo: '/r/app', name: 'new' },
     ])
-    expect(written).toEqual(['dropped→null', 'new→t'])
-    expect(after.branches.filter((b) => b.taskId === 't').map((b) => b.name)).toEqual(['kept', 'new'])
-    expect(after.branches.find((b) => b.name === 'dropped')?.taskId).toBeNull()
+    expect(written).toEqual(['dropped→', 'shared→x', 'new→x,t'])
+    expect(after.branches.filter((b) => b.taskIds.includes('t')).map((b) => b.name)).toEqual(['kept', 'new'])
+    expect(after.branches.find((b) => b.name === 'new')?.taskIds).toEqual(['x', 't'])
+    expect(after.branches.find((b) => b.name === 'dropped')?.taskIds).toEqual([])
   })
 
   test('an unknown branch or task changes nothing', async () => {
-    const { service, written } = fakeCore({ branches: [branch('dropped', { taskId: 't' })] })
+    const { service, written } = fakeCore({ branches: [branch('dropped', { taskIds: ['t'] })] })
     await expect(service.setBranches('t', [{ repo: '/r/app', name: 'nope' }])).rejects.toThrow(/inconnue/)
     await expect(service.setBranches('gone', [{ repo: '/r/app', name: 'dropped' }])).rejects.toThrow(/Tâche inconnue/)
     expect(written).toEqual([])

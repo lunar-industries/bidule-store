@@ -55,8 +55,22 @@ describe('Day', () => {
     expect(before).toEqual([['t1', null]])
     // Git drops the branch, and with it its events' task (its join finds no branch).
     git.branchRows = []
-    for (const e of git.eventRows) e.taskId = null
+    for (const e of git.eventRows) e.taskIds = []
     expect((await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])).toEqual(before)
+  })
+
+  test('a branch serving two tasks shares the day between them, forgotten by git or not', async () => {
+    const { git, days } = setup({ now: FRIDAY_EVENING })
+    git.branch('r', 'big', { taskIds: ['t1', 't2'] })
+    git.event(at(TUE, 9), 'commit', 'r', 'big', 'work')
+    const before = (await days.proposal(TUE, SETTINGS)).map((l) => [l.taskId, l.share]).sort()
+    expect(before).toEqual([
+      ['t1', 10],
+      ['t2', 10],
+    ])
+    git.branchRows = []
+    for (const e of git.eventRows) e.taskIds = []
+    expect((await days.proposal(TUE, SETTINGS)).map((l) => [l.taskId, l.share]).sort()).toEqual(before)
   })
 
   test('a task whose branch had commits over the last weeks counts as begun, branch deleted or not', async () => {
@@ -66,7 +80,7 @@ describe('Day', () => {
     git.event(at(MON, 10), 'checkout', 'r', 'other', 'no commit')
     expect((await days.view(TUE)).started).toEqual(['t1'])
     git.branchRows = []
-    for (const e of git.eventRows) e.taskId = null
+    for (const e of git.eventRows) e.taskIds = []
     expect((await days.view(TUE)).started).toEqual(['t1'])
   })
 
@@ -76,8 +90,8 @@ describe('Day', () => {
     git.event(at(TUE, 9), 'commit', 'r', 'id-1-a', 'work')
     const settings = SETTINGS
     await days.proposal(TUE, settings)
-    git.branchRows[0].taskId = null
-    git.eventRows[0].taskId = null
+    git.branchRows[0].taskIds = []
+    git.eventRows[0].taskIds = []
     expect((await days.proposal(TUE, settings)).map((l) => [l.taskId, l.branch ?? null])).toEqual([[null, 'id-1-a']])
   })
 
@@ -195,7 +209,7 @@ describe('Two objects of the core found to be one', () => {
   test('the drafts, the branches remembered and the mirror keep the task left; then the proposal follows, awaited', async () => {
     const store = new MemoryStore()
     await store.draft(MON, [{ taskId: 'old', share: 20 }])
-    await store.rememberBranches([{ repo: '/r', branch: 'feat/x', taskId: 'old' }])
+    await store.rememberBranches([{ repo: '/r', branch: 'feat/x', taskIds: ['old'] }])
     const entry = (id: string, day: string, taskId: string) => ({ id, day, taskId, label: 'Dév', share: 20, url: null, props: {}, lastEdited: null })
     await store.recordLog([entry('e-old', MON, 'old'), entry('e-kept', TUE, 'kept')], MON, TUE)
     let followed = 0
@@ -205,7 +219,7 @@ describe('Two objects of the core found to be one', () => {
 
     await merged({ type: 'task', from: 'old', into: 'kept' })
     expect((await store.drafts(MON)).map((r) => r.taskId)).toEqual(['kept'])
-    expect(await store.rememberedBranches()).toEqual([{ repo: '/r', branch: 'feat/x', taskId: 'kept' }])
+    expect(await store.rememberedBranches()).toEqual([{ repo: '/r', branch: 'feat/x', taskIds: ['kept'] }])
     expect((await store.logged([MON, TUE])).map((r) => [r.id, r.taskId])).toEqual([
       ['e-old', 'kept'],
       ['e-kept', 'kept'],

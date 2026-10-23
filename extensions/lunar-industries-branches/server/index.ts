@@ -16,7 +16,7 @@ export async function activate(ctx: ServerContext) {
     objects: ctx.objects,
     shared: {
       branches: (filter) => commands.execute('lunar-industries-common.branches', filter),
-      link: (args) => commands.execute('lunar-industries-common.link', args),
+      setTasks: (args) => commands.execute('lunar-industries-common.setTasks', args),
       settings,
       setTarget: (args) => commands.execute('lunar-industries-common.setTarget', args),
     },

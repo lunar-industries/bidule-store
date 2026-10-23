@@ -15,7 +15,8 @@ export function branch(fields: Partial<Spec> & { name: string }): Spec {
   return {
     repo: '/r/app',
     repoLabel: 'app',
-    taskId: null,
+    taskId: fields.taskIds?.[0] ?? null,
+    taskIds: fields.taskId ? [fields.taskId] : [],
     isDefault: false,
     lastCommitAt: NOW,
     headSha: 'abc',
@@ -102,7 +103,7 @@ type World = ReturnType<typeof fakeWorld>['world']
 const SETTINGS: SharedSettings = { integrationBranches: [], reviewTarget: null, targets: {}, naming: 'issue', template: '{issue}-{slug}' }
 
 // lunar-industries-common for these branches (its join of the core's objects and its link are tested there): the
-// branches, a link by hand (each said: `name→task`), the shared settings and a repo's own target.
+// branches, their tasks set by hand (each said: `name→t1,t2`), the shared settings and a repo's own target.
 function sharedOf({ branches }: World, tasks: Task[], settings: SharedSettings, links: string[]): Shared {
   const integration = new Set(settings.integrationBranches.map((n) => n.toLowerCase()))
   const shared = (b: Spec): SharedBranch => ({
@@ -121,11 +122,11 @@ function sharedOf({ branches }: World, tasks: Task[], settings: SharedSettings, 
         .map(shared)
         .sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? '')),
     }),
-    link: async ({ repo, name, taskId }) => {
+    setTasks: async ({ repo, name, taskIds }) => {
       const b = branches.find((x) => x.repo === repo && x.name === name)
-      if (!b || (taskId && !tasks.some((t) => t.id === taskId))) return { linked: false }
-      b.taskId = taskId
-      links.push(`${name}→${taskId}`)
+      if (!b || taskIds.some((id) => !tasks.some((t) => t.id === id))) return { linked: false }
+      Object.assign(b, { taskIds, taskId: taskIds[0] ?? null })
+      links.push(`${name}→${taskIds.join(',')}`)
       return { linked: true }
     },
     settings: async () => settings,

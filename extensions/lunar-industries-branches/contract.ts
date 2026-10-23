@@ -8,7 +8,7 @@
 //   GET  branches                      Listing
 //   GET  branches/links?repo&name      Links (read on the forge now)
 //   GET  branches/jobs?repo&name       { jobs: Job[] }
-//   PUT  branches/link                 { repo, name, taskId | null } → { ok }
+//   PUT  branches/link                 { repo, name, taskIds } → { ok } (its tasks now; none: unlinked)
 //   POST branches/pipeline             { repo, name } → { ok }
 //   POST branches/retry                { repo, name } → { ok }
 //   POST branches/jobs/:id/play        { repo, name } → { ok }
@@ -32,7 +32,9 @@ export type ListedBranch = {
   repoLabel: string
   name: string
   isDefault: boolean
+  // The first of `taskIds` (linked by hand first); a branch can serve several tasks.
   taskId: string | null
+  taskIds: string[]
   lastCommitAt: string | null
   // Its last commit here: the one CI ran on.
   headSha: string | null

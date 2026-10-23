@@ -10,6 +10,6 @@ export function activate(ctx: ServerContext) {
   // through lunar-industries-common (a dependency), which puts them together for every Lunar Industries module.
   service = new KanbanService(ctx.objects, {
     branches: (filter) => ctx.commands.execute('lunar-industries-common.branches', filter),
-    link: (args) => ctx.commands.execute('lunar-industries-common.link', args),
+    setTasks: (args) => ctx.commands.execute('lunar-industries-common.setTasks', args),
   })
 }

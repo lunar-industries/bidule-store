@@ -188,12 +188,14 @@ export function BranchesPage() {
       () => api.play(r, job.id),
       `${job.name} lancé`,
     )
-  const link = async (r: Row, taskId: string | null) => {
+  // A task added to the branch's, or taken off them: its other tasks stay.
+  const link = async (r: Row, taskId: string, add: boolean) => {
+    const others = r.taskIds.filter((id) => id !== taskId)
     try {
-      await api.link(r, taskId)
-      if (!taskId) return react('quack', `${r.name} n'est plus liée à une tâche`, `${r.name} n'est plus liée à une tâche`)
-      const t = tasks.find((x) => x.id === taskId)
-      react('quack', `Coin ! ${r.name} va avec « ${t?.title ?? taskId} ».`, `${r.name} liée à ${t?.title ?? taskId}`)
+      await api.link(r, add ? [...others, taskId] : others)
+      const title = tasks.find((x) => x.id === taskId)?.title ?? taskId
+      if (add) react('quack', `Coin ! ${r.name} va avec « ${title} ».`, `${r.name} liée à ${title}`)
+      else react('quack', `${r.name} ne va plus avec « ${title} »`, `${r.name} n'est plus liée à ${title}`)
     } catch (err) {
       react('panic', errorMessage(err), errorMessage(err))
     }
@@ -246,7 +248,7 @@ export function BranchesPage() {
   const entriesFor = (r: Row): MenuEntry[] => [
     { label: 'Ouvrir le détail', run: () => show(r), shortcut: 'Entrée' },
     { label: 'Copier le nom', run: () => copy(r.name) },
-    !r.taskId && { label: 'Lier à une tâche…', run: () => show(r, true) },
+    { label: r.taskId ? 'Ajouter une tâche…' : 'Lier à une tâche…', run: () => show(r, true) },
     r.forge ? { label: 'Lancer un pipeline…', run: () => runPipeline(r) } : null,
   ]
 
@@ -418,7 +420,7 @@ export function BranchesPage() {
           table={() => table.current}
           menu={(el) => openMenu(el, entriesFor(openRow), `Branche ${openRow.name}`)}
           jobsMenu={(el, entries) => openMenu(el, entries, 'Jobs manuels')}
-          link={(id) => void link(openRow, id)}
+          link={(id, add) => void link(openRow, id, add)}
           push={() => void push(openRow)}
           createReview={(t) => void createReview(openRow, t)}
           ready={() => void ready(openRow)}
@@ -447,6 +449,8 @@ function SortHead({ label, by, sort, setSort, extra }: { label: string; by: Sort
   )
 }
 
+const taskLabel = (t: Task) => `${t.ref ? `${t.ref} · ` : ''}${t.title}`
+
 function TableRow({
   row: r,
   active,
@@ -465,6 +469,8 @@ function TableRow({
   menu: (e: MouseEvent) => void
 }) {
   const writes = r.action.kind !== 'open' && r.action.kind !== 'link'
+  // The tasks it serves besides the one shown.
+  const more = Math.max(r.taskIds.length - 1, 0)
   return (
     <tr
       id={rowId(r.key)}
@@ -479,14 +485,18 @@ function TableRow({
       <td>
         <span className="lib-branch">
           <span className="mono lib-name">{r.name}</span>
-          <span className="legend lib-sub">{r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? 'Tâche inconnue' : 'aucune tâche'}</span>
+          <span className="legend lib-sub">
+            {r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? 'Tâche inconnue' : 'aucune tâche'}
+            {more > 0 && ` + ${more}`}
+          </span>
         </span>
       </td>
       <td className="lib-col-task">
         {r.task ? (
-          <span className="ellipsis">
+          <span className="ellipsis" title={more > 0 ? r.tasks.map(taskLabel).join('\n') : undefined}>
             {r.task.ref && <span className="card-id">{r.task.ref} </span>}
             {r.task.title}
+            {more > 0 && <span className="legend"> + {more} autre{more > 1 ? 's' : ''}</span>}
           </span>
         ) : (
           <span className="muted">{r.taskId ? `Tâche inconnue · ${r.taskId.slice(0, 6)}` : 'aucune'}</span>
@@ -565,7 +575,7 @@ function Drawer({
   table: () => HTMLElement | null
   menu: (el: HTMLElement) => void
   jobsMenu: (el: HTMLElement, entries: MenuEntry[]) => void
-  link: (taskId: string | null) => void
+  link: (taskId: string, add: boolean) => void
   push: () => void
   createReview: (target: string) => void
   ready: () => void
@@ -617,7 +627,6 @@ function Drawer({
     }
   }
 
-  const current = r.task ? `${r.task.ref ? `${r.task.ref} · ` : ''}${r.task.title}` : r.taskId ? `Tâche inconnue · ${r.taskId.slice(0, 6)}` : ''
   return (
     // The common side panel, over the page: a click on a row of the table opens that row instead of closing it.
     <SidePanel
@@ -669,22 +678,28 @@ function Drawer({
           </div>
         </dl>
 
+        {r.taskIds.map((id) => {
+          const task = r.tasks.find((t) => t.id === id)
+          return (
+            <div key={id} className="row lib-task">
+              <span className="grow ellipsis">{task ? taskLabel(task) : `Tâche inconnue · ${id.slice(0, 6)}`}</span>
+              <button type="button" className="btn" onClick={() => link(id, false)}>
+                Délier
+              </button>
+            </div>
+          )
+        })}
         <div className="row lib-task">
           <TaskField
-            label="Tâche"
-            value={current}
+            label={r.taskIds.length ? 'Ajouter une tâche' : 'Tâche'}
             tasks={tasks}
+            exclude={r.taskIds}
             done={done}
             problem={problem}
             retry={retryTasks}
-            also={(t) => branches.filter((b) => b.taskId === t.id).map((b) => b.name).join(' ')}
-            onPick={(t) => link(t.id)}
+            also={(t) => branches.filter((b) => b.taskIds.includes(t.id)).map((b) => b.name).join(' ')}
+            onPick={(t) => link(t.id, true)}
           />
-          {r.taskId && (
-            <button type="button" className="btn" onClick={() => link(null)}>
-              Délier
-            </button>
-          )}
         </div>
 
         {/* The one thing to do now, and its main action. */}

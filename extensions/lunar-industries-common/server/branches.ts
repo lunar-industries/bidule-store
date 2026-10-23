@@ -48,7 +48,7 @@ export async function sharedBranches(
     const repo = repoOf.get(b.repositoryId)
     if (!repo) return []
     const linked = links.filter((l) => l.to.id === b.id)
-    const task = linked.find((l) => l.origin === 'manual') ?? linked[0]
+    const taskIds = [...linked.filter((l) => l.origin === 'manual'), ...linked.filter((l) => l.origin !== 'manual')].map((l) => l.from.id)
     const review = reviews.filter((r) => r.branchId === b.id).sort((x, y) => y.number - x.number)[0]
     const pipeline = pipelines.find((p) => p.branchId === b.id)
     return [
@@ -60,7 +60,8 @@ export async function sharedBranches(
         name: b.name,
         isDefault: b.isDefault,
         integration: integration.has(b.name.toLowerCase()),
-        taskId: task?.from.id ?? null,
+        taskId: taskIds[0] ?? null,
+        taskIds,
         lastCommitAt: b.lastCommitAt,
         headSha: b.headSha,
         reviewNumber: review?.number ?? null,
@@ -80,15 +81,25 @@ export async function sharedBranches(
  * opposite mark go. False when the core knows neither the branch nor the task.
  */
 export async function linkByHand(objects: Objects, repo: string, name: string, taskId: string | null): Promise<boolean> {
+  return setTasksByHand(objects, repo, name, taskId ? [taskId] : [])
+}
+
+/**
+ * A branch's tasks are exactly these now, all linked by hand (a task the rule linked is kept that way, since the core
+ * drops a link by name once one is made by hand); none: the `noTask` mark. False when the core knows neither the
+ * branch nor one of the tasks.
+ */
+export async function setTasksByHand(objects: Objects, repo: string, name: string, taskIds: string[]): Promise<boolean> {
   const [r] = await objects.list('repository', { where: { path: repo } })
   const [found] = r ? await objects.list('branch', { where: { repositoryId: r.id, name } }) : []
   if (!found) return false
-  if (taskId && !(await objects.get('task', taskId))) return false
+  const wanted = [...new Set(taskIds)]
+  for (const id of wanted) if (!(await objects.get('task', id))) return false
   const branch = { type: 'branch' as const, id: found.id }
-  if (taskId) await objects.link({ type: 'task', id: taskId }, 'branch', branch, 'manual')
-  else await objects.link(branch, 'noTask', branch, 'manual')
+  for (const id of wanted) await objects.link({ type: 'task', id }, 'branch', branch, 'manual')
+  if (!wanted.length) await objects.link(branch, 'noTask', branch, 'manual')
   for (const l of await objects.related(found.id, { kind: 'branch', type: 'task' }))
-    if (!l.outgoing && l.id !== taskId) await objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
-  if (taskId) await objects.unlink(branch, 'noTask', branch)
+    if (!l.outgoing && !wanted.includes(l.id)) await objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
+  if (wanted.length) await objects.unlink(branch, 'noTask', branch)
   return true
 }

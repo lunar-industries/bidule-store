@@ -5,11 +5,11 @@ import type { Job, ListedBranch, Links, ListedRepo, Listing } from '../contract.
 import { BranchesError } from './errors.ts'
 import { issueOf, reviewDescription } from './names.ts'
 
-// lunar-industries-common's commands: the branches as the core has them, a link by hand, the shared settings (the
-// integration branches, the review targets, the naming of the branches) and a repo's own target.
+// lunar-industries-common's commands: the branches as the core has them, a branch's tasks set by hand, the shared
+// settings (the integration branches, the review targets, the naming of the branches) and a repo's own target.
 export interface Shared {
   branches(filter: BranchFilter): Promise<{ available: boolean; branches: SharedBranch[] }>
-  link(args: { repo: string; name: string; taskId: string | null }): Promise<{ linked: boolean }>
+  setTasks(args: { repo: string; name: string; taskIds: string[] }): Promise<{ linked: boolean }>
   settings(): Promise<SharedSettings>
   setTarget(args: { repo: string; target: string | null }): Promise<void>
 }
@@ -89,6 +89,7 @@ export class BranchesService {
           name: b.name,
           isDefault: b.isDefault,
           taskId: b.taskId,
+          taskIds: b.taskIds,
           lastCommitAt: b.lastCommitAt,
           headSha: b.headSha,
           reviewNumber: b.reviewNumber,
@@ -128,9 +129,9 @@ export class BranchesService {
     return done
   }
 
-  // A branch linked to a task by hand (null: unlinked), in the core: lunar-industries-common's link.
-  async link(repo: string, name: string, taskId: string | null): Promise<void> {
-    const { linked } = await this.deps.shared.link({ repo, name, taskId })
+  // A branch's tasks set by hand (none: unlinked), in the core: lunar-industries-common's setTasks.
+  async link(repo: string, name: string, taskIds: string[]): Promise<void> {
+    const { linked } = await this.deps.shared.setTasks({ repo, name, taskIds })
     if (!linked) throw new BranchesError('Branche ou tâche inconnue', 404)
   }
 

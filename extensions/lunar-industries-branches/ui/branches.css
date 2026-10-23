@@ -231,9 +231,9 @@
   color: var(--lib-warn-ink);
 }
 
-/* The task field and, once linked, « Délier » on its line, level with the field. */
+/* One line per task linked, its « Délier » at the end, then the field that adds one. */
 .lib-task {
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-2);
 }
 .lib-task .lunar-tasks {

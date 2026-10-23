@@ -227,7 +227,7 @@ export function Kanban() {
   const columns = groups.flatMap((g) => g.columns)
   const byTask = useMemo(() => {
     const map = new Map<string, KanbanBranch[]>()
-    for (const b of git.branches) if (b.taskId) map.set(b.taskId, [...(map.get(b.taskId) ?? []), b])
+    for (const b of git.branches) for (const id of b.taskIds) map.set(id, [...(map.get(id) ?? []), b])
     return map
   }, [git])
   const orphans = orphansOf(git.branches, Date.now(), ready ? new Set(ready.tasks.map((t) => t.id)) : undefined)
@@ -355,9 +355,8 @@ export function Kanban() {
   }
   const refsOf = (taskId: string, without?: KanbanBranch) =>
     (byTask.get(taskId) ?? []).filter((b) => !without || branchKey(b) !== branchKey(without)).map(({ repo, name }) => ({ repo, name }))
-  // A branch onto a task: added to its branches; the notice offers to put it back where it was.
+  // A branch onto a task: added to its branches, its other tasks kept; the notice offers to take it off again.
   const linkBranch = async (branch: KanbanBranch, task: Task) => {
-    const before = branch.taskId
     try {
       setGit(await busy(setBranches(task.id, [...refsOf(task.id), { repo: branch.repo, name: branch.name }])))
     } catch (err) {
@@ -368,11 +367,7 @@ export function Kanban() {
       action: {
         label: 'Annuler',
         run: () =>
-          void busy(
-            setBranches(task.id, refsOf(task.id, branch)).then(() =>
-              before ? setBranches(before, [...refsOf(before), { repo: branch.repo, name: branch.name }]) : null,
-            ),
-          )
+          void busy(setBranches(task.id, refsOf(task.id, branch)))
             .then(reloadGit)
             .catch((err: unknown) => react('panic', errorMessage(err), errorMessage(err))),
       },

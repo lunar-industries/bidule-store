@@ -38,18 +38,21 @@ const TAIL = 15
 /**
  * Which line of the day a piece of activity belongs to: a task (`t:<id>`), a git branch linked to no task
  * (`b:<repo>\0<branch>`), commits straight on a default branch, whatever the repo (`main`), or commits on a
- * production branch (`deploy`).
+ * production branch (`deploy`). A branch serving several tasks has a line of its own while the day is weighed
+ * (`s:<id>\0<id>…`), split between them at the end.
  */
 export type LineKey = string
 export const taskKey = (taskId: string) => `t:${taskId}`
 export const branchKey = (repo: string, branch: string) => `b:${repo}\u0000${branch}`
 export const MAIN_KEY = 'main'
 export const DEPLOY_KEY = 'deploy'
+const sharedKey = (taskIds: string[]) => `s:${[...taskIds].sort().join('\u0000')}`
+const tasksKey = (taskIds: string[]) => (taskIds.length === 1 ? taskKey(taskIds[0]) : sharedKey(taskIds))
 
 /**
  * One signal of the user's work: from git (a checkout, a commit — `detail` its subject —, a branch created by the
  * app, files edited and not committed yet), or from the source of tasks (an edit of a task, a change of its status).
- * `taskId`: the task a git event's branch is linked to (kept once the branch is deleted), or the task edited.
+ * `taskIds`: the tasks a git event's branch is linked to (kept once the branch is deleted), or the task edited.
  */
 export interface WorkEvent {
   at: string
@@ -57,13 +60,13 @@ export interface WorkEvent {
   repo: string | null
   branch: string | null
   detail: string
-  taskId: string | null
+  taskIds: string[]
   // A status change: the group it went to (`doing` opens the task's activity).
   toGroup?: TaskGroup | null
 }
 
 export interface BranchInfo {
-  taskId: string | null
+  taskIds: string[]
   isDefault: boolean
 }
 export const placeKey = (repo: string, branch: string) => `${repo}\u0000${branch}`
@@ -115,12 +118,12 @@ interface Tally {
 // The branch an event happened on: the one git knows now, else (deleted since) the task the event kept.
 function branchOf(e: WorkEvent, branches: Map<string, BranchInfo>): BranchInfo | undefined {
   if (!e.repo || !e.branch) return undefined
-  return branches.get(placeKey(e.repo, e.branch)) ?? (e.taskId ? { taskId: e.taskId, isDefault: false } : undefined)
+  return branches.get(placeKey(e.repo, e.branch)) ?? (e.taskIds.length ? { taskIds: e.taskIds, isDefault: false } : undefined)
 }
 
 // The line an event belongs to, or null when it says nothing about the work (a checkout back to the default branch).
 export function lineOf(e: WorkEvent, branches: Map<string, BranchInfo>, integration: Integration): LineKey | null {
-  if (e.kind === 'task' || e.kind === 'status') return e.taskId ? taskKey(e.taskId) : null
+  if (e.kind === 'task' || e.kind === 'status') return e.taskIds.length ? taskKey(e.taskIds[0]) : null
   if (!e.repo || !e.branch) return null
   // Not a branch: a commit git reached only through a tag or the stash (`git log --all --source`) belongs to none.
   if (e.branch.startsWith('refs/')) return null
@@ -135,10 +138,10 @@ export function lineOf(e: WorkEvent, branches: Map<string, BranchInfo>, integrat
   if (merged && integration.branches.has(name)) {
     if (integration.branches.has(merged.toLowerCase())) return null
     const source = branches.get(placeKey(e.repo, merged))
-    if (source?.taskId) return taskKey(source.taskId)
+    if (source?.taskIds.length) return tasksKey(source.taskIds)
     return source?.isDefault ? null : branchKey(e.repo, merged)
   }
-  if (b?.taskId) return taskKey(b.taskId)
+  if (b?.taskIds.length) return tasksKey(b.taskIds)
   if (b?.isDefault) return MAIN_KEY
   // Commits made on an integration branch itself (a conflict fixed while merging) belong to no task.
   if (integration.branches.has(name)) return null
@@ -232,7 +235,7 @@ export function reconstruct(day: string, input: DayInput, now = new Date()): Act
     tallies.get(key)?.intervals.push([from, Math.min(to, 24 * 60)])
   }
 
-  return [...tallies.entries()].map(([key, t]) => {
+  const activityOf = (key: LineKey, t: Tally): Activity => {
     const places = [...t.places].map((p) => p.split('\u0000'))
     const repos = [...new Set(places.map((p) => label(p[0])))]
     const parts: string[] = []
@@ -243,9 +246,31 @@ export function reconstruct(day: string, input: DayInput, now = new Date()): Act
     if (t.edits) parts.push(t.edits > 1 ? `${t.edits} modifications de la tâche` : 'une modification de la tâche')
     if (key === MAIN_KEY) parts.push(`sur la branche par défaut de ${repos.slice(0, 3).join(', ')}`)
     else if (key === DEPLOY_KEY) parts.push(`en production sur ${repos.slice(0, 3).join(', ')}`)
+    else if (key.startsWith('s:'))
+      parts.push(`sur une branche commune à ${key.split('\u0000').length} tâches, dont le temps est partagé à parts égales`)
     else if (!t.taskId && t.branch && t.repo) parts.push(`sur ${t.branch} (${label(t.repo)}), une branche liée à aucune tâche`)
     return { key, taskId: t.taskId, repo: t.repo, branch: t.branch, weight: covered(t.intervals), reason: parts.join(', ') + '.' }
-  })
+  }
+
+  // A branch's line shared by several tasks goes to each of them, in equal parts, added to what they have of their
+  // own; the lines keep the order of their first activity.
+  const lines = new Map<LineKey, Activity>()
+  const add = (a: Activity) => {
+    const had = lines.get(a.key)
+    if (!had) return void lines.set(a.key, a)
+    had.weight += a.weight
+    had.reason = `${had.reason.slice(0, -1)} ; ${a.reason}`
+  }
+  for (const [key, t] of tallies) {
+    const a = activityOf(key, t)
+    if (!key.startsWith('s:')) {
+      add(a)
+      continue
+    }
+    const ids = key.slice(2).split('\u0000')
+    for (const id of ids) add({ ...a, key: taskKey(id), taskId: id, weight: a.weight / ids.length })
+  }
+  return [...lines.values()]
 }
 
 /**

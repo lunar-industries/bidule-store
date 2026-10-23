@@ -38,6 +38,24 @@ beforeAll(async () => {
     table.string('day').primary()
     table.integer('edited').notNullable().defaultTo(0)
   })
+  // As the migrations leave them.
+  await database.connection().schema.createTable('lunar_industries_temps_branch_tasks', (table) => {
+    table.text('repo').notNullable()
+    table.string('branch').notNullable()
+    table.string('task_id').notNullable()
+    table.primary(['repo', 'branch', 'task_id'])
+  })
+  await database.connection().schema.createTable('lunar_industries_temps_log', (table) => {
+    table.string('id').primary()
+    table.string('day').notNullable()
+    table.string('task_id').nullable()
+    table.string('label').notNullable().defaultTo('')
+    table.integer('share').notNullable()
+    table.text('url').nullable()
+    table.text('props').notNullable().defaultTo('{}')
+    table.string('last_edited').nullable()
+    table.string('deleted_at').nullable()
+  })
   store = new DbStore(database)
 })
 
@@ -67,5 +85,34 @@ describe('DbStore.writeDraft', () => {
   it('writes an empty draft', async () => {
     await store.writeDraft('2026-10-02', [])
     expect(await store.drafts('2026-10-02')).toEqual([])
+  })
+})
+
+describe('DbStore, the branches remembered', () => {
+  const remembered = async () =>
+    (await store.rememberedBranches()).map((r) => [r.branch, [...r.taskIds].sort()]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+
+  it('keeps every task of a branch, follows what git says now, forgets a branch no longer linked', async () => {
+    await store.rememberBranches([
+      { repo: '/r', branch: 'big', taskIds: ['a', 'b'] },
+      { repo: '/r', branch: 'one', taskIds: ['a'] },
+    ])
+    expect(await remembered()).toEqual([
+      ['big', ['a', 'b']],
+      ['one', ['a']],
+    ])
+    await store.rememberBranches([
+      { repo: '/r', branch: 'big', taskIds: ['b', 'c'] },
+      { repo: '/r', branch: 'one', taskIds: [] },
+    ])
+    expect(await remembered()).toEqual([['big', ['b', 'c']]])
+  })
+
+  it('a task merged into one the branch has already: one row left', async () => {
+    await store.rememberBranches([{ repo: '/r', branch: 'big', taskIds: ['b', 'c'] }])
+    await store.followMerge('task', 'c', 'b')
+    expect(await remembered()).toEqual([['big', ['b']]])
+    await store.followMerge('task', 'b', 'z')
+    expect(await remembered()).toEqual([['big', ['z']]])
   })
 })

@@ -35,17 +35,17 @@ const git = (time: string, kind: WorkEvent['kind'], repo: string, branch: string
   repo,
   branch,
   detail,
-  taskId: null,
+  taskIds: [],
 })
 
 describe('Time engine', () => {
   test('a task worked on in several moments makes one line, weighed by its spread', () => {
     const day = input(
       [
-        ['cam', 'tsk-42-ipu-bridge', { taskId: 't42', isDefault: false }],
-        ['board', 'tsk-57-notion-sync', { taskId: 't57', isDefault: false }],
-        ['cam', 'fix-selinux', { taskId: null, isDefault: false }],
-        ['cam', 'main', { taskId: null, isDefault: true }],
+        ['cam', 'tsk-42-ipu-bridge', { taskIds: ['t42'], isDefault: false }],
+        ['board', 'tsk-57-notion-sync', { taskIds: ['t57'], isDefault: false }],
+        ['cam', 'fix-selinux', { taskIds: [], isDefault: false }],
+        ['cam', 'main', { taskIds: [], isDefault: true }],
       ],
       [
         git(at(9, 2), 'checkout', 'cam', 'tsk-42-ipu-bridge'),
@@ -55,7 +55,7 @@ describe('Time engine', () => {
         git(at(11, 52), 'commit', 'board', 'tsk-57-notion-sync', 'c'),
         git(at(12, 5), 'commit', 'cam', 'fix-selinux', 'd'),
         git(at(13, 28), 'checkout', 'cam', 'main'),
-        { at: at(13, 30), kind: 'task', repo: null, branch: null, detail: 'edit', taskId: 't57' },
+        { at: at(13, 30), kind: 'task', repo: null, branch: null, detail: 'edit', taskIds: ['t57'] },
       ]
     )
     const lines = reconstruct(DAY, day, NEXT_DAY)
@@ -70,9 +70,9 @@ describe('Time engine', () => {
 
   test('a task moved to in progress opens its activity until its next commit', () => {
     const day = input(
-      [['r', 'id-1-a', { taskId: 't1', isDefault: false }]],
+      [['r', 'id-1-a', { taskIds: ['t1'], isDefault: false }]],
       [
-        { at: at(9, 0), kind: 'status', repo: null, branch: null, detail: 'Backlog → En cours', taskId: 't1', toGroup: 'doing' },
+        { at: at(9, 0), kind: 'status', repo: null, branch: null, detail: 'Backlog → En cours', taskIds: ['t1'], toGroup: 'doing' },
         git(at(11, 0), 'commit', 'r', 'id-1-a', 'c'),
       ]
     )
@@ -83,7 +83,7 @@ describe('Time engine', () => {
 
   test('commits alone, the status forgotten, still make a proposal', () => {
     const day = input(
-      [['r', 'id-1-a', { taskId: 't1', isDefault: false }]],
+      [['r', 'id-1-a', { taskIds: ['t1'], isDefault: false }]],
       [git(at(9, 0), 'commit', 'r', 'id-1-a', 'a'), git(at(11, 0), 'commit', 'r', 'id-1-a', 'b')]
     )
     expect(reconstruct(DAY, day, NEXT_DAY).map((l) => [l.taskId, l.weight])).toEqual([['t1', 30]])
@@ -109,7 +109,7 @@ describe('Time engine', () => {
       [19, 27, 'deploy'],
     ]
     const day = input(
-      ['deploy', 'iam', 'platform'].map((repo) => [repo, 'main', { taskId: null, isDefault: true }]),
+      ['deploy', 'iam', 'platform'].map((repo) => [repo, 'main', { taskIds: [], isDefault: true }]),
       commits.map(([h, m, repo], i) => git(at(h, m), 'commit', repo, 'main', `c${i}`))
     )
     const lines = reconstruct(DAY, day, NEXT_DAY)
@@ -119,8 +119,42 @@ describe('Time engine', () => {
   })
 
   test('a deleted branch keeps the task its events carried', () => {
-    const day = input([], [{ ...git(at(9, 0), 'commit', 'r', 'id-9-gone', 'a'), taskId: 't9' }])
+    const day = input([], [{ ...git(at(9, 0), 'commit', 'r', 'id-9-gone', 'a'), taskIds: ['t9'] }])
     expect(reconstruct(DAY, day, NEXT_DAY).map((l) => l.taskId)).toEqual(['t9'])
+  })
+
+  test('a branch serving two tasks gives each half of its time, on top of what each has of its own', () => {
+    const day = input(
+      [
+        ['r', 'big', { taskIds: ['t1', 't2'], isDefault: false }],
+        ['r', 'id-1-a', { taskIds: ['t1'], isDefault: false }],
+      ],
+      [
+        git(at(9, 0), 'commit', 'r', 'big', 'a'),
+        git(at(9, 30), 'commit', 'r', 'big', 'b'),
+        // 9:00 to 10:00 on the shared branch, then 15 min on t1's own.
+        git(at(10, 0), 'commit', 'r', 'id-1-a', 'c'),
+      ]
+    )
+    const lines = reconstruct(DAY, day, NEXT_DAY)
+    expect(lines.map((l) => [l.key, l.taskId, l.weight])).toEqual([
+      ['t:t1', 't1', 30 + 15],
+      ['t:t2', 't2', 30],
+    ])
+    expect(lines[1].reason).toBe('2 commits, sur une branche commune à 2 tâches, dont le temps est partagé à parts égales.')
+    expect(lines[0].reason).toMatch(/partagé à parts égales ; un commit\.$/)
+    expect(proposeShares(lines.map((l) => l.weight))).toEqual([12, 8])
+  })
+
+  test('a merge into staging of a branch serving two tasks counts for both', () => {
+    const day = input(
+      [['r', 'big', { taskIds: ['t2', 't1'], isDefault: false }]],
+      [git(at(14, 0), 'commit', 'r', 'factory', "Merge branch 'big' into 'factory'")]
+    )
+    expect(reconstruct(DAY, day, NEXT_DAY).map((l) => [l.taskId, l.weight])).toEqual([
+      ['t1', 7.5],
+      ['t2', 7.5],
+    ])
   })
 })
 

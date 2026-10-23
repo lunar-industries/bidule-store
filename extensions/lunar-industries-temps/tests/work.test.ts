@@ -51,18 +51,18 @@ describe('the work as the core has it', () => {
   test('a task gone from its tool no longer counts: neither its status changes nor its branch’s link', async () => {
     const work = coreWork(objectsWithGoneTask(), async () => ({ linked: true }))
     const events = await work.events('2026-10-16T00:00:00.000Z', '2026-10-17T00:00:00.000Z')
-    expect(events.map((e) => [e.kind, e.taskId])).toEqual([
-      ['status', 't1'],
-      ['commit', null],
+    expect(events.map((e) => [e.kind, e.taskIds])).toEqual([
+      ['status', ['t1']],
+      ['commit', []],
     ])
   })
 
   test('each branch with its task, and the mark of one the user unlinked by hand', async () => {
     const work = coreWork(fakeObjects(), async () => ({ linked: true }))
     expect(await work.branches()).toEqual([
-      { repo: '/r/app', name: 'main', taskId: null, isDefault: true, noTask: false },
-      { repo: '/r/app', name: 'feat/a', taskId: 't1', isDefault: false, noTask: false },
-      { repo: '/r/app', name: 'fix/b', taskId: null, isDefault: false, noTask: true },
+      { repo: '/r/app', name: 'main', taskIds: [], isDefault: true, noTask: false },
+      { repo: '/r/app', name: 'feat/a', taskIds: ['t1'], isDefault: false, noTask: false },
+      { repo: '/r/app', name: 'fix/b', taskIds: [], isDefault: false, noTask: true },
     ])
   })
 })

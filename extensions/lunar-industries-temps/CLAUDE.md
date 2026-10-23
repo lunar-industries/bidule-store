@@ -10,7 +10,10 @@ Une journée vaut 1, répartie en vingtièmes entre des lignes (une tâche, ou a
 chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.ts`.
 
 - **`engine.ts`** reconstitue la journée depuis l'activité du cœur (celle de git et celle des tâches) et propose les
-  parts, sans modèle d'IA.
+  parts, sans modèle d'IA. Le temps passé sur une branche qui sert plusieurs tâches est partagé à parts égales entre
+  elles, en plus de ce que chacune a d'elle-même ; l'utilisateur corrige les parts à la main s'il le faut. Le module
+  garde toutes les tâches de chaque branche (`lunar_industries_temps_branch_tasks`, une ligne par branche et par
+  tâche), pour qu'une branche fusionnée puis supprimée compte encore pour chacune.
 - **`days.ts`** tient les journées : le brouillon suit l'activité tant que l'utilisateur ne l'a pas changé (`edited`) ;
   une journée que le Time Log a est montrée telle qu'il l'a, et « Modifier » en refait un brouillon. Le Time Log est
   recopié sur 35 jours en arrière et 60 en avant, relu au bout de 10 minutes, ou tout de suite par « Relire le Time

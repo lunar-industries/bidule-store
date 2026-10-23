@@ -76,6 +76,8 @@ export function rowOf(b: ListedBranch, tasks: Task[]) {
     ...b,
     key: branchKey(b),
     task: tasks.find((t) => t.id === b.taskId) ?? null,
+    // Every task it serves that the board knows, in the order of `taskIds`.
+    tasks: b.taskIds.flatMap((id) => tasks.filter((t) => t.id === id)),
     review,
     reviewLabel: b.reviewNumber ? `${review} ${b.forge === 'gitlab' ? '!' : '#'}${b.reviewNumber}` : null,
     forgeName: (b.forge && FORGE[b.forge]) || 'la forge',
@@ -117,13 +119,13 @@ export function sortRows(rows: Row[], sort: Sort): Row[] {
 
 /**
  * The repos as the table shows them: the branches the filter keeps and the search finds (in the name, the repo, the
- * task's title or reference), in the sort's order; a repo without a target of its own takes the settings' one when it
- * has that branch.
+ * title or reference of one of its tasks), in the sort's order; a repo without a target of its own takes the settings'
+ * one when it has that branch.
  */
 export function reposOf(listing: Listing, tasks: Task[], filter: Filter, sort: Sort = 'state', query = '') {
   const words = fold(query).split(/\s+/).filter(Boolean)
   const found = (r: Row) => {
-    const text = fold(`${r.name} ${r.repoLabel} ${r.task?.title ?? ''} ${r.task?.ref ?? ''}`)
+    const text = fold(`${r.name} ${r.repoLabel} ${r.tasks.map((t) => `${t.title} ${t.ref ?? ''}`).join(' ')}`)
     return words.every((w) => text.includes(w))
   }
   const byRepo = new Map<string, ListedBranch[]>()

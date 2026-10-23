@@ -49,10 +49,10 @@ export interface TempsStore {
   // Makes the mirror match what the Time Log has for a period: entries read are stored as they are, the period's
   // others hidden (archived, moved to another day).
   recordLog(entries: LogRow[], from: string, to: string): Promise<void>
-  // The task of each branch seen linked to one. Git forgets a branch deleted, and with it its events' task: the past
+  // The tasks of each branch seen linked to some. Git forgets a branch deleted, and with it its events' tasks: the past
   // commits of a merged branch would turn into « a branch without a task » (and a day not edited would change).
-  rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]): Promise<void>
-  rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]>
+  rememberBranches(live: { repo: string; branch: string; taskIds: string[] }[]): Promise<void>
+  rememberedBranches(): Promise<{ repo: string; branch: string; taskIds: string[] }[]>
   // An object of the core merged into another (objects.merged): what is kept under its id goes to the one left.
   followMerge(type: StoredType, from: string, into: string): Promise<void>
 }
@@ -244,22 +244,30 @@ export class DbStore implements TempsStore {
     })
   }
 
-  async rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]): Promise<void> {
-    const known = new Map((await this.rememberedBranches()).map((r) => [`${r.repo}\u0000${r.branch}`, r.taskId]))
-    const changes = live.filter((b) => (known.get(`${b.repo}\u0000${b.branch}`) ?? null) !== b.taskId)
+  async rememberBranches(live: { repo: string; branch: string; taskIds: string[] }[]): Promise<void> {
+    const said = (ids: string[]) => [...new Set(ids)].sort().join('\u0000')
+    const known = new Map((await this.rememberedBranches()).map((r) => [`${r.repo}\u0000${r.branch}`, said(r.taskIds)]))
+    const changes = live.filter((b) => (known.get(`${b.repo}\u0000${b.branch}`) ?? '') !== said(b.taskIds))
     if (!changes.length) return
     await this.db.transaction(async (trx) => {
-      for (const { repo, branch, taskId } of changes) {
-        // A branch still there and no longer linked is not one of the task: what git says now wins.
-        if (taskId === null) await trx.from(BRANCH_TASKS).where({ repo, branch }).delete()
-        else await trx.table(BRANCH_TASKS).insert({ repo, branch, task_id: taskId }).onConflict(['repo', 'branch']).merge()
+      // A branch still there and no longer linked to a task is not one of that task's: what git says now wins.
+      for (const { repo, branch, taskIds } of changes) {
+        await trx.from(BRANCH_TASKS).where({ repo, branch }).delete()
+        for (const taskId of new Set(taskIds)) await trx.table(BRANCH_TASKS).insert({ repo, branch, task_id: taskId })
       }
     })
   }
 
-  async rememberedBranches(): Promise<{ repo: string; branch: string; taskId: string }[]> {
+  async rememberedBranches(): Promise<{ repo: string; branch: string; taskIds: string[] }[]> {
     const rows: BranchTaskColumns[] = await this.db.from(BRANCH_TASKS)
-    return rows.map((r) => ({ repo: r.repo, branch: r.branch, taskId: r.task_id }))
+    const out = new Map<string, { repo: string; branch: string; taskIds: string[] }>()
+    for (const r of rows) {
+      const key = `${r.repo}\u0000${r.branch}`
+      const had = out.get(key) ?? { repo: r.repo, branch: r.branch, taskIds: [] }
+      had.taskIds.push(r.task_id)
+      out.set(key, had)
+    }
+    return [...out.values()]
   }
 
   // A task: the drafts, the branches remembered and the mirror. An entry: the mirror, by its id (when it has both, the
@@ -267,6 +275,13 @@ export class DbStore implements TempsStore {
   async followMerge(type: StoredType, from: string, into: string): Promise<void> {
     if (type === 'task') {
       await this.db.transaction(async (trx) => {
+        // A branch remembered for both tasks keeps one row: the key is the branch and its task.
+        const both = trx.from(`${BRANCH_TASKS} as kept`).select('kept.repo').where('kept.task_id', into)
+        await trx
+          .from(BRANCH_TASKS)
+          .where('task_id', from)
+          .whereExists(both.whereRaw(`kept.repo = ${BRANCH_TASKS}.repo`).whereRaw(`kept.branch = ${BRANCH_TASKS}.branch`))
+          .delete()
         for (const table of [DRAFTS, BRANCH_TASKS, LOG]) await trx.from(table).where('task_id', from).update({ task_id: into })
       })
     } else if (type === 'timeEntry') {

@@ -16,12 +16,12 @@ export class MemoryStore implements TempsStore {
   log: (LogRow & { deleted: boolean })[] = []
   #id = 1
 
-  remembered = new Map<string, { repo: string; branch: string; taskId: string }>()
-  async rememberBranches(live: { repo: string; branch: string; taskId: string | null }[]) {
-    for (const { repo, branch, taskId } of live) {
+  remembered = new Map<string, { repo: string; branch: string; taskIds: string[] }>()
+  async rememberBranches(live: { repo: string; branch: string; taskIds: string[] }[]) {
+    for (const { repo, branch, taskIds } of live) {
       const key = `${repo}\u0000${branch}`
-      if (taskId === null) this.remembered.delete(key)
-      else this.remembered.set(key, { repo, branch, taskId })
+      if (!taskIds.length) this.remembered.delete(key)
+      else this.remembered.set(key, { repo, branch, taskIds: [...taskIds] })
     }
   }
   async rememberedBranches() {
@@ -86,7 +86,7 @@ export class MemoryStore implements TempsStore {
   async followMerge(type: StoredType, from: string, into: string) {
     if (type === 'task') {
       for (const r of this.draftRows) if (r.taskId === from) r.taskId = into
-      for (const r of this.remembered.values()) if (r.taskId === from) r.taskId = into
+      for (const r of this.remembered.values()) r.taskIds = [...new Set(r.taskIds.map((id) => (id === from ? into : id)))]
       for (const r of this.log) if (r.taskId === from) r.taskId = into
     } else if (type === 'timeEntry') {
       if (this.log.some((r) => r.id === into)) this.log = this.log.filter((r) => r.id !== from)
@@ -109,12 +109,13 @@ export class FakeGit {
   eventRows: GitEvent[] = []
   links: [string, string, string | null][] = []
 
-  branch(repo: string, name: string, o: { taskId?: string | null; isDefault?: boolean; noTask?: boolean } = {}) {
-    this.branchRows.push({ repo, name, taskId: o.taskId ?? null, isDefault: o.isDefault ?? false, noTask: o.noTask ?? false })
+  branch(repo: string, name: string, o: { taskId?: string | null; taskIds?: string[]; isDefault?: boolean; noTask?: boolean } = {}) {
+    const taskIds = o.taskIds ?? (o.taskId ? [o.taskId] : [])
+    this.branchRows.push({ repo, name, taskIds, isDefault: o.isDefault ?? false, noTask: o.noTask ?? false })
   }
   event(at: string, kind: GitEvent['kind'], repo: string, branch: string, detail = '') {
-    const taskId = this.branchRows.find((b) => b.repo === repo && b.name === branch)?.taskId ?? null
-    this.eventRows.push({ at, kind, repo, branch, detail, taskId })
+    const taskIds = this.branchRows.find((b) => b.repo === repo && b.name === branch)?.taskIds ?? []
+    this.eventRows.push({ at, kind, repo, branch, detail, taskIds: [...taskIds] })
   }
 }
 
@@ -135,15 +136,15 @@ export function fakeWork(git: FakeGit, tasks: FakeTasks): Work {
       ...git.eventRows.filter(within(since, until)),
       ...tasks.edits
         .filter(within(since, until))
-        .map((e): WorkEvent => ({ at: e.at, kind: 'task', repo: null, branch: null, detail: 'Tâche modifiée', taskId: e.taskId })),
+        .map((e): WorkEvent => ({ at: e.at, kind: 'task', repo: null, branch: null, detail: 'Tâche modifiée', taskIds: [e.taskId] })),
       ...tasks.changes.filter(within(since, until)).map(
-        (c): WorkEvent => ({ at: c.at, kind: 'status', repo: null, branch: null, detail: `→ ${c.to}`, taskId: c.taskId, toGroup: c.toGroup })
+        (c): WorkEvent => ({ at: c.at, kind: 'status', repo: null, branch: null, detail: `→ ${c.to}`, taskIds: [c.taskId], toGroup: c.toGroup })
       ),
     ],
     link: async (repo, name, taskId) => {
       git.links.push([repo, name, taskId])
       const b = git.branchRows.find((x) => x.repo === repo && x.name === name)
-      if (b) b.taskId = taskId
+      if (b) b.taskIds = [taskId]
     },
     tasks: async () => new Map(tasks.list.map((t) => [t.id, { title: t.title, ref: t.ref ?? null, url: t.url ?? null }])),
   }

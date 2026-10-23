@@ -20,11 +20,12 @@ export const isRecent = (at: string | null, now = Date.now()) =>
   at !== null && now - new Date(at).getTime() < RECENT_DAYS * 864e5
 
 // Recent branches without a task, not merged: to drop on a card. A branch linked to a task the board does not show (done
-// and hidden, someone else's) has no card either: it counts as without a task, so that it can be found and moved.
+// and hidden, someone else's) has no card either: it counts as without a task, so that it can be found and linked; one
+// of its tasks on the board is enough to give it a card.
 export const orphansOf = (branches: KanbanBranch[], now = Date.now(), onBoard?: ReadonlySet<string>) =>
   branches.filter(
     (b) =>
-      (!b.taskId || (onBoard !== undefined && !onBoard.has(b.taskId))) &&
+      (onBoard === undefined ? !b.taskIds.length : !b.taskIds.some((id) => onBoard.has(id))) &&
       isRecent(b.lastCommitAt, now) &&
       b.reviewState !== 'merged' &&
       b.ci !== 'merged'
@@ -431,7 +432,8 @@ const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCas
 
 /**
  * The « Lier des branches… » dialog's rows, grouped by repo in the order they first come: the task's branches, then
- * those without a task, then the others' (« liée à … »), merged ones last; the most recent first.
+ * those without a task, then the others' (« liée à … »), merged ones last; the most recent first. Ticking another
+ * task's branch links it to this one as well.
  */
 export function linkRows(
   branches: KanbanBranch[],
@@ -442,7 +444,12 @@ export function linkRows(
 ): LinkRow[] {
   const words = fold(query).split(/\s+/).filter(Boolean)
   const rank = (b: KanbanBranch) =>
-    b.taskId === taskId ? 0 : b.reviewState === 'merged' || b.ci === 'merged' ? 3 : b.taskId ? 2 : 1
+    b.taskIds.includes(taskId) ? 0 : b.reviewState === 'merged' || b.ci === 'merged' ? 3 : b.taskIds.length ? 2 : 1
+  const note = (b: KanbanBranch) => {
+    const others = b.taskIds.filter((id) => id !== taskId)
+    if (!others.length) return relTime(b.lastCommitAt)
+    return `${others.length < b.taskIds.length ? 'aussi ' : ''}liée à ${others.map(titleOf).join(', ')}`
+  }
   const shown = branches
     .filter((b) => words.every((w) => fold(`${b.name} ${b.repoLabel}`).includes(w)))
     .sort((a, b) => rank(a) - rank(b) || (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? ''))
@@ -453,7 +460,7 @@ export function linkRows(
       key: branchKey(b),
       name: b.name,
       repo: b.repoLabel,
-      note: b.taskId && b.taskId !== taskId ? `liée à ${titleOf(b.taskId)}` : relTime(b.lastCommitAt),
+      note: note(b),
       checked: checked.has(branchKey(b)),
     }))
 }

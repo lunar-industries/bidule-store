@@ -21,7 +21,7 @@ export function LinkBranches({
 }) {
   const [query, setQuery] = useState('')
   const [checked, setChecked] = useState<ReadonlySet<string>>(
-    () => new Set(branches.filter((b) => b.taskId === taskId).map(branchKey)),
+    () => new Set(branches.filter((b) => b.taskIds.includes(taskId)).map(branchKey)),
   )
   const [saving, setSaving] = useState(false)
   const rows = useMemo(() => linkRows(branches, taskId, query, titleOf, checked), [branches, taskId, query, titleOf, checked])
