@@ -16,10 +16,6 @@
         "optional": true
       },
       {
-        "extension": "git",
-        "optional": true
-      },
-      {
         "object": "repository",
         "optional": true
       },

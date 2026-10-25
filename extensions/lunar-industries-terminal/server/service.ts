@@ -2,7 +2,6 @@ import { glob, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { ServerContext } from '@bidule/api/extensions'
 import type { TerminalLaunch } from '@bidule/api/bridge'
-import type { GitSource } from '@bidule/ext-git/contract'
 import type { ForgeClient } from '@bidule/sdk/forges'
 import { parseWslPath } from '@bidule/sdk/paths'
 import {
@@ -63,11 +62,6 @@ function userShell(place: Pick<TerminalLaunch, 'wsl'>): Pick<TerminalLaunch, 'ar
 export class TerminalService {
   constructor(protected ctx: ServerContext) {}
 
-  // git itself, for what only it reads live (a branch's worktree).
-  #git() {
-    return this.ctx.objects.client<GitSource>('git')
-  }
-
   // The user's repos, as the core has them (git's); `ordered`: the most recently committed to first, then by label.
   async #repos(ordered = false): Promise<Repo[]> {
     if (!this.ctx.objects.providers('repository').length) throw new TerminalError("Aucun dépôt git : l'extension git n'est pas là", 404)
@@ -96,11 +90,12 @@ export class TerminalService {
   }
 
   // A worktree of the repo the branch is checked out in, else the repo itself (git not there: the repo).
-  async #folderOf(repo: string, branch: string): Promise<string> {
+  async #folderOf(repo: { id: string; path: string }, branch: string): Promise<string> {
     try {
-      return (await this.#git().worktrees(repo)).find((w) => w.branch === branch)?.path ?? repo
+      const worktrees = await this.ctx.objects.act('repository.worktrees', repo.id, {})
+      return worktrees.find((w) => w.branch === branch)?.path ?? repo.path
     } catch {
-      return repo
+      return repo.path
     }
   }
 
@@ -228,7 +223,7 @@ export class TerminalService {
     const [known] = await this.ctx.objects.list('repository', { where: { path: repo } })
     const [branch] = known ? await this.ctx.objects.list('branch', { where: { repositoryId: known.id, name } }) : []
     if (!known || !branch) throw new TerminalError('Branche inconnue', 404)
-    const folder = await this.#folderOf(known.path, name)
+    const folder = await this.#folderOf(known, name)
     const place = this.#place(folder)
     const session = this.ctx.terminal.prepare({ ...userShell(place), ...place })
     return { session, title: name, folder }
@@ -247,7 +242,7 @@ export class TerminalService {
     const [branch] = branches.sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? ''))
     const repo = branch ? await this.ctx.objects.get('repository', branch.repositoryId) : null
     if (!branch || !repo) throw new TerminalError("Cette tâche n'a pas encore de branche", 404)
-    const folder = await this.#folderOf(repo.path, branch.name)
+    const folder = await this.#folderOf(repo, branch.name)
     const task = await this.ctx.objects.get('task', taskId).catch(() => null)
     const place = this.#place(folder)
     const session = this.ctx.terminal.prepare({ ...userShell(place), ...place })
