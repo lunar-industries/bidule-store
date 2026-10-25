@@ -27,7 +27,7 @@ et l'aperçu de l'option choisie, `annotationsOf`).
   infobulle, tant que la session tourne dans l'app).
 - **Les colonnes** se replient en bandes (le nom de chaque point dit l'état de sa session). Le choix, et les archivées
   montrées, sont gardés d'un lancement à l'autre (`useSavedState`, réglage caché `lunar-industries-claude.columns`).
-  Le mode focus du cœur (`useFocusMode`) et une fenêtre de moins de 1 000 px replient les deux ; une colonne dépliée à
+  Une fenêtre de moins de 1 000 px replie les deux ; une colonne dépliée à
   la main le reste jusqu'à la prochaine fois, sans toucher au choix gardé.
 - **La conversation** (`ui/Conversation.tsx`) : le fil (`role="log"`, `aria-live="polite"`), « Interrompre » et
   « Arrêter… » avec leur infobulle (dans le « ⋯ » sous 1 000 px) ; « Arrêter » demande confirmation quand Claude

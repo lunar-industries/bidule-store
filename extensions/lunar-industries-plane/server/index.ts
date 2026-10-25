@@ -1,6 +1,5 @@
 import type { PutItem, ServerContext } from '@bidule/api/extensions'
 import { meaningOf } from '@bidule/sdk/objects'
-import '../contract.ts'
 import { DbMirror } from './mirror.ts'
 import { PlaneTasks } from './source.ts'
 import { listOf, paletteOf } from './states.ts'
@@ -87,9 +86,9 @@ export async function activate(ctx: ServerContext) {
   const sync = async () => {
     const { tasks, edits, moves, who } = await source.syncCount()
     await publish()
-    const message = `${tasks} tâche${tasks > 1 ? 's' : ''} Plane pour ${who}${edits || moves ? `, ${edits + moves} changement${edits + moves > 1 ? 's' : ''} de ta part` : ''}`
-    ctx.logger.info(message)
-    return { message }
+    ctx.logger.info(
+      `${tasks} tâche${tasks > 1 ? 's' : ''} Plane pour ${who}${edits || moves ? `, ${edits + moves} changement${edits + moves > 1 ? 's' : ''} de ta part` : ''}`
+    )
   }
   // An action changed a work item in the mirror: the core sees it at once.
   const after = async <T>(work: Promise<T>) => {
@@ -124,11 +123,8 @@ export async function activate(ctx: ServerContext) {
         role: 'owner' as const,
       }))
     },
-    'task.sync': async () => {
-      await sync()
-    },
+    'task.sync': sync,
   })
-  ctx.commands.register('lunar-industries-plane.sync', sync)
 
   const quietly = () => {
     void (async () => {
@@ -138,5 +134,6 @@ export async function activate(ctx: ServerContext) {
     )
   }
   quietly()
-  setInterval(quietly, SYNC_EVERY).unref()
+  // Paced by the core: less often on battery, never while the machine sleeps.
+  ctx.every(SYNC_EVERY, quietly)
 }

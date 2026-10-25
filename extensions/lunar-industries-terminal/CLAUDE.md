@@ -87,12 +87,12 @@ existe, même caché (le navigateur la suspend quand la fenêtre est cachée).
 - **Fermer** un onglet ou un volet où une commande tourne (`commands.running`, d'après l'intégration du shell) demande
   d'abord la confirmation commune, le focus sur « Annuler » (`askClose` de `ui/tabs.ts`) ; à l'invite, il se ferme
   aussitôt.
-- **La recherche** : Ctrl+Maj+R (« Rechercher » ; Ctrl+Maj+F est le mode focus du cœur, pris avant la page), ou la
+- **La recherche** : Ctrl+Maj+R (« Rechercher »), ou la
   loupe au bord du bandeau. Son champ a l'anneau de focus, et elle dit « Aucun résultat ».
 - **Le clic droit dans le terminal** ouvre le menu commun ; « Copier » est grisé sans sélection, avec sa raison.
 - **Les états** : « Ouverture du terminal… » pendant que le premier se charge (`opening`), sans bouton ; un terminal
   qui ne peut pas se charger le dit (`Empty` commun, avec Réglages › Rôles) et « + », « Scripts » et la loupe
-  disparaissent ; la ligne « Relancer » d'un shell arrêté, sous laquelle la mascotte ne descend pas en mode focus.
+  disparaissent ; la ligne « Relancer » d'un shell arrêté.
 - **Les scripts** : une palette sans script dit pourquoi (« Aucun script dans … », « Aucun dépôt connu »).
 - **Un terminal qui attend ta réponse** se voit depuis les autres pages : la partie de fond (`ui/index.tsx`) met leur
   nombre sur l'onglet Terminal du bandeau, et l'onglet du terminal a son point jaune. Deux sources : la marque
@@ -102,8 +102,6 @@ existe, même caché (le navigateur la suspend quand la fenêtre est cachée).
   `preferredNotifChannel` le demande (`iterm2`, `ghostty` ou `kitty` ; « auto » n'envoie rien, le terminal se disant
   `TERM_PROGRAM=Bidule`). La marque d'une notification part quand tu reviens à l'onglet ou y tapes quelque chose ; la
   fenêtre au second plan, le système la dit aussi.
-- **Le mode focus** : les règles que le cœur donne à ses onglets de terminal valent pour `lterm-tabs`, `lterm-tab` et
-  `lterm-switch`.
 
 ## Classes CSS
 

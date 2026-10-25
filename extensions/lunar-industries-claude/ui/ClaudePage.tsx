@@ -5,9 +5,7 @@ import {
   navigate,
   react,
   ToolSearch,
-  useFocusMode,
   useHint,
-  useMascotClearance,
   useSavedState,
 } from '@bidule/sdk'
 import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
@@ -63,11 +61,10 @@ const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => matchMedia(N
 /**
  * Claude (Lunar Industries, Simon's pages/claude): Claude Code sessions run in the app. The list on the left
  * (grouped by state), the conversation, the session's context on the right. Each side column folds into a strip;
- * the core's focus mode, and a narrow window, fold both. Off until the experimental switch of its settings is on.
+ * a narrow window folds both. Off until the experimental switch of its settings is on.
  */
 export function ClaudePage() {
   const enabled = useEnabled()
-  useMascotClearance(96)
   if (enabled === null) return <div className="page fill" />
   if (!enabled) return <Disabled />
   return <Sessions />
@@ -104,11 +101,10 @@ function Sessions() {
   const [columns, setColumns] = useSavedState<Columns>(COLUMNS, OPEN, readColumns)
   const [menu, openMenu] = useMenu()
 
-  // The core's focus mode or a narrow window: both columns folded. One unfolded by hand stays so until the page is
-  // compact again; the columns kept for the wide page are untouched.
-  const focus = useFocusMode()
+  // A narrow window: both columns folded. One unfolded by hand stays so until the page is wide again; the columns
+  // kept for the wide page are untouched.
   const narrow = useNarrow()
-  const compact = focus || narrow
+  const compact = narrow
   const [unfolded, setUnfolded] = useState({ left: false, right: false })
   useEffect(() => {
     if (compact) setUnfolded({ left: false, right: false })

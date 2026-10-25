@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { BannerTools, navigate, openPalette, setPaletteScope, useHint, useMascotClearance } from '@bidule/sdk'
+import { BannerTools, navigate, openPalette, setPaletteScope, useHint } from '@bidule/sdk'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
@@ -46,9 +46,8 @@ export function TerminalPage() {
   }, [])
 
   const active = terminals.active
-  // The line « Relancer » at the bottom: in focus mode, the mascot stays above it.
+  // The line « Relancer » at the bottom, under a shell that stopped.
   const ended = active?.state === 'exited'
-  useMascotClearance(ended ? 64 : 0)
   // No terminal can be made (WebAssembly refused…): what would only fail is not offered.
   const broken = Boolean(terminals.problem) && !active
 

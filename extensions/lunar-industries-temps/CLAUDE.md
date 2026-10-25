@@ -44,7 +44,7 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
   confirmation quand le brouillon a des changements faits à la main (`edited`, ou des modifications pas encore
   enregistrées).
 - **La barre d'envoi** dit ce qui manque pour envoyer ; pour un jour envoyé, quand il l'a été, « Relire le Time Log »
-  et « Modifier ». En mode focus, la mascotte reste au-dessus d'elle (`useMascotClearance`).
+  et « Modifier ».
 - **Le matin**, avant toute activité, la page ouvre le jour de travail précédent s'il reste à valider ou à remplir, et
   la mascotte le dit (« Hier n'est pas encore validé, je te l'ai ouvert »).
 - **Le chargement et les échecs** (`Loading`, `Alert` et `Empty` de `lunar-industries-common`) : « Lecture de la

@@ -5,9 +5,7 @@ import {
   errorMessage,
   navigate,
   react,
-  useFocusMode,
   useHint,
-  useMascotClearance,
   useOn,
   type Task,
 } from '@bidule/sdk'
@@ -155,7 +153,6 @@ export function TempsPage() {
   const savingRef = useRef(false)
   const bar = useRef<HTMLDivElement>(null)
   const calToggle = useRef<HTMLButtonElement>(null)
-  const foot = useRef<HTMLElement>(null)
   const drag = useRef<{ x0: number; width: number; scale: number; from: Line[]; left: number; right: number | null } | null>(null)
 
   useEffect(() => {
@@ -340,21 +337,6 @@ export function TempsPage() {
   // What the user changed by hand on this day: an action that replaces the draft asks first.
   const handMade = Boolean(edits) || Boolean(view?.edited)
   const sendBar = editable && showLines
-  const focus = useFocusMode()
-
-  // In focus mode the mascot's disc sits at the bottom right: it stays above the send bar.
-  const [footHeight, setFootHeight] = useState(0)
-  const hasFoot = sendBar || recorded
-  useEffect(() => {
-    const el = foot.current
-    if (!el) return setFootHeight(0)
-    const measure = () => setFootHeight(el.offsetHeight)
-    measure()
-    const watch = new ResizeObserver(measure)
-    watch.observe(el)
-    return () => watch.disconnect()
-  }, [hasFoot])
-  useMascotClearance(focus && hasFoot ? footHeight : 0)
 
   // The API announced a change of the days (new activity, the Time Log read again): the lists are read again, and the
   // day shown too, unless the user is changing it.
@@ -1132,7 +1114,7 @@ export function TempsPage() {
 
         {/* The day's send bar: what sending needs, then the button; for a recorded day, when it was sent. */}
         {sendBar ? (
-          <footer className="lit-foot" ref={foot}>
+          <footer className="lit-foot">
             <ul className="lit-checks">
               {checks.map((c, i) => (
                 <li key={i} className={`lit-check-line${c.ok ? ' ok' : ''}`}>
@@ -1154,7 +1136,7 @@ export function TempsPage() {
             </button>
           </footer>
         ) : recorded ? (
-          <footer className="lit-foot" ref={foot}>
+          <footer className="lit-foot">
             <span className="lit-check-line ok">
               <span aria-hidden="true">✓</span>
               Envoyée dans le Time Log {sentAtText(view?.sentAt ?? null)}
