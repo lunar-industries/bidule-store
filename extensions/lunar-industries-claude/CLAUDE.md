@@ -48,6 +48,10 @@ et l'aperçu de l'option choisie, `annotationsOf`).
   Claude travaille est la confirmation commune, le focus sur « Annuler » ; les icônes et les teintes des étiquettes
   sont les communes. Une revue s'appelle MR sur GitLab et PR sur GitHub.
 - **La première visite** : les vérifications et les tâches en cours, sur une colonne sous 1 000 px.
+- **« T'attend »** (`ui/Background.tsx`, tant que le module est allumé) : chaque session qui attend une décision
+  (sorte `decision`) et chaque session dont le tour a fini en erreur, jusqu'à ce qu'elle reparte (`turn`), sont publiées
+  dans la liste du cœur ; un tour fini (`turn`) et le créneau pris (`news`) sont annoncés. C'est le cœur qui décide qui
+  le dit : le module n'envoie aucune notification lui-même.
 
 Ce qui se calcule sans rien dessiner est dans `ui/events.ts` et `ui/models.ts`, testé dans `ui/events.test.ts` ; la
 carte des questions est essayée dans `ui/DecisionCard.test.tsx`.

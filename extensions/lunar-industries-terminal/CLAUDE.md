@@ -100,8 +100,9 @@ existe, même caché (le navigateur la suspend quand la fenêtre est cachée).
   notification qu'un programme envoie à son terminal (`notificationOf` de `ui/osc.ts` : OSC 9 d'iTerm2, OSC 777 de
   Ghostty, OSC 99 de Kitty), reçue pendant que tu regardes ailleurs. Claude Code n'en envoie que si son réglage
   `preferredNotifChannel` le demande (`iterm2`, `ghostty` ou `kitty` ; « auto » n'envoie rien, le terminal se disant
-  `TERM_PROGRAM=Bidule`). La marque d'une notification part quand tu reviens à l'onglet ou y tapes quelque chose ; la
-  fenêtre au second plan, le système la dit aussi.
+  `TERM_PROGRAM=Bidule`). La marque d'une notification part quand tu reviens à l'onglet ou y tapes quelque chose ; elle
+  est aussi annoncée au cœur (sorte `command`), qui la fait dire par le système quand la fenêtre est au second plan,
+  comme une commande longue finie hors de vue.
 
 ## Classes CSS
 

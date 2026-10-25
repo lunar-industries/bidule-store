@@ -46,11 +46,8 @@ sont listées dans `contract.ts`.
   Les tâches sont lues par `useTaskBoard` : une lecture qui échoue est dite dans le champ Tâche, avec Réessayer. Tant que l'état réel d'une revue n'est pas
   connu, la branche dit « Revue ouverte », pas « Prête à fusionner ».
 - **La fenêtre étroite** (moins de 1 000 px) : le tableau garde la branche (sa tâche dessous), l'état et l'action.
-- **La mascotte** dit d'abord « La CI de X est rouge », sa réplique taquine ensuite (`hintOf`).
-- **La partie de fond** (`ui/index.tsx`) relit les branches quand git relit les dépôts, quand une tâche ou une branche
-  change (une liaison) ou quand une forge lit une revue ou une CI. Elle notifie une CI qui passe au rouge (`turnedRed` : une fois par
-  pipeline, la première lecture ne faisant que retenir), fenêtre au second plan ; un clic ouvre la branche
-  (`ui/state.ts`, `openBranch`).
+- **Une CI qui passe au rouge** est dite par « T'attend » du cœur, depuis Git (le module officiel) : le module n'a plus
+  de partie de fond.
 
 Ce qui se calcule sans rien dessiner est dans `ui/steps.ts`, testé dans `tests/steps.test.ts`.
 
