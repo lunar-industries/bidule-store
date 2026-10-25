@@ -101,12 +101,28 @@ export async function activate(ctx: ServerContext) {
   ctx.objects.provide('task', {
     'task.move': (task, { status }) => after(source.move(task.remoteId, status)),
     'task.comment': (task, { text }) => source.comment(task.remoteId, text),
-    'task.join': (task) => source.join(task.remoteId),
+    // Taking a work item on is Plane's own interface's work: one the mirror has is the user's already.
+    'task.join': async ({ remoteId }) => {
+      await source.join(remoteId)
+      const id = (await ctx.objects.idsOf('task', await account())).get(remoteId)
+      if (!id) throw new Error('Cette tâche Plane n’est pas encore dans Bidule : synchronise d’abord')
+      return id
+    },
     'task.page': (task) => source.page(task.remoteId),
+    // The user's work items whose title holds the text, as the mirror has them (assigned to the user: responsible).
     'task.search': async ({ q }) => {
-      const found = await source.search(q)
-      const ids = await ctx.objects.idsOf('task', await account())
-      return found.flatMap((t) => ids.get(t.id) ?? [])
+      const groups = new Map((await mirror.columns()).map((c) => [c.name, c.group]))
+      return (await source.search(q)).map((t) => ({
+        remoteId: t.id,
+        ref: t.ref,
+        url: t.url,
+        title: t.title,
+        status: t.status,
+        group: groups.get(t.status) ?? 'todo',
+        due: t.due,
+        people: t.people,
+        role: 'owner' as const,
+      }))
     },
     'task.sync': async () => {
       await sync()

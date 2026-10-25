@@ -46,7 +46,10 @@ function fakeCtx(options: { providers?: string[] } = {}) {
       acted.push(`${action} ${id} ${JSON.stringify(args)}`)
       return action === 'task.page' ? { text: 'Contenu', comments: [] } : undefined
     },
-    run: async (_action: string, { q }: { q: string }) => (q === 'rôle' ? ['t1', 't2'] : []),
+    // A tool's search gives its own ids; the core knows a task by its source (here, its id in the tool is `r` + id).
+    run: async (_action: string, { q }: { q: string }) =>
+      q === 'rôle' ? [{ remoteId: 'rt1' }, { remoteId: 'rt2' }, { remoteId: 'unknown' }] : [],
+    find: async (_type: string, { remoteId }: { remoteId: string }) => tasks.find((t) => `r${t.id}` === remoteId) ?? null,
   }
   return { ctx: { objects } as unknown as ServerContext, acted }
 }

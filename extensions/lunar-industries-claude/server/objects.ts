@@ -62,7 +62,7 @@ export interface TaskAccess {
   get(id: string): Promise<Task | null>
   // A task by its id or its reference (ID-101, in any case): the user's own first, then any the core knows.
   find(key: string): Promise<Task | null>
-  // Tasks found in the tools themselves (task.search, by title), as the core keeps them.
+  // Tasks found in the tools themselves (task.search, by title) that the core knows.
   search(q: string): Promise<Task[]>
   move(taskId: string, status: string): Promise<void>
   // Its page's text and comments (empty when its provider does not tell).
@@ -104,12 +104,15 @@ export function taskAccess(ctx: ServerContext): TaskAccess | null {
       const found = (await objects.list('task')).filter((t) => t.ref?.toLowerCase() === ref)
       return found.find((t) => t.role !== null) ?? found[0] ?? null
     },
+    // The core keeps none of what a tool finds: only the tasks found that the core knows are given.
     search: async (q) => {
       const found = await Promise.all(
-        objects.providers('task', 'task.search').map((p) => objects.run('task.search', { q }, p).catch((): string[] => []))
+        objects.providers('task', 'task.search').map(async (provider) => {
+          const tasks = await objects.run('task.search', { q }, provider).catch(() => [])
+          return Promise.all(tasks.map((t) => objects.find('task', { remoteId: t.remoteId, provider })))
+        })
       )
-      const ids = found.flat()
-      return ids.length ? objects.list('task', { ids }) : []
+      return found.flat().filter((t): t is Task => t !== null)
     },
     move: (taskId, status) => objects.act('task.move', taskId, { status }),
     page: async (taskId) => {
