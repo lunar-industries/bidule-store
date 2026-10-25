@@ -5,7 +5,6 @@ import {
   errorMessage,
   navigate,
   react,
-  useHint,
   useOn,
   type Task,
 } from '@bidule/sdk'
@@ -444,21 +443,6 @@ export function TempsPage() {
   })
   const weekPending = weekLoading ? [] : weekDays.filter((d) => PENDING.includes(d.state))
   const nextDay = weekPending.find((d) => d.key !== shownDay) ?? null
-
-  // What the mascot says about this day.
-  const hints: Record<DayState, string> = {
-    future: "Ce jour n'est pas encore arrivé. Coin.",
-    empty: 'Rien dans git ni dans tes tâches pour l’instant.',
-    to_fill: 'Un jour de travail sans rien dans git ni dans tes tâches. Réunions ? Absence ?',
-    off: 'Jour non travaillé. Repos !',
-    recorded: shownDay === today ? 'Journée dans le Time Log. Je fais une sieste.' : 'Cette journée est déjà dans le Time Log.',
-    absent: 'Journée d’absence, bien notée dans le Time Log.',
-    modified: 'Tu modifies une journée déjà envoyée : renvoie-la quand c’est bon.',
-    to_validate: orphans.length
-      ? "Des commits sur une branche sans tâche… c'était pour quoi ?"
-      : `J'ai réparti ${shownDay === today ? 'ta journée' : 'cette journée'} d'après git et tes tâches. Tu valides ?`,
-  }
-  useHint(dayError ? "Je n'arrive pas à lire cette journée." : view ? hints[state] : null, state === 'recorded' && !dayError ? 'sleep' : 'listen')
 
   // ---------- editing
 

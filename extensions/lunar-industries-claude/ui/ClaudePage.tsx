@@ -5,7 +5,6 @@ import {
   navigate,
   react,
   ToolSearch,
-  useHint,
   useSavedState,
 } from '@bidule/sdk'
 import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
@@ -71,7 +70,6 @@ export function ClaudePage() {
 }
 
 function Disabled() {
-  useHint('Les sessions Claude dans l’app sont éteintes. Coin.')
   return (
     <div className="page">
       <section className="panel lc-off">
@@ -152,18 +150,6 @@ function Sessions() {
     { label: 'Archivées', items: columns.archived ? visible.filter((s) => s.archived) : [] },
   ].filter((g) => g.items.length)
   const current = all.find((s) => s.id === selectedId) ?? all.find((s) => !s.archived) ?? null
-  const waiting = all.filter((s) => !s.archived && s.status === 'waiting').length
-  const working = all.some((s) => !s.archived && s.status === 'running')
-
-  useHint(
-    list === null
-      ? null
-      : waiting
-        ? `${waiting} session${waiting > 1 ? 's attendent' : ' attend'} ta décision. Coin !`
-        : working
-          ? 'Claude bosse, je surveille. Coin.'
-          : null,
-  )
 
   async function newSession(taskId: string | null = null) {
     const id = await openNewSession({ taskId })
@@ -379,7 +365,6 @@ function FirstVisit({ start }: { start: (taskId: string | null) => void }) {
     }
   }
   useEffect(() => void check(), [])
-  useHint('Aucune session Claude pour l’instant. On en lance une ? Coin.')
 
   const doing = new Set((board?.columns ?? []).filter((c) => c.group === 'doing').map((c) => c.name))
   const inProgress = (board?.tasks ?? []).filter((t) => doing.has(t.status)).slice(0, 5)

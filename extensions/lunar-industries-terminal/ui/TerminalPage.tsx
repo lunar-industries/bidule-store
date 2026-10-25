@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { SpaceTools, navigate, openPalette, setPaletteScope, useHint } from '@bidule/sdk'
+import { SpaceTools, navigate, openPalette, setPaletteScope } from '@bidule/sdk'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
@@ -27,7 +27,6 @@ export function TerminalPage() {
   const host = useRef<HTMLDivElement>(null)
   const [menu, openMenu] = useMenu()
   const [dropping, setDropping] = useState(false)
-  useHint('Tape, je regarde. Enfin, je fais semblant. Coin.')
   useThemeNotice()
   // Ctrl+K here opens the palette on the scripts of the active tab's repo.
   useEffect(() => setPaletteScope(scriptsScope), [])

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { useHint, useOn } from '@bidule/sdk'
+import { useOn } from '@bidule/sdk'
 import { useMenu } from '@bidule/ext-lunar-industries-common/ui/menu'
 import type { ContainerDetail, ContainerHealth } from '../contract.ts'
 import { act, containerEntries, copy, openTerminal } from './actions.tsx'
 import { api, message } from './api.ts'
-import { fmtBytes, fmtPercent, isFailed, isUp, portLabel, portsOf, portUrl, sinceOf, stateOf, titleOf, usageRowOf, when, type Tone } from './format.ts'
+import { fmtBytes, fmtPercent, isUp, portLabel, portsOf, portUrl, sinceOf, stateOf, titleOf, usageRowOf, when, type Tone } from './format.ts'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { Alert, Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
 import { LogsPanel, useLogs } from './Logs.tsx'
@@ -155,15 +155,6 @@ function Fiche({ c, gone, reload }: { c: ContainerDetail; gone: string | null; r
   const health = c.health ? HEALTH[c.health] : null
   const since = sinceOf(c)
   const ports = portsOf(c.ports)
-  const firstPort = ports.find((p) => portUrl(c, p))
-
-  useHint(
-    c.state === 'running'
-      ? `${titleOf(c)} tourne ${since || 'en ce moment'}${firstPort ? `, et répond sur le port ${firstPort.hostPort}` : ''}.`
-      : isFailed(c)
-        ? `${titleOf(c)} est tombé (${c.state === 'dead' ? 'mort' : `code ${c.exitCode}`}).`
-        : `${titleOf(c)} est ${state.label}.`,
-  )
 
   // What it uses: the current figures in the side panel, their history in the resources' tab.
   const usage = useUsage(c.state === 'running')

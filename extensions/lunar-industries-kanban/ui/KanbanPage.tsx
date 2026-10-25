@@ -24,7 +24,6 @@ import {
   ToolFilter,
   ToolSearch,
   useCommands,
-  useHint,
   useOn,
   useSavedState,
   useSettingValues,
@@ -578,24 +577,6 @@ export function Kanban() {
     () => registerCommands({ id: 'lunar-industries-kanban.sync', group: 'Kanban', title: 'Synchroniser les tâches', run: sync }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ready?.source],
-  )
-
-  // The mascot says what needs attention first: the late tasks, the failing CI, then today's.
-  const firstLate = ready?.tasks.find((t) => !ctx.done(t) && matchesFilter(t, 'late', ctx))
-  useHint(
-    !board
-      ? null
-      : board.source === null
-        ? 'Il me faut une source de tâches : une extension comme Notion. Coin.'
-        : !board.configured
-          ? `Branche-moi à ${board.source} dans les Réglages, que je voie tes tâches.`
-          : attentionCount.late
-            ? `${plural(attentionCount.late, 'tâche en retard', 'tâches en retard')}, dont ${firstLate?.ref ?? firstLate?.title}.${attentionCount.ci ? ` Et ${plural(attentionCount.ci, 'CI rouge', 'CI rouges')}.` : ''}`
-            : attentionCount.ci
-              ? `${plural(attentionCount.ci, 'tâche a sa CI rouge', 'tâches ont leur CI rouge')}. On regarde ?`
-              : attentionCount.today
-                ? `${plural(attentionCount.today, 'tâche est à rendre', 'tâches sont à rendre')} aujourd'hui. On s'y met ?`
-                : `Rien en retard. Laquelle on avance ?`,
   )
 
   const tools = (

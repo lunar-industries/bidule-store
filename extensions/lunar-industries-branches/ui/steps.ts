@@ -158,16 +158,6 @@ export const isRecent = (at: string | null, now = Date.now()) =>
 export const orphansOf = (branches: ListedBranch[], now = Date.now()) =>
   branches.filter((b) => !b.taskId && b.reviewState !== 'merged' && isRecent(b.lastCommitAt, now))
 
-// What the mascot says on the page: a red CI first, plainly, its own teasing words after; then the branches to link.
-export function hintOf(listing: Listing, tease: string | null, now = Date.now()): { line: string; mode: 'listen' | 'panic' } {
-  const failing = listing.branches.find((b) => b.ci === 'fail' && b.reviewState !== 'merged')
-  if (failing) return { mode: 'panic', line: tease ? `La CI de ${failing.name} est rouge. ${tease}` : `La CI de ${failing.name} est rouge. On regarde ?` }
-  if (!listing.branches.length) return { mode: 'listen', line: 'Je ne vois aucune branche. Vérifie le dossier des dépôts dans les Réglages.' }
-  const n = orphansOf(listing.branches, now).length
-  if (n) return { mode: 'listen', line: `${n} branche${n > 1 ? 's' : ''} récente${n > 1 ? 's' : ''} sans tâche. On les rattache ?` }
-  return { mode: 'listen', line: 'Chaque branche a sa tâche. Coin !' }
-}
-
 export const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
 // « 3 h »: the branch's last commit, short for the table.

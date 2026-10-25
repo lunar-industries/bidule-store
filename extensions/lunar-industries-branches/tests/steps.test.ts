@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { actionOf, countsOf, hintOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf } from '../ui/steps.ts'
+import { actionOf, countsOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf } from '../ui/steps.ts'
 import { listed, task } from './fakes.ts'
 
 describe('a branch’s step', () => {
@@ -101,13 +101,9 @@ describe('the table', () => {
     expect(sortRows(rows, 'name').map((r) => r.name)).toEqual(['orphan', 'pending', 'ready', 'red'])
   })
 
-  test('the recent branches without a task, and what the mascot says: a red CI plainly, its teasing words after', () => {
+  test('the recent branches without a task', () => {
     const now = Date.now()
     const stale = listed({ name: 's', lastCommitAt: new Date(now - 20 * 864e5).toISOString() })
     expect(orphansOf([...listing.branches, stale], now).map((b) => b.name)).toEqual(['new'])
-    expect(hintOf(listing, null, now).line).toBe('1 branche récente sans tâche. On les rattache ?')
-    const red = { ...listing, branches: [listed({ name: 'b', ci: 'fail' })] }
-    expect(hintOf(red, 'Coin ! Ta CI saigne.', now)).toEqual({ mode: 'panic', line: 'La CI de b est rouge. Coin ! Ta CI saigne.' })
-    expect(hintOf({ ...listing, branches: [] }, null, now).line).toMatch(/aucune branche/)
   })
 })

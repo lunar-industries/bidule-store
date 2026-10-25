@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { SpaceTools, ToolFilter, ToolSearch, useHint } from '@bidule/sdk'
+import { SpaceTools, ToolFilter, ToolSearch } from '@bidule/sdk'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { allTicks, nextTicks, useListKeys } from '@bidule/ext-lunar-industries-common/ui/list'
 import type { ContainerRow } from '../contract.ts'
@@ -12,7 +12,6 @@ import {
   fold,
   healthOf,
   isActive,
-  isFailed,
   isUp,
   keyOf,
   looseHealthOf,
@@ -105,22 +104,6 @@ function ContainerList() {
     void api.select({ body: { keys: picked } }).catch(() => undefined)
   }, [picked])
 
-  const failed = all.filter(isFailed)
-  const running = all.filter((c) => c.state === 'running').length
-  useHint(
-    !list
-      ? null
-      : !list.engines.length
-        ? 'Ni Docker ni Podman en vue.'
-        : failed.length
-          ? `${failed
-              .slice(0, 2)
-              .map((c) => (c.project ? `${titleOf(c)} de ${c.project}` : c.name))
-              .join(' et ')}${failed.length > 2 ? ` et ${failed.length - 2} autres` : ''} ${failed.length > 1 ? 'sont tombés' : 'est tombé'}.`
-          : running
-            ? `${running} conteneur${running > 1 ? 's' : ''} en marche sur ${all.length}.`
-            : 'Tout dort.',
-  )
 
   // The groups, over all the containers; their rows, those the filter and the search keep.
   const q = fold(query.trim())
@@ -240,6 +223,7 @@ function ContainerList() {
   }
 
   // What the running containers use of the machine, every engine together: one line in the list's header.
+  const running = all.filter((c) => c.state === 'running').length
   const totals = (() => {
     if (!usage || !running) return null
     const cpu = usage.containers.reduce((sum, c) => sum + c.cpu, 0)

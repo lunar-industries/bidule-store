@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
-import { SpaceTools, busy, errorMessage, navigate, react, ToolFilter, ToolSearch, useHint, useMascot, useOn, type Task } from '@bidule/sdk'
+import { SpaceTools, busy, errorMessage, navigate, react, ToolFilter, ToolSearch, useOn, type Task } from '@bidule/sdk'
 import { confirm, type Ask } from '@bidule/ext-lunar-industries-common/ui/confirm'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
@@ -9,7 +9,7 @@ import { TaskField, useTaskBoard, type TaskProblem } from '@bidule/ext-lunar-ind
 import type { Job, Links, Listing } from '../contract.ts'
 import { api } from './api.ts'
 import { setOpened, useOpened } from './state.ts'
-import { countsOf, FILTERS, hintOf, relTime, reposOf, type Filter, type RepoView, type Row, type Sort } from './steps.ts'
+import { countsOf, FILTERS, relTime, reposOf, type Filter, type RepoView, type Row, type Sort } from './steps.ts'
 
 // Kept across visits while the app runs: the filter, the order, the repos folded.
 let keptFilter: Filter = 'current'
@@ -50,7 +50,6 @@ export function BranchesPage() {
   const opened = useOpened()
   const narrow = useNarrow()
   const [menu, openMenu] = useMenu()
-  const { mascot } = useMascot()
   const table = useRef<HTMLTableElement>(null)
 
   const reload = useCallback(() => {
@@ -99,9 +98,6 @@ export function BranchesPage() {
   const openRow = all.find((r) => r.key === opened) ?? null
   const openRepo = openRow ? (repos.find((r) => r.path === openRow.repo) ?? null) : null
   const activeKey = active && visible.some((r) => r.key === active) ? active : (openRow?.key ?? visible[0]?.key ?? null)
-
-  const hint = listing ? hintOf(listing, mascot?.lines.tease ?? null) : null
-  useHint(error && !listing ? 'Je n’arrive pas à lire tes dépôts.' : (hint?.line ?? null), hint?.mode ?? 'listen')
 
   // ---------- writes: each confirmed, the wait shown, the table read again
 
