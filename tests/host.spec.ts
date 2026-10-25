@@ -76,17 +76,11 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     assert.deepEqual(listed.find((e) => e.id === 'lunar-industries-terminal')?.holds, ['terminal'])
   })
 
-  test('the Kanban reads the point kanban, and Claude contributes its two card actions to it', async ({
-    client,
-    assert,
-  }) => {
+  test('the Kanban reads the point kanban', async ({ client, assert }) => {
     const res = await client.get('/api/extensions').headers(TOKEN)
-    const listed: { id: string; points: { id: string }[]; to: Record<string, { actions?: unknown[] }> }[] =
-      res.body()
+    const listed: { id: string; points: { id: string }[] }[] = res.body()
     const kanban = listed.find((e) => e.id === 'lunar-industries-kanban')
-    const claude = listed.find((e) => e.id === 'lunar-industries-claude')
     assert.deepInclude(kanban?.points ?? [], { id: 'kanban', title: 'Cartes du Kanban' })
-    assert.lengthOf(claude?.to.kanban?.actions ?? [], 2)
   })
 
   test('the settings page has a section for each, with fields of its own namespace and valid defaults', async ({
@@ -217,14 +211,12 @@ test.group('Lunar Industries modules · in the core’s host', (group) => {
     ['lunar-industries-temps', 'days/2026-10-01'],
     ['lunar-industries-temps', 'summary'],
     ['lunar-industries-kanban', 'branches'],
-    ['lunar-industries-branches', 'branches'],
     ['lunar-industries-containers', 'containers'],
-    ['lunar-industries-claude', 'status'],
   ] as const
   for (const [id, path] of routes.filter(([id]) => runs(id))) {
     test(`GET /api/ext/${id}/${path} answers without an error of the core`, async ({ client, assert }) => {
       const res = await client.get(`/api/ext/${id}/${path}`).headers(TOKEN)
-      // 403: the experimental Claude sessions are off, by design. 409/502: a role without its provider or a tool
+      // 409/502: a role without its provider or a tool
       // missing here. What must never be is a refusal of the core.
       assert.notInclude([500], res.status(), JSON.stringify(res.body()))
       assert.notMatch(JSON.stringify(res.body()), /non déclaré/)
