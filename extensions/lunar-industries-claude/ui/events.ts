@@ -155,16 +155,6 @@ export function cardTitle(card: Permission): string {
   return `Claude veut utiliser « ${toolLabel(card.name)} »`
 }
 
-// The kinds of notification the `notify` setting names (« decision, error, slot »).
-export function notifyKinds(setting: unknown): Set<string> {
-  return new Set(
-    String(setting ?? '')
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  )
-}
-
 const RELATIVE = new Intl.RelativeTimeFormat('fr', { style: 'short', numeric: 'auto' })
 const STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],

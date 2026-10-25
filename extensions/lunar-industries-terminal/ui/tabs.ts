@@ -1,6 +1,6 @@
 import { FitAddon, Terminal, type Ghostty, type ILink, type ITheme } from 'ghostty-web'
 import type { TerminalBridge, TerminalTarget, ShellPlace } from '@bidule/api/bridge'
-import { isPaletteKey, navigate, parseWslPath, react, tasksNow } from '@bidule/sdk'
+import { announce, isPaletteKey, parseWslPath, react, tasksNow } from '@bidule/sdk'
 import { confirm } from '@bidule/ext-lunar-industries-common/ui/confirm'
 import type { TerminalMark } from '../contract.ts'
 import { findMatches, pickMatch, viewFor, type Match } from './find.ts'
@@ -858,15 +858,8 @@ export class TerminalTabs {
     if (seen) return
     tab.notice = { state: 'waiting', label: text }
     this.#changed()
-    if (document.hasFocus() || typeof Notification === 'undefined' || Notification.permission === 'denied') return
-    const n = new Notification(tab.heading, { body: text, tag: `lterm-wait-${tab.key}` })
-    n.onclick = () => {
-      window.focus()
-      navigate(PAGE)
-      if (!this.tabs.includes(tab)) return
-      this.select(tab)
-      this.focusPane(tab.panes.indexOf(pane), tab)
-    }
+    // The core says it (the system, while the window is away); the tab keeps its mark until it is seen.
+    void announce({ kind: 'command', title: tab.heading, detail: text, path: PAGE }).catch(() => undefined)
   }
 
   // A command that ended: told when it took long and the user was elsewhere (another tab, page, or the window away).
@@ -878,15 +871,7 @@ export class TerminalTabs {
     const notice = noticeOf(done)
     tab.notice = { state: notice.ok ? 'done' : 'failed', label: notice.body }
     this.#changed()
-    if (typeof Notification === 'undefined' || Notification.permission === 'denied') return
-    const n = new Notification(notice.title, { body: notice.body, tag: `lterm-${tab.key}` })
-    n.onclick = () => {
-      window.focus()
-      navigate(PAGE)
-      if (!this.tabs.includes(tab)) return
-      this.select(tab)
-      this.focusPane(tab.panes.indexOf(pane), tab)
-    }
+    void announce({ kind: 'command', title: notice.title, detail: notice.body, path: PAGE }).catch(() => undefined)
   }
 
   /**

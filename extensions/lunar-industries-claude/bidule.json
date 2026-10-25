@@ -199,14 +199,6 @@
           "hidden": true
         },
         {
-          "key": "lunar-industries-claude.notify",
-          "type": "text",
-          "title": "Notifications",
-          "help": "decision (une décision attendue), turn (Claude a terminé), error, slot (le créneau est pris).",
-          "default": "decision, error, slot",
-          "hidden": true
-        },
-        {
           "key": "lunar-industries-claude.createIssue",
           "type": "toggle",
           "title": "Toujours créer une issue",

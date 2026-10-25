@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { actionOf, countsOf, hintOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf, turnedRed } from '../ui/steps.ts'
+import { actionOf, countsOf, hintOf, orphansOf, reposOf, rowOf, sortRows, stateOf, stepOf } from '../ui/steps.ts'
 import { listed, task } from './fakes.ts'
 
 describe('a branch’s step', () => {
@@ -109,15 +109,5 @@ describe('the table', () => {
     const red = { ...listing, branches: [listed({ name: 'b', ci: 'fail' })] }
     expect(hintOf(red, 'Coin ! Ta CI saigne.', now)).toEqual({ mode: 'panic', line: 'La CI de b est rouge. Coin ! Ta CI saigne.' })
     expect(hintOf({ ...listing, branches: [] }, null, now).line).toMatch(/aucune branche/)
-  })
-
-  test('a CI turned red is told once per pipeline; the first reading only remembers', () => {
-    const seen = new Map<string, string>()
-    const red = (sha: string) => listed({ name: 'a', taskId: 't', reviewNumber: 3, reviewState: 'open', ci: 'fail', headSha: sha })
-    expect(turnedRed(seen, [red('1')])).toEqual([])
-    expect(turnedRed(seen, [red('1')])).toEqual([])
-    expect(turnedRed(seen, [listed({ name: 'a', ci: 'pending', headSha: '2' })])).toEqual([])
-    expect(turnedRed(seen, [red('2')]).map((b) => b.name)).toEqual(['a'])
-    expect(turnedRed(seen, [red('2')])).toEqual([])
   })
 })

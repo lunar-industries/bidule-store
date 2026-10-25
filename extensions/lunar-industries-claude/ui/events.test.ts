@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '../contract.ts'
-import { diffLines, itemsOf, merge, notifyKinds, pendingOf, relTime, tokens, toolLabel, toolsSummary } from './events.ts'
+import { diffLines, itemsOf, merge, pendingOf, relTime, tokens, toolLabel, toolsSummary } from './events.ts'
 import { effortOptions, effortsOf, modelOptions, summaryOf } from './models.ts'
 
 const text = (seq: number): SessionEvent => ({ seq, kind: 'text', text: `ligne ${seq}` })
@@ -60,11 +60,6 @@ describe('Claude (Lunar Industries)', () => {
       { sign: '+', text: 'c' },
     ])
     expect(diffLines('', 'new')).toEqual([{ sign: '+', text: 'new' }])
-  })
-
-  it('reads the notify setting', () => {
-    expect([...notifyKinds('decision, Error ,, slot')]).toEqual(['decision', 'error', 'slot'])
-    expect(notifyKinds(undefined).size).toBe(0)
   })
 
   it('offers the efforts the model takes', () => {

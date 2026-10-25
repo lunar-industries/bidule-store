@@ -158,22 +158,6 @@ export const isRecent = (at: string | null, now = Date.now()) =>
 export const orphansOf = (branches: ListedBranch[], now = Date.now()) =>
   branches.filter((b) => !b.taskId && b.reviewState !== 'merged' && isRecent(b.lastCommitAt, now))
 
-/**
- * The branches whose CI turned red since the last reading, each red pipeline once (by its commit): what the
- * background tells by a notification. The first reading (`seen` empty) only remembers. `seen` is brought up to date.
- */
-export function turnedRed(seen: Map<string, string>, branches: ListedBranch[]): ListedBranch[] {
-  const first = !seen.size
-  const red: ListedBranch[] = []
-  for (const b of branches) {
-    const key = branchKey(b)
-    const now = `${b.ci ?? 'none'}\u0000${b.headSha ?? ''}`
-    if (!first && b.ci === 'fail' && b.reviewState !== 'merged' && seen.get(key) !== now) red.push(b)
-    seen.set(key, now)
-  }
-  return red
-}
-
 // What the mascot says on the page: a red CI first, plainly, its own teasing words after; then the branches to link.
 export function hintOf(listing: Listing, tease: string | null, now = Date.now()): { line: string; mode: 'listen' | 'panic' } {
   const failing = listing.branches.find((b) => b.ci === 'fail' && b.reviewState !== 'merged')
