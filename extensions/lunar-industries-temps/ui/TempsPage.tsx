@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import {
-  BannerTools,
+  SpaceTools,
   busy,
   errorMessage,
   navigate,
@@ -695,7 +695,7 @@ export function TempsPage() {
     <div className="page with-tools lit-temps">
       {menu}
       {/* On the banner's edge: back to today, and the calendar, which hangs under its button. */}
-      <BannerTools>
+      <SpaceTools>
         <button type="button" className="banner-button" onClick={() => go(today)}>
           Aujourd'hui
         </button>
@@ -715,7 +715,7 @@ export function TempsPage() {
         <button type="button" className="banner-button" title="Réglages de Temps" onClick={() => navigate('/reglages/lunar-industries-temps')}>
           Réglages
         </button>
-      </BannerTools>
+      </SpaceTools>
       {cal && (
         <Calendar
           anchor={calToggle.current}

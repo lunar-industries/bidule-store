@@ -19,7 +19,7 @@ et l'aperçu de l'option choisie, `annotationsOf`).
 
 ## La page (`ui/ClaudePage.tsx`)
 
-- **Au bord du bandeau** (`BannerTools`, page `fill with-tools`) : la recherche (`ToolSearch`, `/` y va) et « Nouvelle
+- **Dans la barre de l'espace** (`SpaceTools`, page `fill with-tools`) : la recherche (`ToolSearch`, `/` y va) et « Nouvelle
   session ».
 - **La liste** à gauche : « En attente de toi » d'abord, puis les autres sessions ; les archivées à la demande. Le clic
   droit, la touche Menu ou Maj+F10 ouvrent le menu de la session (le menu commun de `lunar-industries-common`), le même

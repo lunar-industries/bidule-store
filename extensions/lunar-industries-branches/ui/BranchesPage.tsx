@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
-import { BannerTools, busy, errorMessage, navigate, react, ToolFilter, ToolSearch, useHint, useMascot, useOn, type Task } from '@bidule/sdk'
+import { SpaceTools, busy, errorMessage, navigate, react, ToolFilter, ToolSearch, useHint, useMascot, useOn, type Task } from '@bidule/sdk'
 import { confirm, type Ask } from '@bidule/ext-lunar-industries-common/ui/confirm'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { isMenuKey, useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
@@ -281,7 +281,7 @@ export function BranchesPage() {
   }
 
   const tools = (
-    <BannerTools>
+    <SpaceTools>
       <ToolSearch label="Chercher une branche" placeholder="Branche, dépôt, tâche…" value={query} onChange={setQuery} />
       <ToolFilter
         label="Branches affichées"
@@ -289,7 +289,7 @@ export function BranchesPage() {
         value={filter}
         onChange={setFilter}
       />
-    </BannerTools>
+    </SpaceTools>
   )
 
   if (!listing)

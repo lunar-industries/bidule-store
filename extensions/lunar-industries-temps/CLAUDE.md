@@ -29,7 +29,7 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
 
 ## La page (`ui/TempsPage.tsx`)
 
-- **Au bord du bandeau** (`BannerTools`, page `with-tools`) : « Aujourd'hui », « Calendrier » et « Réglages » (ceux du
+- **Dans la barre de l'espace** (`SpaceTools`, page `with-tools`) : « Aujourd'hui », « Calendrier » et « Réglages » (ceux du
   module). Le calendrier (`ui/Calendar.tsx`) est dessiné dans le `body` de la page (`menu floating`), calé sous son
   bouton et gardé dans la fenêtre : un seul jour tabulable, les flèches passent au mois voisin (année et mois ensemble,
   `monthStep`), les boutons de mois laissent le focus où il est, Échap le ferme et rend le focus à « Calendrier », une

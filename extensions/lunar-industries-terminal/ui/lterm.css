@@ -103,12 +103,11 @@
   /* Its width is the room measured (TabStrip.tsx): past it, the tabs become a list instead of being cut. */
   overflow: hidden;
 }
-/* The strip and its list, in the banner's tools or the focus bar. */
+/* The strip and its list, in the space's bar. */
 .lterm-switch {
   position: relative;
   min-width: 0;
   display: flex;
-  /* On the banner's edge it carries the ring cut out of the banner (.banner-tools > *): a pill too. */
   border-radius: var(--radius-pill);
 }
 /* The row as wide as it would be, drawn out of sight to measure it. */

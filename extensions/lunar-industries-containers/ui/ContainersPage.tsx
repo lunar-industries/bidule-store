@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { BannerTools, ToolFilter, ToolSearch, useHint } from '@bidule/sdk'
+import { SpaceTools, ToolFilter, ToolSearch, useHint } from '@bidule/sdk'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { allTicks, nextTicks, useListKeys } from '@bidule/ext-lunar-industries-common/ui/list'
 import type { ContainerRow } from '../contract.ts'
@@ -471,10 +471,10 @@ function ContainerList() {
   ]
   return (
     <div className="page with-tools">
-      <BannerTools>
+      <SpaceTools>
         <ToolSearch label="Chercher un conteneur" placeholder="Nom, image, projet, port…" value={query} onChange={setQuery} />
         <ToolFilter label="Conteneurs affichés" options={filters} value={filter} onChange={setFilter} />
-      </BannerTools>
+      </SpaceTools>
 
       {error && (
         <Alert retry={() => void reloadContainers()}>

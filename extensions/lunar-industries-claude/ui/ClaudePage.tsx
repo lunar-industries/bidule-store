@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
-  BannerTools,
+  SpaceTools,
   errorMessage,
   navigate,
   react,
@@ -199,12 +199,12 @@ function Sessions() {
   const titleOf = (s: (typeof all)[number]) => s.task?.title ?? s.title
 
   const tools = (
-    <BannerTools>
+    <SpaceTools>
       <ToolSearch label="Chercher une session" placeholder="Session ou tâche…" value={search} onChange={setSearch} />
       <button type="button" className="banner-button" onClick={() => void newSession()}>
         Nouvelle session
       </button>
-    </BannerTools>
+    </SpaceTools>
   )
 
   // The sessions could not be read at all: said, with Réessayer, never taken for a first visit.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { BannerTools, navigate, openPalette, setPaletteScope, useHint } from '@bidule/sdk'
+import { SpaceTools, navigate, openPalette, setPaletteScope, useHint } from '@bidule/sdk'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/menu'
 import { Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
@@ -86,7 +86,7 @@ export function TerminalPage() {
   return (
     <div className={`page fill${terminals.available ? ' with-tools' : ''}`}>
       {terminals.available && !broken && (
-        <BannerTools>
+        <SpaceTools>
           {terminals.tabs.length > 0 && <TabStrip />}
           {active && (
             <button
@@ -105,7 +105,7 @@ export function TerminalPage() {
           <button type="button" className="banner-button round" aria-label="Nouveau terminal (Ctrl+Maj+T)" title="Nouveau terminal (Ctrl+Maj+T)" onClick={() => void terminals.add()}>
             <Icon name="plus" />
           </button>
-        </BannerTools>
+        </SpaceTools>
       )}
 
       <section className="panel lterm-panel" aria-label="Terminal">

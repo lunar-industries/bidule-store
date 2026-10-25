@@ -11,7 +11,7 @@ import {
   type MouseEvent,
 } from 'react'
 import {
-  BannerTools,
+  SpaceTools,
   busy,
   navigate,
   objectProviders,
@@ -599,7 +599,7 @@ export function Kanban() {
   )
 
   const tools = (
-    <BannerTools>
+    <SpaceTools>
       <ToolSearch label="Chercher une tâche" placeholder="Titre, référence, branche…" value={query} onChange={setQuery} />
       <ToolFilter
         label="Rôle"
@@ -622,7 +622,7 @@ export function Kanban() {
       <button type="button" className="banner-button round" aria-label="Synchroniser" title="Synchroniser les tâches" onClick={sync}>
         <Icon name="sync" />
       </button>
-    </BannerTools>
+    </SpaceTools>
   )
 
   // The states without a board: each one with what to do next (maquette « États sans tableau »).
