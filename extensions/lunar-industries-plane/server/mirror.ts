@@ -1,5 +1,5 @@
 import type { Database } from '@adonisjs/lucid/database'
-import type { TaskGroup } from '@bidule/sdk/objects'
+import type { TaskGroup, TaskPerson } from '@bidule/sdk/objects'
 import type { PlaneColumn } from './states.ts'
 
 // A change of a work item's state the user made, with the groups of the columns as they are now.
@@ -24,6 +24,8 @@ export interface MirrorTask {
   due: string | null
   // The Notion page ids its description names.
   notionIds: string[]
+  // Everyone assigned to it, the user included.
+  people: TaskPerson[]
 }
 
 /** What the extension keeps of Plane between two syncs. */
@@ -54,12 +56,22 @@ type TaskRow = {
   last_edited: string | null
   due: string | null
   notion_ids: string
+  people: string
 }
 
 function idsIn(json: string): string[] {
   try {
     const parsed: unknown = JSON.parse(json)
     return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function peopleIn(json: string): TaskPerson[] {
+  try {
+    const parsed: unknown = JSON.parse(json)
+    return Array.isArray(parsed) ? (parsed as TaskPerson[]) : []
   } catch {
     return []
   }
@@ -77,6 +89,7 @@ const taskOf = (row: TaskRow): MirrorTask => ({
   lastEdited: row.last_edited,
   due: row.due,
   notionIds: idsIn(row.notion_ids),
+  people: peopleIn(row.people),
 })
 
 // Everything this extension writes, in its own tables (lunar_industries_plane_…).
@@ -122,6 +135,7 @@ export class DbMirror implements PlaneMirror {
         last_edited: task.lastEdited,
         due: task.due,
         notion_ids: JSON.stringify(task.notionIds),
+        people: JSON.stringify(task.people),
         deleted_at: null,
       })
       .onConflict('id')

@@ -168,11 +168,14 @@ describe('what an agent or a conversation reads', () => {
     expect(plane.comments).toEqual([{ item: 'w1', html: '<p>Fait.<br>À relire &amp; valider</p>' }])
   })
 
-  test('the other people on the work item, named as the workspace names them, the user left out', async () => {
+  test('the people assigned, named as the workspace names them, all responsible, the user said', async () => {
     const plane = fakePlane([item('w1', 'Une', { assignees: ['me', 'u2', 'inconnu'] })])
-    const { tasks } = source(plane)
+    const { tasks, mirror } = source(plane)
     await tasks.syncCount()
-    expect(await tasks.people('w1')).toEqual([{ name: 'Camille Durand', email: 'camille@x.fr' }])
+    expect((await mirror.task('w1'))?.people).toEqual([
+      { name: 'Simon', email: 'simon@x.fr', avatar: null, role: 'owner', me: true },
+      { name: 'Camille Durand', email: 'camille@x.fr', avatar: null, role: 'owner', me: false },
+    ])
   })
 })
 

@@ -3,6 +3,7 @@ import {
   PlaneClient,
   planeBase,
   type PlaneApi,
+  type PlaneMember,
   type PlaneProject,
   type PlaneState,
   type PlaneWorkItem,
@@ -68,6 +69,7 @@ export class PlaneTasks {
     const me = await api.me()
     const c = await this.config()
     const projects = wantedProjects(await api.projects(workspace), c.projects)
+    const members = new Map((await api.members(workspace)).map((m) => [m.id, m]))
     const before = new Map((await this.mirror.tasks()).map((t) => [t.id, t]))
     const columns: PlaneState[] = []
     const reads: { project: PlaneProject; item: PlaneWorkItem; state: PlaneState | undefined }[] = []
@@ -97,6 +99,7 @@ export class PlaneTasks {
         lastEdited: item.updatedAt,
         due: item.targetDate?.slice(0, 10) ?? null,
         notionIds: notionIdsOf(item.descriptionHtml),
+        people: peopleOf(item.assignees, members, me.id),
       })
       seen.add(item.id)
       const previous = before.get(item.id)
@@ -158,23 +161,17 @@ export class PlaneTasks {
     const { api, workspace, project, workItem } = await this.#target(taskId)
     await api.addComment(workspace, project, workItem, textToHtml(text))
   }
+}
 
-  // The other people assigned to the work item, named as the workspace names them; the user left out.
-  async people(taskId: string): Promise<TaskPerson[]> {
-    const { api, workspace, project, workItem } = await this.#target(taskId)
-    const [item, me, members] = await Promise.all([
-      api.workItem(workspace, project, workItem),
-      api.me(),
-      api.members(workspace),
-    ])
-    const byId = new Map(members.map((m) => [m.id, m]))
-    return item.assignees
-      .filter((id) => id !== me.id)
-      .flatMap((id) => {
-        const m = byId.get(id)
-        if (!m) return []
-        const name = m.displayName || [m.firstName, m.lastName].filter(Boolean).join(' ')
-        return name ? [{ name, email: m.email || null }] : []
-      })
-  }
+/**
+ * The people assigned to a work item, named as the workspace names them. Plane has no responsible apart from those
+ * taking part: everyone assigned is in charge of it, so each one is responsible (`owner`), the user included.
+ */
+export function peopleOf(assignees: string[], members: ReadonlyMap<string, PlaneMember>, me: string): TaskPerson[] {
+  return assignees.flatMap((id) => {
+    const m = members.get(id)
+    if (!m) return []
+    const name = m.displayName || [m.firstName, m.lastName].filter(Boolean).join(' ') || m.email
+    return name ? [{ name, email: m.email || null, avatar: null, role: 'owner' as const, me: id === me }] : []
+  })
 }

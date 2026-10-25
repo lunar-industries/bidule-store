@@ -1,4 +1,5 @@
 import type { PutItem, ServerContext } from '@bidule/api/extensions'
+import { meaningOf } from '@bidule/sdk/objects'
 import '../contract.ts'
 import { DbMirror } from './mirror.ts'
 import { PlaneTasks } from './source.ts'
@@ -30,7 +31,7 @@ export async function activate(ctx: ServerContext) {
     const where = await account()
     const columns = await mirror.columns()
     await ctx.objects.setColumns(
-      columns.map((c) => ({ name: c.name, group: c.group, color: paletteOf(c.color) })),
+      columns.map((c) => ({ name: c.name, group: c.group, color: paletteOf(c.color), meaning: meaningOf(c.name) })),
       where
     )
     const groups = new Map(columns.map((c) => [c.name, c.group]))
@@ -54,6 +55,7 @@ export async function activate(ctx: ServerContext) {
           role: 'owner',
           due: task.due,
           lastEdited: task.lastEdited,
+          people: task.people,
         },
         ...(copyOf ? { copyOf } : {}),
       })
@@ -101,7 +103,6 @@ export async function activate(ctx: ServerContext) {
     'task.comment': (task, { text }) => source.comment(task.remoteId, text),
     'task.join': (task) => source.join(task.remoteId),
     'task.page': (task) => source.page(task.remoteId),
-    'task.people': (task) => source.people(task.remoteId),
     'task.search': async ({ q }) => {
       const found = await source.search(q)
       const ids = await ctx.objects.idsOf('task', await account())
