@@ -1,4 +1,4 @@
-import { act, readTasks, type Board } from '@bidule/sdk'
+import { act, mergedColumns, tasksNow, type Task, type TaskColumn } from '@bidule/sdk'
 import type { DaySummary, DayView, LineInput, Summary } from '../contract.ts'
 
 // The module's routes (contract.ts lists them).
@@ -32,11 +32,19 @@ export const api = {
   summary: () => get<Summary>('summary'),
 }
 
-// The user's tasks in the core (its `task` objects): those a line goes to, and the statuses (« passer en … »); null
-// without a provider of tasks. A reading that fails throws: the page says it.
+// The user's tasks in the core (its `task` objects): those a line goes to, and the statuses (« passer en … »), every
+// provider's on one board (a status two tools share once); null without a provider of tasks. A reading that fails
+// throws: the page says it.
+export type Board = { source: string; configured: boolean; columns: TaskColumn[]; tasks: Task[] }
 export async function board(): Promise<Board | null> {
-  const b = await readTasks()
-  return b.source !== null ? b : null
+  const b = await tasksNow()
+  if (!b.providers.length) return null
+  return {
+    source: b.providers.map((p) => p.title).join(', '),
+    configured: b.configured,
+    columns: mergedColumns(b),
+    tasks: b.tasks,
+  }
 }
 
 // Its provider writes a task's new status in its tool (« passer en … »).

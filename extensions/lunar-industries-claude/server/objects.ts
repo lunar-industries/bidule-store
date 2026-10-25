@@ -2,7 +2,11 @@ import type { ServerContext } from '@bidule/api/extensions'
 import type { BranchFilter, SharedBranch } from '@bidule/ext-lunar-industries-common/contract'
 import type { ForgeClient } from '@bidule/sdk/forges'
 import type { Ci } from '@bidule/sdk/objects'
-import type { Board, Task, TaskPage } from '@bidule/sdk/tasks'
+import type { Task, TaskColumn, TaskPage } from '@bidule/sdk/tasks'
+
+// The board as the sessions read it: the providers in one line, every provider's statuses on one board (a status two
+// tools share once), the tasks the user is on.
+export type Board = { source: string; configured: boolean; columns: TaskColumn[]; tasks: Task[] }
 
 /**
  * The branches as the sessions and their tools read them: the core's objects (git's branches and repos), their task

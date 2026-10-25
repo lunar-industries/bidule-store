@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { readTasks, setPageCount, useOn, type ExtensionUi } from '@bidule/sdk'
+import { setPageCount, useOn, type ExtensionUi } from '@bidule/sdk'
 import '../contract.ts'
+import { board as readTasks } from './api.ts'
 import { Kanban } from './KanbanPage.tsx'
 import { KanbanSettings } from './KanbanSettings.tsx'
 import { dayKey, daysLeft } from './layout.ts'

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { errorMessage, Modal, navigate, openDialog, readTasks, type Task, type TaskColumn } from '@bidule/sdk'
+import { errorMessage, mergedColumns, Modal, navigate, openDialog, tasksNow, type Task, type TaskColumn } from '@bidule/sdk'
 import './common.css'
 
 /**
@@ -69,12 +69,12 @@ export function useTaskBoard() {
   })
   const retry = useCallback(() => {
     setState((s) => ({ ...s, problem: null }))
-    readTasks().then(
+    tasksNow().then(
       (board) =>
         setState(
-          board.source === null
+          !board.providers.length
             ? { tasks: [], columns: [], problem: { kind: 'none' } }
-            : { tasks: board.tasks, columns: board.columns, problem: null },
+            : { tasks: board.tasks, columns: mergedColumns(board), problem: null },
         ),
       (err: unknown) => setState((s) => ({ ...s, tasks: s.tasks ?? [], problem: { kind: 'failed', message: errorMessage(err) } })),
     )

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { react, saveSettingValues, useSettingValues, type Board } from '@bidule/sdk'
-import { board as readBoard, errorMessage } from './api.ts'
+import { react, saveSettingValues, useSettingValues } from '@bidule/sdk'
+import { board as readBoard, errorMessage, type Board } from './api.ts'
 import {
   boardColumns,
   choiceOf,

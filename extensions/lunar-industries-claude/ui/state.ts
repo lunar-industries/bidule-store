@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { errorMessage, navigate, on, useSettingValues, type Board } from '@bidule/sdk'
+import { errorMessage, navigate, on, useSettingValues } from '@bidule/sdk'
 import type { RepoSettings, SessionModel, SessionSummary, Template } from '../contract.ts'
-import { api, board } from './api.ts'
+import { api, board, type Board } from './api.ts'
 
 // What the page and the background share while the app runs (taken from Simon's core/claude-sessions.ts): the
 // sessions, read again when the API tells one started or changed state; the session shown.

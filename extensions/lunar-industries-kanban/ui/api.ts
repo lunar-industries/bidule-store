@@ -1,9 +1,24 @@
-import { act, objectProviders, readTasks, run, type Board } from '@bidule/sdk'
+import { act, mergedColumns, objectProviders, run, tasksNow, type Task, type TaskColumn } from '@bidule/sdk'
 import type { BranchRef, Branches } from '../contract.ts'
 
 // The core's tasks and their actions (as for any Kanban), and the module's own routes over the branches
 // (contract.ts). The core announces each change (`objects.changed`).
+
+// The board as this module reads it: the providers' titles in one line, every provider's statuses on one board (a
+// status two tools share once). The core gives each provider's statuses apart (its `Board`).
+export type Board = { source: string; configured: boolean; columns: TaskColumn[]; tasks: Task[] }
 export type Loaded = Board | { source: null }
+
+export async function board(): Promise<Loaded> {
+  const read = await tasksNow()
+  if (!read.providers.length) return { source: null }
+  return {
+    source: read.providers.map((p) => p.title).join(', '),
+    configured: read.configured,
+    columns: mergedColumns(read),
+    tasks: read.tasks,
+  }
+}
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Accept: 'application/json' } })
@@ -16,7 +31,6 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 
 const BASE = '/api/ext/lunar-industries-kanban'
 
-export const board = readTasks
 // Its provider writes the task's new status in its tool.
 export const moveTask = (id: string, status: string) => act('task', 'task.move', id, { status })
 // The first of these statuses the task's tool takes (`moveCandidates`); when it takes none, the first refusal.

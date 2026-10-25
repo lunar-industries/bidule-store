@@ -1,4 +1,4 @@
-import { readTasks, type Board } from '@bidule/sdk'
+import { mergedColumns, tasksNow, type Task, type TaskColumn } from '@bidule/sdk'
 import type {
   Attachments,
   ClaudePlace,
@@ -64,9 +64,17 @@ export const api = {
   repos: () => get<{ repos: RepoSettings[] }>('repos'),
 }
 
-// The user's tasks in the core (its `task` objects): those a session starts from or gets attached to; null without a
-// provider of tasks, or when they cannot be read.
+// The user's tasks in the core (its `task` objects): those a session starts from or gets attached to, and every
+// provider's statuses on one board (a status two tools share once); null without a provider of tasks, or when they
+// cannot be read.
+export type Board = { source: string; configured: boolean; columns: TaskColumn[]; tasks: Task[] }
 export async function board(): Promise<Board | null> {
-  const b = await readTasks().catch(() => null)
-  return b && b.source !== null ? b : null
+  const b = await tasksNow().catch(() => null)
+  if (!b?.providers.length) return null
+  return {
+    source: b.providers.map((p) => p.title).join(', '),
+    configured: b.configured,
+    columns: mergedColumns(b),
+    tasks: b.tasks,
+  }
 }

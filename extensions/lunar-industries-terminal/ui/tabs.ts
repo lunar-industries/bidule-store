@@ -1,6 +1,6 @@
 import { FitAddon, Terminal, type Ghostty, type ILink, type ITheme } from 'ghostty-web'
 import type { TerminalBridge, TerminalTarget, ShellPlace } from '@bidule/api/bridge'
-import { isPaletteKey, navigate, parseWslPath, react, readTasks } from '@bidule/sdk'
+import { isPaletteKey, navigate, parseWslPath, react, tasksNow } from '@bidule/sdk'
 import { confirm } from '@bidule/ext-lunar-industries-common/ui/confirm'
 import type { TerminalMark } from '../contract.ts'
 import { findMatches, pickMatch, viewFor, type Match } from './find.ts'
@@ -30,8 +30,7 @@ async function taskRefs(): Promise<NonNullable<typeof board>> {
   const refs = new Map<string, string>()
   const urls = new Map<string, string | null>()
   try {
-    const read = await readTasks()
-    for (const t of read.source === null ? [] : read.tasks) {
+    for (const t of (await tasksNow()).tasks) {
       if (!t.ref) continue
       refs.set(t.ref.toUpperCase(), t.ref)
       urls.set(t.ref, t.url)

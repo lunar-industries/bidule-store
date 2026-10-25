@@ -1,4 +1,5 @@
-import { relTime, statusColor, type Board, type Task, type TaskColumn, type TaskGroup } from '@bidule/sdk'
+import { relTime, statusColor, type Task, type TaskColumn, type TaskGroup } from '@bidule/sdk'
+import type { Board } from './api.ts'
 import type { KanbanBranch } from '../contract.ts'
 
 // Taken from quack-board (Simon's kanban.ts and core/format.ts): what the board shows, without drawing it.

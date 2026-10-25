@@ -9,7 +9,6 @@ import {
   useHint,
   useMascotClearance,
   useOn,
-  type Board,
   type Task,
 } from '@bidule/sdk'
 import { confirm, type Ask } from '@bidule/ext-lunar-industries-common/ui/confirm'
@@ -18,7 +17,7 @@ import { useMenu, type MenuEntry } from '@bidule/ext-lunar-industries-common/ui/
 import { Alert, Empty, Loading } from '@bidule/ext-lunar-industries-common/ui/states'
 import { doneOf, TaskField, type TaskProblem } from '@bidule/ext-lunar-industries-common/ui/tasks'
 import type { DayLine, DayState, DaySummary, DayView, LineInput, Props, Summary } from '../contract.ts'
-import { api, board as readBoard, moveTask } from './api.ts'
+import { api, board as readBoard, moveTask, type Board } from './api.ts'
 import { Calendar, type MonthCursor } from './Calendar.tsx'
 import { latestOf } from './latest.ts'
 import {
