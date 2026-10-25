@@ -49,8 +49,6 @@ déclare comme l'officiel (`ui/points.ts`) ; chaque pastille est dessinée dans 
   (`columnWidth` de `ui/layout.ts`, mesurée sur le tableau quand la fenêtre change de taille ou qu'une colonne se
   replie, posée en `--lik-col`) ; sinon étroite (252 px), moyenne (320 px) ou large (400 px).
 - **La fenêtre étroite** (moins de 1 000 px) : une étape à la fois, choisie par des onglets.
-- **La partie de fond** (`ui/index.tsx`, `Count`) met sur l'onglet le nombre de tâches en retard ou à rendre
-  aujourd'hui.
 
 Ce qui se calcule sans rien dessiner est dans `ui/layout.ts` (colonnes, réunions de statuts, ordre, badges, notes,
 marques, filtres, tri) et testé dans `tests/layout.test.ts`.

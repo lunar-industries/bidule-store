@@ -16,7 +16,7 @@ garde lui-même que les conteneurs cochés (`server/selection.ts`, `selection.js
 - **Au bord du bandeau** : la recherche (nom, image, projet, service, port) et le filtre « Actifs » ou « Tous ».
   « Actifs » garde ce qui tourne et ce qui demande un coup d'œil : en pause, qui redémarre, en échec.
 - **Un échec** (`isFailed`) : l'état `dead`, ou un arrêt sur un code autre que ceux d'un arrêt voulu (0, 130 pour
-  Ctrl-C, 143 et 137 pour `stop`). Il a sa couleur d'alerte et compte sur l'onglet.
+  Ctrl-C, 143 et 137 pour `stop`). Il a sa couleur d'alerte.
 - **Les projets** : un cadre par projet Compose, avec sa santé sur tous ses conteneurs, quel que soit le filtre
   (`healthOf` : « 3 sur 4 · db en échec (code 1) »), et ses actions (tout démarrer, redémarrer, arrêter ; le menu
   ajoute cocher le projet et tout supprimer). Les conteneurs hors projet sont réunis sous « Sans projet », qui se
@@ -65,8 +65,7 @@ garde lui-même que les conteneurs cochés (`server/selection.ts`, `selection.js
 
 ## La partie de fond (`ui/index.tsx`)
 
-Le compteur de l'onglet (les conteneurs en échec) et une commande de la palette par conteneur, depuis la lecture
-partagée.
+Une commande de la palette par conteneur, depuis la lecture partagée.
 
 Ce qui se calcule sans rien dessiner est dans `ui/format.ts`, testé dans `ui/format.test.ts`.
 

@@ -45,7 +45,6 @@
     "events": [
       "lunar-industries-temps.changed"
     ],
-    "background": true,
     "shortcuts": [
       {
         "keys": "↑ ↓ ← →",

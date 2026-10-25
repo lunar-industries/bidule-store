@@ -1,5 +1,4 @@
-import { useEffect } from 'react'
-import { navigate, react, setPageCount, type ExtensionUi } from '@bidule/sdk'
+import { navigate, react, type ExtensionUi } from '@bidule/sdk'
 import type { TerminalMark } from '../contract.ts'
 import { PAGE } from './page.ts'
 import { syncScripts } from './script-commands.ts'
@@ -9,25 +8,9 @@ import { terminals } from './tabs.ts'
 // The scripts of the active tab's repo, in the command palette.
 syncScripts(terminals)
 
-// Always there: the Terminal's tab counts the terminals waiting for the user's answer (Claude Code asking), seen from
-// every page.
-function Background() {
-  useEffect(() => {
-    let shown = -1
-    const count = () => {
-      const n = terminals.waiting()
-      if (n === shown) return
-      shown = n
-      setPageCount(PAGE, n)
-    }
-    count()
-    const off = terminals.subscribe(count)
-    return () => {
-      off()
-    }
-  }, [])
-  return null
-}
+// Loaded with the app (its `background`, which draws nothing): the scripts reach the palette, and the marks the other
+// extensions put on the tabs are kept, before the page is ever visited.
+const Background = () => null
 
 const ui: ExtensionUi = {
   background: Background,

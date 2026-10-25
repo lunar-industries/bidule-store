@@ -47,8 +47,8 @@ sont listées dans `contract.ts`.
   connu, la branche dit « Revue ouverte », pas « Prête à fusionner ».
 - **La fenêtre étroite** (moins de 1 000 px) : le tableau garde la branche (sa tâche dessous), l'état et l'action.
 - **La mascotte** dit d'abord « La CI de X est rouge », sa réplique taquine ensuite (`hintOf`).
-- **La partie de fond** (`ui/index.tsx`) met sur l'onglet le nombre de branches récentes sans tâche, relu aussi quand
-  une tâche ou une branche change (une liaison). Elle notifie une CI qui passe au rouge (`turnedRed` : une fois par
+- **La partie de fond** (`ui/index.tsx`) relit les branches quand git relit les dépôts, quand une tâche ou une branche
+  change (une liaison) ou quand une forge lit une revue ou une CI. Elle notifie une CI qui passe au rouge (`turnedRed` : une fois par
   pipeline, la première lecture ne faisant que retenir), fenêtre au second plan ; un clic ouvre la branche
   (`ui/state.ts`, `openBranch`).
 

@@ -94,8 +94,8 @@ existe, même caché (le navigateur la suspend quand la fenêtre est cachée).
   qui ne peut pas se charger le dit (`Empty` commun, avec Réglages › Rôles) et « + », « Scripts » et la loupe
   disparaissent ; la ligne « Relancer » d'un shell arrêté.
 - **Les scripts** : une palette sans script dit pourquoi (« Aucun script dans … », « Aucun dépôt connu »).
-- **Un terminal qui attend ta réponse** se voit depuis les autres pages : la partie de fond (`ui/index.tsx`) met leur
-  nombre sur l'onglet Terminal du bandeau, et l'onglet du terminal a son point jaune. Deux sources : la marque
+- **Un terminal qui attend ta réponse** a son point jaune sur son onglet. La partie de fond (`ui/index.tsx`, qui ne
+  dessine rien) charge le module avec l'app, pour que les marques soient gardées avant la première visite. Deux sources : la marque
   `waiting` qu'une extension pose sur le dossier d'un onglet (`terminal.mark`, les sessions que l'app a lancées), et la
   notification qu'un programme envoie à son terminal (`notificationOf` de `ui/osc.ts` : OSC 9 d'iTerm2, OSC 777 de
   Ghostty, OSC 99 de Kitty), reçue pendant que tu regardes ailleurs. Claude Code n'en envoie que si son réglage

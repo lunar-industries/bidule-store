@@ -1,16 +1,16 @@
 import { useEffect } from 'react'
-import { on, setPageCount, type ExtensionUi } from '@bidule/sdk'
+import { on, type ExtensionUi } from '@bidule/sdk'
 import '../contract.ts'
 import { api } from './api.ts'
 import { BranchesPage } from './BranchesPage.tsx'
-import { openBranch, PATH } from './state.ts'
-import { branchKey, orphansOf, turnedRed } from './steps.ts'
+import { openBranch } from './state.ts'
+import { branchKey, turnedRed } from './steps.ts'
 import './branches.css'
 
 /**
- * Always there: the tab counts the recent branches without a task, read again whenever git reads the repos, a link
- * changes (a task, a branch) or a forge reads a review or a CI. A CI that turns red is told by the system while the
- * window is not in front, once per pipeline; a click opens its branch.
+ * Always there: the branches read again whenever git reads the repos, a link changes (a task, a branch) or a forge
+ * reads a review or a CI. A CI that turns red is told by the system while the window is not in front, once per
+ * pipeline; a click opens its branch.
  */
 function Background() {
   useEffect(() => {
@@ -18,7 +18,6 @@ function Background() {
     const read = () =>
       void api.list().then(
         (l) => {
-          setPageCount(PATH, orphansOf(l.branches).length)
           const red = turnedRed(seen, l.branches)
           if (!red.length || document.hasFocus() || typeof Notification === 'undefined') return
           for (const b of red) {

@@ -57,8 +57,6 @@ chacune avec l'étiquette du Time Log. Les routes sont listées dans `contract.t
   de la semaine et du calendrier, « plus », le chevron d'une ligne) et les teintes des étiquettes sont les communes.
 - **La fenêtre étroite** : sous 1 200 px, l'étiquette et la part d'une ligne passent sous son nom ; sous 900 px, la
   semaine passe au-dessus du jour, ses sept jours sur une ligne.
-- **La partie de fond** (`ui/Background.tsx`) met sur l'onglet le nombre de jours à valider ou à remplir parmi les
-  sept derniers.
 
 Ce qui se calcule sans rien dessiner est dans `ui/format.ts` et testé dans `ui/format.test.ts`.
 

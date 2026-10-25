@@ -1,21 +1,18 @@
 import { useEffect } from 'react'
-import { registerCommands, setPageCount, type ExtensionUi } from '@bidule/sdk'
+import { registerCommands, type ExtensionUi } from '@bidule/sdk'
 import { ContainersPage } from './ContainersPage.tsx'
-import { isFailed, titleOf } from './format.ts'
-import { openContainer, PAGE } from './route.ts'
+import { titleOf } from './format.ts'
+import { openContainer } from './route.ts'
 import { reloadContainers, useContainers } from './store.ts'
 
 /**
- * Always there, whatever the page: the tab's counter (the containers that failed) and, in the palette, a command to
- * open each container's view. Both from the list the page shares (store.ts), read again on the engines' events once
- * an engine was found.
+ * Always there, whatever the page: in the palette, a command to open each container's view, from the list the page
+ * shares (store.ts), read again on the engines' events once an engine was found.
  */
 function Background() {
   const { list } = useContainers()
   useEffect(() => void reloadContainers(), [])
   const containers = list?.containers ?? []
-  const failed = containers.filter(isFailed).length
-  useEffect(() => setPageCount(PAGE, failed || null), [failed])
   const names = containers.map((c) => `${c.engine}:${c.name}:${c.project ?? ''}:${c.service ?? ''}`).join('\n')
   useEffect(
     () =>
