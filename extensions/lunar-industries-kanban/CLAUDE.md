@@ -6,7 +6,8 @@ fichier ne dit que ce qui est propre à ce module. Sa page est `/lunar-industrie
 
 ## Le tableau (`ui/KanbanPage.tsx`)
 
-Les tâches viennent du cœur (`readTasks`, comme pour tout Kanban), déplacées par l'action `task.move` ; les branches,
+Les tâches viennent du cœur (`tasksNow` du magasin du SDK, comme pour tout Kanban, ramenées par `ui/api.ts` à
+l'ancienne forme du tableau : les statuts de tous les fournisseurs sur une seule liste), déplacées par l'action `task.move` ; les branches,
 revues et CI des cartes viennent du module commun (`lunar-industries-common`), par les routes du module
 (`contract.ts`). Les pastilles et les actions des autres extensions passent par le point `kanban`, que le module
 déclare comme l'officiel (`ui/points.ts`) ; chaque pastille est dessinée dans sa limite d'erreur.
