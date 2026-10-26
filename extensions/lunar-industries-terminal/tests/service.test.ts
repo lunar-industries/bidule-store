@@ -82,8 +82,8 @@ describe('Terminal (Lunar Industries) · from the core', () => {
     const terminal = serviceOn(objects, [])
     expect(await terminal.repoOf('/lib/src')).toEqual({ path: '/lib', label: 'lib' })
     expect(await terminal.repoOf('/elsewhere')).toBeNull()
-    expect(await terminal.branchShell('/app', 'feat/tsk-1-new')).toMatchObject({ session: 'session', title: 'feat/tsk-1-new', folder: '/app' })
-    await expect(terminal.branchShell('/app', 'nope')).rejects.toThrow(/Branche inconnue/)
+    expect(await terminal.branchShell('b2')).toMatchObject({ session: 'session', title: 'feat/tsk-1-new', folder: '/app' })
+    await expect(terminal.branchShell('nope')).rejects.toThrow(/Branche inconnue/)
   })
 })
 

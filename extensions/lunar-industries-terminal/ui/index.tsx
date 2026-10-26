@@ -33,11 +33,11 @@ const ui: ExtensionUi = {
     },
     // Git's page: a shell on a branch, named after it.
     'terminal.branch': async (args) => {
-      const { repo, name } = args as { repo: string; name: string }
+      const { branchId } = args as { branchId: string }
       const res = await fetch('/api/ext/lunar-industries-terminal/branches/session', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo, name }),
+        body: JSON.stringify({ branchId }),
       })
       const body = (await res.json().catch(() => ({}))) as { session?: string; title?: string; folder?: string; error?: string }
       if (!res.ok || !body.session) {

@@ -224,14 +224,14 @@ export class TerminalService {
   /**
    * A shell on a branch (Git's page): the worktree it is checked out in, else its repo. Only a branch the core knows.
    */
-  async branchShell(repo: string, name: string) {
-    const [known] = await this.ctx.objects.list('repository', { where: { path: repo } })
-    const [branch] = known ? await this.ctx.objects.list('branch', { where: { repositoryId: known.id, name } }) : []
-    if (!known || !branch) throw new TerminalError('Branche inconnue', 404)
-    const folder = await this.#folderOf(known, name)
+  async branchShell(branchId: string) {
+    const branch = await this.ctx.objects.get('branch', branchId).catch(() => null)
+    const known = branch ? await this.ctx.objects.get('repository', branch.repositoryId) : null
+    if (!branch || !known) throw new TerminalError('Branche inconnue', 404)
+    const folder = await this.#folderOf(known, branch.name)
     const place = this.#place(folder)
     const session = this.ctx.terminal.prepare({ ...userShell(place), ...place })
-    return { session, title: name, folder }
+    return { session, title: branch.name, folder }
   }
 
   /**

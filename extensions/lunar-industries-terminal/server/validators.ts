@@ -16,8 +16,7 @@ export const runValidator = vine.create({
 })
 
 export const branchValidator = vine.create({
-  repo: folder.clone(),
-  name: vine.string().trim().minLength(1).maxLength(255),
+  branchId: vine.string().trim().minLength(1).maxLength(100),
 })
 
 export const reviewValidator = vine.create({

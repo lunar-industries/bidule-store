@@ -17,9 +17,9 @@ declare module '@bidule/sdk/contracts' {
     // A shell where a task is worked on (the worktree of its branch, else its repo), the tab named after it: the
     // Kanban's right click. Interface only.
     'terminal.task': (args: { taskId: string }) => void
-    // A shell on a branch (the worktree it is checked out in, else its repo), the tab named after it: Git's page.
-    // Interface only.
-    'terminal.branch': (args: { repo: string; name: string }) => void
+    // A shell on a branch (by its id in the core: the worktree it is checked out in, else its repo's main copy), the
+    // tab named after it: Git's page. A command of the role `terminal`, whoever holds it. Interface only.
+    'terminal.branch': (args: { branchId: string }) => void
   }
 }
 

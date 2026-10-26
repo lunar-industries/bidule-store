@@ -31,7 +31,7 @@ export default class TerminalController {
   }
 
   async branch({ request }: HttpContext) {
-    const { repo, name } = await request.validateUsing(branchValidator)
-    return service.branchShell(repo, name)
+    const { branchId } = await request.validateUsing(branchValidator)
+    return service.branchShell(branchId)
   }
 }
