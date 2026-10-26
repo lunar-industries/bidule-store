@@ -2,7 +2,7 @@ import { glob, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { ServerContext } from '@bidule/api/extensions'
 import type { TerminalLaunch } from '@bidule/api/bridge'
-import type { ForgeClient } from '@bidule/sdk/forges'
+import { siteUrl } from '@bidule/sdk/forges'
 import { parseWslPath } from '@bidule/sdk/paths'
 import {
   justRecipes,
@@ -207,13 +207,18 @@ export class TerminalService {
     return { session, title: argv.join(' '), folder: repo.path }
   }
 
-  // The address of review `number` of a tab's repo (`mr` on GitLab, `pr` on GitHub), when its forge is known.
+  /**
+   * The address of review `number` of a tab's repo, cited `!45` (`mr`) or `#45` (`pr`), when the forge serving the
+   * repo cites them so: the review's own, as the forge read it, else the one its site gives.
+   */
   async reviewUrl(folder: string, kind: 'mr' | 'pr', number: number): Promise<string | null> {
-    const repo = await this.repoOf(folder)
+    const found = await this.repoOf(folder)
+    const [repo] = found ? await this.ctx.objects.list('repository', { where: { path: found.path } }) : []
     if (!repo) return null
-    const client = await forgeOf(this.ctx, repo.path)
-    if (!client || (kind === 'mr') !== (client.kind === 'gitlab')) return null
-    return client.reviewUrl?.(number) ?? null
+    const site = await this.ctx.objects.first('review.site', { repositoryId: repo.id }).catch(() => null)
+    if (!site || site.reviewMark !== (kind === 'mr' ? '!' : '#')) return null
+    const review = (await this.ctx.objects.branches({ repositoryId: repo.id })).find((b) => b.review?.number === number)?.review
+    return review?.url ?? siteUrl(site.reviewUrl, { n: number })
   }
 
   /**
@@ -245,10 +250,4 @@ export class TerminalService {
     const session = this.ctx.terminal.prepare({ ...userShell(place), ...place })
     return { session, title: task?.ref ?? task?.title ?? branch.name, folder }
   }
-}
-
-// The forge serving a repo (by its path), as a client on its project: null without one, or without its token.
-export async function forgeOf(ctx: ServerContext, path: string): Promise<ForgeClient | null> {
-  const [repo] = await ctx.objects.list('repository', { where: { path } })
-  return repo ? ctx.objects.first('review.forge', { repositoryId: repo.id }) : null
 }

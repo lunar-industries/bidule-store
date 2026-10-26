@@ -1,5 +1,4 @@
 import type { SharedBranch } from '@bidule/ext-lunar-industries-common/contract'
-import type { ForgeClient } from '@bidule/sdk/forges'
 import { describe, expect, test } from 'vitest'
 import { KanbanService, type Objects, type Shared } from '../server/service.ts'
 
@@ -25,8 +24,8 @@ const branch = (name: string, patch: Partial<SharedBranch> = {}): SharedBranch =
 })
 
 // The core as the module sees it: lunar-industries-common's commands (each branch's tasks said: `branch→t,x`), a
-// task, a forge.
-function fakeCore(init: { branches?: SharedBranch[]; available?: boolean; forge?: Partial<ForgeClient> } = {}) {
+// task.
+function fakeCore(init: { branches?: SharedBranch[]; available?: boolean } = {}) {
   const branches = init.branches ?? []
   const written: string[] = []
   const shared: Shared = {
@@ -43,7 +42,6 @@ function fakeCore(init: { branches?: SharedBranch[]; available?: boolean; forge?
   }
   const objects = {
     get: async (_type: string, id: string) => (['t', 'x'].includes(id) ? { id } : null),
-    first: async () => init.forge ?? null,
   } as unknown as Objects
   return { service: new KanbanService(objects, shared), written }
 }
@@ -105,28 +103,10 @@ describe('the cards’ branches', () => {
     expect(written).toEqual([])
   })
 
-  test('a mark leads to the review, else the pipeline, else asks the forge now, else nowhere', async () => {
+  test('a mark leads where the forges said (the review, else the pipeline), else nowhere', async () => {
     const ref = { repo: '/r/app', name: 'feat/a' }
     const known = fakeCore({ branches: [branch('feat/a', { url: 'https://r/1' })] })
     expect(await known.service.reviewUrl(ref)).toBe('https://r/1')
-    const withReview = fakeCore({
-      branches: [branch('feat/a')],
-      forge: { review: async () => ({ number: 1, state: 'open', draft: false, url: 'https://r/9', description: '' }) },
-    })
-    expect(await withReview.service.reviewUrl(ref)).toBe('https://r/9')
-    const pipelines: string[] = []
-    const withPipeline = fakeCore({
-      branches: [branch('feat/a')],
-      forge: {
-        review: async () => null,
-        pipeline: async (sha: string) => {
-          pipelines.push(sha)
-          return { id: 3, status: 'ok', url: 'https://p/3' }
-        },
-      },
-    })
-    expect(await withPipeline.service.reviewUrl(ref)).toBe('https://p/3')
-    expect(pipelines).toEqual(['sha-feat/a'])
     expect(await fakeCore({ branches: [branch('feat/a')] }).service.reviewUrl(ref)).toBeNull()
     expect(await fakeCore().service.reviewUrl(ref)).toBeNull()
   })

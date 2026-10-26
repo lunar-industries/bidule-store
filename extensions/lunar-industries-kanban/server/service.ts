@@ -3,8 +3,8 @@ import type { BranchFilter, SharedBranch } from '@bidule/ext-lunar-industries-co
 import type { BranchRef, Branches, KanbanBranch } from '../contract.ts'
 import { KanbanError } from './errors.ts'
 
-// What the module reads of the core's objects itself: a task, and the forge serving a repo.
-export type Objects = Pick<ServerContext['objects'], 'get' | 'first'>
+// What the module reads of the core's objects itself: a task.
+export type Objects = Pick<ServerContext['objects'], 'get'>
 
 // lunar-industries-common's commands: the branches as the core has them, and a branch's tasks set by hand.
 export interface Shared {
@@ -75,18 +75,11 @@ export class KanbanService {
     if (!linked) throw new KanbanError(`Branche ou tâche inconnue : ${b.name}`, 404)
   }
 
-  // Where a mark of a card leads: the branch's review, else its pipeline, as the forges gave them; else asked of the
-  // forge serving the repo now; null when neither is known.
+  // Where a mark of a card leads: the branch's review, else its pipeline, as the forges gave them (their sources'
+  // addresses); null when neither is known.
   async reviewUrl(ref: BranchRef): Promise<string | null> {
     const { available, branches } = await this.shared.branches({ repo: ref.repo, name: ref.name })
     if (!available) throw new KanbanError(NO_BRANCHES, 409)
-    const [branch] = branches
-    if (!branch) return null
-    if (branch.url) return branch.url
-    const forge = await this.objects.first('review.forge', { repositoryId: branch.repositoryId })
-    if (!forge) return null
-    const review = await forge.review(branch.name)
-    if (review) return review.url
-    return branch.headSha ? ((await forge.pipeline(branch.headSha))?.url ?? null) : null
+    return branches[0]?.url ?? null
   }
 }

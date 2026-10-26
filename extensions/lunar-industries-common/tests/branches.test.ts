@@ -20,11 +20,11 @@ describe('the branches as the core has them', () => {
           ],
           review: {
             id: 'v', provider: 'gitlab', url: 'https://r/7', number: 7, label: 'MR !7', state: 'open', draft: false,
-            comments: null, title: null,
+            comments: null, title: null, description: null, approvals: null,
           },
           ci: 'none',
         }),
-        state('b', 'feat/b', { repositoryId: 'r2', pipeline: { id: 'p', provider: 'gitlab', url: 'https://p/1', status: 'fail', headSha: null }, ci: 'fail' }),
+        state('b', 'feat/b', { repositoryId: 'r2', pipeline: { id: 'p', provider: 'gitlab', url: 'https://p/1', status: 'fail', headSha: null, forgeId: '1', duration: null }, ci: 'fail' }),
       ],
     })
     const { branches } = await sharedBranches(objects, NONE, {})
