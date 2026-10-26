@@ -4,17 +4,18 @@ Le cœur et le contrat des extensions sont décrits dans le `CLAUDE.md` et le `d
 fichier ne dit que ce qui est propre à ce module.
 
 Ce module porte ce que les modules Lunar Industries partagent. Côté serveur, ce sont les branches telles que le cœur
-les a (tâches, revue, CI), le lien d'une branche à ses tâches fait à la main, et les réglages communs (branches
-d'intégration, cibles des revues, nommage des branches). Une revue s'appelle MR sur GitLab et PR sur GitHub ; un
+les a (« la branche avec son état », `ctx.objects.branches` : tâches, revue, CI), le lien d'une branche à ses tâches fait
+à la main (par `ctx.objects.setTasks` du cœur), et les réglages communs (branches d'intégration, cibles des revues,
+nommage des branches). Ces réglages ont été repris par le cœur comme propriétés des dépôts (une migration, une fois) :
+c'est là que Bidule les lit désormais ; une branche d'intégration de ce module s'ajoute à celles du dépôt. Une revue s'appelle MR sur GitLab et PR sur GitHub ; un
 texte qui vaut pour les deux dit « revue (MR ou PR) ». Les autres modules les demandent par ses commandes
 (`lunar-industries-common.branches`, `.link`, `.setTasks`, `.settings`, `.setTarget`) et n'importent de lui que des
 types (`contract.ts`) : une fois empaquetés, les modules ne se voient pas.
 
 Une branche peut servir plusieurs tâches (une branche plus grosse que prévu) : `taskIds` les donne toutes, celles
 liées à la main d'abord, et `taskId` reste la première. `.link` remplace les tâches d'une branche par une seule (ou
-aucune) ; `.setTasks` lui donne exactement celles qu'on lui passe, toutes liées à la main. Une tâche que la règle du
-cœur avait liée par le nom de la branche le reste ainsi, puisque le cœur retire les liens par le nom dès qu'un lien
-est fait à la main.
+aucune) ; `.setTasks` lui donne exactement celles qu'on lui passe, toutes liées à la main. Les deux passent par `setTasks`
+du cœur : une tâche qui n'est pas dans la liste perd son lien, quelle qu'en soit l'origine.
 
 ## Les composants d'interface (`ui/`)
 
