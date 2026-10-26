@@ -75,7 +75,7 @@
       }
     ],
     "to": {
-      "kanban": {
+      "task": {
         "actions": [
           {
             "command": "terminal.task",

@@ -9,8 +9,9 @@ fichier ne dit que ce qui est propre à ce module. Sa page est `/lunar-industrie
 Les tâches viennent du cœur (`tasksNow` du magasin du SDK, comme pour tout Kanban, ramenées par `ui/api.ts` à
 l'ancienne forme du tableau : les statuts de tous les fournisseurs sur une seule liste), déplacées par l'action `task.move` ; les branches,
 revues et CI des cartes viennent du module commun (`lunar-industries-common`), par les routes du module
-(`contract.ts`). Les pastilles et les actions des autres extensions passent par le point `kanban`, que le module
-déclare comme l'officiel (`ui/points.ts`) ; chaque pastille est dessinée dans sa limite d'erreur.
+(`contract.ts`). Les actions que les autres modules offrent sur une tâche viennent du point `task` du cœur
+(`contributes.to.task.actions`, lues par `ui/points.ts`), les mêmes que dans le menu de la carte du cœur. Le module
+garde sa carte et son menu jusqu'à ce que Piloter les reprenne (phase 5 de la refonte), puis il s'arrête.
 
 - **Au bord du bandeau** : la recherche (`ToolSearch`, dans le titre, la référence et les branches), le filtre de rôle
   (`ToolFilter` : Toutes, Responsable, Participant, gardé par le réglage caché `lunar-industries-kanban.role`), le

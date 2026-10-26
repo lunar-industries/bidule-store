@@ -1,5 +1,5 @@
-import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
-import { ExtensionBoundary, type Task } from '@bidule/sdk'
+import type { DragEvent, KeyboardEvent, MouseEvent } from 'react'
+import type { Task } from '@bidule/sdk'
 import { Icon } from '@bidule/ext-lunar-industries-common/ui/icons'
 import type { KanbanBranch } from '../contract.ts'
 import { badgeOf, branchLabel, marksOf, noteOf, type Mark, type Tone } from './layout.ts'
@@ -14,12 +14,9 @@ const TONE_CLASS: Record<Tone, string> = {
   accent: 'lunar-tone-accent',
 }
 
-// What another extension gives a card: its badges, drawn by its own interface.
-export type Part = { id: string; title: string; badges: (task: Task) => ReactNode }
-
 /**
  * A card (maquette « Kanban Lunar », La carte) : its reference (and its tool, when two give tasks), its due date, its
- * title, its branch, then its marks (review, CI, the other extensions'), and a note when it says something. One stop
+ * title, its branch, then its marks (review, CI), and a note when it says something. One stop
  * of Tab for the whole board: the board gives each card its `tabIndex` and its keys. A click selects it with Ctrl or
  * Shift, a double click opens it in its tool, a right click opens its menu.
  */
@@ -29,7 +26,6 @@ export function Card({
   today,
   branches,
   tool,
-  parts,
   active,
   selected,
   branchOver,
@@ -48,7 +44,6 @@ export function Card({
   branches: KanbanBranch[]
   // The tool it comes from, said when two give tasks.
   tool: string | null
-  parts: Part[]
   active: boolean
   selected: boolean
   branchOver: boolean
@@ -101,7 +96,7 @@ export function Card({
         </span>
       )}
       {branchOver && <div className="lik-link-hint">Lâche pour lier la branche à cette tâche</div>}
-      {(marks.length > 0 || parts.length > 0) && (
+      {marks.length > 0 && (
         <div className="row lik-marks">
           {marks.map((m) => (
             <button
@@ -117,19 +112,9 @@ export function Card({
               {m.text}
             </button>
           ))}
-          {parts.map((p) => (
-            <ExtensionBoundary key={p.id} subject={`L'extension ${p.title}`} show="quiet">
-              <Badges part={p} task={task} />
-            </ExtensionBoundary>
-          ))}
         </div>
       )}
       {note && <div className="lik-note">{note}</div>}
     </article>
   )
-}
-
-// Another extension's badges, drawn inside its error boundary: one that throws takes only itself away.
-function Badges({ part, task }: { part: Part; task: Task }) {
-  return <>{part.badges(task)}</>
 }

@@ -46,7 +46,7 @@ import {
   type Loaded,
 } from './api.ts'
 import { BranchPanel } from './BranchPanel.tsx'
-import { Card, type Part } from './Card.tsx'
+import { Card } from './Card.tsx'
 import {
   applicableMerges,
   attentionOf,
@@ -76,7 +76,7 @@ import {
 } from './layout.ts'
 import { latestOf } from './latest.ts'
 import { LinkBranches } from './LinkBranches.tsx'
-import { useKanbanContributions } from './points.ts'
+import { useTaskActions } from './points.ts'
 
 // The columns folded or unfolded against their default, and the role the board shows: hidden settings of the module,
 // kept by the API from one launch to the next (useSavedState).
@@ -89,9 +89,6 @@ const readRole = (raw: unknown) => ROLES.find((r) => r === raw) ?? null
 // What needs attention, as the row under the banner filters it.
 type Attention = Exclude<TaskFilter, Role>
 
-// The badges this board leaves out, by extension: the official Git extension's (`branches`) counts the task's
-// branches, which the card already says.
-const SAID_BY_THE_CARD = new Set(['branches'])
 
 // What a drag carries: cards (to another column, their ids one per line) or a branch of the panel (onto a card).
 const TASK_TYPE = 'application/x-lik-task'
@@ -178,8 +175,7 @@ export function Kanban() {
   const { board, setBoard, readAt, error, reload } = useBoard()
   const { git, setGit, gitError, reloadGit } = useBranches()
   const values = useSettingValues()
-  const contributions = useKanbanContributions()
-  const { actionsFor } = contributions
+  const { actionsFor } = useTaskActions()
   const [toggledList, setToggled] = useSavedState<string[]>(TOGGLED, [], readList)
   const toggled = useMemo((): ReadonlySet<string> => new Set(toggledList), [toggledList])
   const [role, setRole] = useSavedState<Role>(ROLE, 'all', readRole)
@@ -236,9 +232,6 @@ export function Kanban() {
   const attentionCount = ready ? attentionOf(ready.tasks, ctx) : { late: 0, today: 0, ci: 0 }
   const twoTools = providers.length > 1
   const toolOf = (task: Task) => (twoTools ? (providers.find((p) => p.id === task.provider)?.title ?? null) : null)
-  const parts: Part[] = contributions.parts
-    .filter(({ id }) => !SAID_BY_THE_CARD.has(id))
-    .flatMap(({ id, kanban }) => (kanban.badges ? [{ id, title: id, badges: kanban.badges }] : []))
 
   // What the board shows: the search, the role and what needs attention, each column sorted (late ones first).
   const shownTasks = (col: Column) =>
@@ -796,7 +789,6 @@ export function Kanban() {
                           today={today}
                           branches={ctx.branches(t)}
                           tool={toolOf(t)}
-                          parts={parts}
                           active={t.id === activeCard}
                           selected={selected.has(t.id)}
                           branchOver={branchOver === t.id}
