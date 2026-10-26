@@ -1,105 +1,72 @@
 import type { ObjectsContext } from '@bidule/api/extensions'
-import type { StoredObject } from '@bidule/sdk/objects'
+import type { BranchFilter as CoreFilter, BranchState } from '@bidule/sdk/branches'
 import type { BranchFilter, SharedBranch } from '../contract.ts'
 
-// What the module reads and writes of the core's objects.
-export type Objects = Pick<ObjectsContext, 'providers' | 'list' | 'get' | 'relations' | 'related' | 'link' | 'unlink'>
+// What the module reads and writes of the core's objects: the branches with their state, and their tasks.
+export type Objects = Pick<ObjectsContext, 'providers' | 'list' | 'branches' | 'setTasks'>
 
-const has = (objects: Objects, type: 'branch' | 'review' | 'pipeline') => objects.providers(type).length > 0
-
-// The branches a filter names: those a task links, else a repo's (one of them by its name), else all.
-async function chosen(objects: Objects, filter: BranchFilter): Promise<StoredObject<'branch'>[]> {
-  if (filter.taskId) {
-    const ids = (await objects.related(filter.taskId, { kind: 'branch', type: 'branch' }))
-      .filter((l) => l.outgoing)
-      .map((l) => l.id)
-    return ids.length ? objects.list('branch', { ids }) : []
-  }
-  if (filter.repo) {
-    const [repo] = await objects.list('repository', { where: { path: filter.repo } })
-    if (!repo) return []
-    return objects.list('branch', { where: filter.name ? { repositoryId: repo.id, name: filter.name } : { repositoryId: repo.id } })
-  }
-  return objects.list('branch')
+// The core's filter for this one: a task's branches, else a repo's (one of them by its name), else all; null for a
+// repo the core does not know.
+async function coreFilter(objects: Objects, filter: BranchFilter): Promise<CoreFilter | null> {
+  if (filter.taskId) return { taskId: filter.taskId }
+  if (!filter.repo) return {}
+  const [repo] = await objects.list('repository', { where: { path: filter.repo } })
+  if (!repo) return null
+  return filter.name ? { repositoryId: repo.id, name: filter.name } : { repositoryId: repo.id }
 }
 
+const shared = (b: BranchState, integration: Set<string>): SharedBranch => ({
+  id: b.id,
+  repositoryId: b.repositoryId,
+  repo: b.repository.path,
+  repoLabel: b.repository.label,
+  name: b.name,
+  isDefault: b.isDefault,
+  integration: (b.integration && !b.isDefault) || integration.has(b.name.toLowerCase()),
+  // Those linked by hand first.
+  taskIds: [...b.tasks.filter((t) => t.origin === 'manual'), ...b.tasks.filter((t) => t.origin !== 'manual')].map((t) => t.id),
+  taskId: (b.tasks.find((t) => t.origin === 'manual') ?? b.tasks[0])?.id ?? null,
+  lastCommitAt: b.lastCommitAt,
+  headSha: b.headSha,
+  reviewNumber: b.review?.number ?? null,
+  reviewRef: b.review?.label ?? null,
+  reviewState: b.review?.state ?? null,
+  ci: b.ci,
+  url: b.review?.url ?? b.pipeline?.url ?? null,
+})
+
 /**
- * The branches as the core has them, newest first: their repository, their task (the core's `task → branch` links,
- * the one made by hand first), their latest review and their CI (the forges' objects): `merged` once the review is,
- * else the pipeline of the last commit, `none` for a review without a pipeline, null when no forge read the branch.
- * `integration`: lower-cased names of the integration branches.
+ * The branches as the core has them, with their state (`ctx.objects.branches`), newest first. `integration`: the
+ * lower-cased names of the integration branches this module's setting adds to each repository's own.
  */
 export async function sharedBranches(
   objects: Objects,
   integration: Set<string>,
   filter: BranchFilter
 ): Promise<{ available: boolean; branches: SharedBranch[] }> {
-  if (!has(objects, 'branch')) return { available: false, branches: [] }
-  const branches = await chosen(objects, filter)
-  if (!branches.length) return { available: true, branches: [] }
-  const [repos, links, reviews, pipelines] = await Promise.all([
-    objects.list('repository', { ids: [...new Set(branches.map((b) => b.repositoryId))] }),
-    objects.relations({ kind: 'branch', fromType: 'task', toType: 'branch' }),
-    has(objects, 'review') ? objects.list('review') : [],
-    has(objects, 'pipeline') ? objects.list('pipeline') : [],
-  ])
-  const repoOf = new Map(repos.map((r) => [r.id, r]))
-  const shared = branches.flatMap((b): SharedBranch[] => {
-    const repo = repoOf.get(b.repositoryId)
-    if (!repo) return []
-    const linked = links.filter((l) => l.to.id === b.id)
-    const taskIds = [...linked.filter((l) => l.origin === 'manual'), ...linked.filter((l) => l.origin !== 'manual')].map((l) => l.from.id)
-    const review = reviews.filter((r) => r.branchId === b.id).sort((x, y) => y.number - x.number)[0]
-    const pipeline = pipelines.find((p) => p.branchId === b.id)
-    return [
-      {
-        id: b.id,
-        repositoryId: repo.id,
-        repo: repo.path,
-        repoLabel: repo.label,
-        name: b.name,
-        isDefault: b.isDefault,
-        integration: integration.has(b.name.toLowerCase()),
-        taskId: taskIds[0] ?? null,
-        taskIds,
-        lastCommitAt: b.lastCommitAt,
-        headSha: b.headSha,
-        reviewNumber: review?.number ?? null,
-        reviewRef: review?.label ?? null,
-        reviewState: review?.state ?? null,
-        ci: !review && !pipeline ? null : review?.state === 'merged' ? 'merged' : (pipeline?.status ?? 'none'),
-        url: review?.url ?? pipeline?.url ?? null,
-      },
-    ]
-  })
-  return { available: true, branches: shared.sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? '')) }
+  if (!objects.providers('branch').length) return { available: false, branches: [] }
+  const asked = await coreFilter(objects, filter)
+  if (!asked) return { available: true, branches: [] }
+  return { available: true, branches: (await objects.branches(asked)).map((b) => shared(b, integration)) }
 }
 
-/**
- * A branch of a repo (by its path) linked to a task by hand, in the core: the task's link (origin `manual`: the core's
- * rule on branch names no longer moves it), or the `noTask` mark when `taskId` is null; its other tasks and the
- * opposite mark go. False when the core knows neither the branch nor the task.
- */
+// A branch of a repo (by its path) linked to a task by hand, or marked as having none (null).
 export async function linkByHand(objects: Objects, repo: string, name: string, taskId: string | null): Promise<boolean> {
   return setTasksByHand(objects, repo, name, taskId ? [taskId] : [])
 }
 
 /**
- * A branch's tasks are exactly these now, all linked by hand (a task the rule linked is kept that way, since the core
- * drops a link by name once one is made by hand); none: the `noTask` mark. False when the core knows neither the
- * branch nor one of the tasks.
+ * A branch's tasks are exactly these now, linked by hand; none: marked as having none (the core's `setTasks`). False
+ * when the core knows neither the branch nor one of the tasks.
  */
 export async function setTasksByHand(objects: Objects, repo: string, name: string, taskIds: string[]): Promise<boolean> {
-  const [r] = await objects.list('repository', { where: { path: repo } })
-  const [found] = r ? await objects.list('branch', { where: { repositoryId: r.id, name } }) : []
+  const asked = await coreFilter(objects, { repo, name })
+  const [found] = asked ? await objects.branches(asked) : []
   if (!found) return false
-  const wanted = [...new Set(taskIds)]
-  for (const id of wanted) if (!(await objects.get('task', id))) return false
-  const branch = { type: 'branch' as const, id: found.id }
-  for (const id of wanted) await objects.link({ type: 'task', id }, 'branch', branch, 'manual')
-  if (!wanted.length) await objects.link(branch, 'noTask', branch, 'manual')
-  for (const l of await objects.related(found.id, { kind: 'branch', type: 'task' }))
-    if (!l.outgoing && !wanted.includes(l.id)) await objects.unlink({ type: 'task', id: l.id }, 'branch', branch)
-  if (wanted.length) await objects.unlink(branch, 'noTask', branch)
-  return true
+  try {
+    await objects.setTasks(found.id, taskIds)
+    return true
+  } catch {
+    return false
+  }
 }

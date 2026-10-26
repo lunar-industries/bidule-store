@@ -234,13 +234,10 @@ export class TerminalService {
    * branch's repo. The tab takes the task's reference.
    */
   async taskShell(taskId: string) {
-    // The task's branches: the core's links `task → branch`.
-    const ids = (await this.ctx.objects.related(taskId, { kind: 'branch', type: 'branch' }))
-      .filter((l) => l.outgoing)
-      .map((l) => l.id)
-    const branches = ids.length ? await this.ctx.objects.list('branch', { ids }) : []
-    const [branch] = branches.sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? ''))
-    const repo = branch ? await this.ctx.objects.get('repository', branch.repositoryId) : null
+    // The task's branches, as the core gives them: the most recent commit first.
+    const [state] = await this.ctx.objects.branches({ taskId })
+    const branch = state ?? null
+    const repo = state?.repository ?? null
     if (!branch || !repo) throw new TerminalError("Cette tâche n'a pas encore de branche", 404)
     const folder = await this.#folderOf(repo, branch.name)
     const task = await this.ctx.objects.get('task', taskId).catch(() => null)

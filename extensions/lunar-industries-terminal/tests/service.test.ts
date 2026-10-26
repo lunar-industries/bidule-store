@@ -31,12 +31,16 @@ function serviceOn(objects: Objects, prepared: unknown[]) {
       },
       related: async (id: string) =>
         (objects.tasks.find((t) => t.id === id)?.branches ?? []).map((branch) => ({ id: branch, outgoing: true })),
+      // A task's branches with their state, as the core gives them: the most recent commit first.
+      branches: async ({ taskId }: { taskId: string }) =>
+        objects.branches
+          .filter((b) => objects.tasks.find((t) => t.id === taskId)?.branches.includes(b.id))
+          .sort((a, b) => (b.lastCommitAt ?? '').localeCompare(a.lastCommitAt ?? ''))
+          .map((b) => ({ ...b, repository: objects.repositories.find((r) => r.id === b.repositoryId) })),
       // git is not there: a branch's shell opens in its repo, not a worktree.
-      client: () => ({
-        worktrees: async () => {
-          throw new Error('git absent')
-        },
-      }),
+      act: async () => {
+        throw new Error('git absent')
+      },
       first: async () => null,
     },
     terminal: {
