@@ -76,11 +76,18 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
         const branch = branchById.get(branchOf.get(a.id) ?? '')
         const repo = repoById.get(repoOf.get(a.id) ?? branch?.repositoryId ?? '')
         const task = alive(taskOfActivity.get(a.id))
-        if (repo && a.kind !== 'status')
+        // git's work only: what is not committed yet (`files`, `edit` before the core's 0.4) is the engine's `edit`.
+        const gitKind =
+          a.kind === 'files' || a.kind === 'edit'
+            ? 'edit'
+            : a.kind === 'checkout' || a.kind === 'commit' || a.kind === 'branch'
+              ? a.kind
+              : null
+        if (repo && gitKind)
           return [
             {
               at: a.at,
-              kind: a.kind,
+              kind: gitKind,
               repo: repo.path,
               branch: branch?.name ?? null,
               detail: a.detail ?? '',
@@ -97,9 +104,9 @@ export function coreWork(objects: Objects, linkByHand: LinkByHand): Work {
               repo: null,
               branch: null,
               // The status it went to (the one it left is the provider's own).
-              detail: `→ ${a.detail ?? ''}`,
+              detail: `→ ${a.status ?? ''}`,
               taskIds: [task],
-              toGroup: groups.get(a.detail ?? '') ?? null,
+              toGroup: groups.get(a.status ?? '') ?? null,
             },
           ]
         return []

@@ -72,7 +72,7 @@ export async function activate(ctx: ServerContext) {
       ...moves.map((m) => ({
         remoteId: `status ${m.at} ${m.taskId}`,
         taskId: m.taskId,
-        fields: { at: m.at, kind: 'status' as const, detail: m.to, author: null },
+        fields: { at: m.at, kind: 'status' as const, detail: null, author: null, status: m.to },
         data: { from: m.from },
       })),
     ].flatMap(({ taskId, ...a }) => {

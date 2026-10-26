@@ -24,8 +24,8 @@ function objectsWithGoneTask() {
   const at = '2026-10-16T09:00:00.000Z'
   const lists: Record<string, unknown[]> = {
     activity: [
-      { id: 'a1', at, kind: 'status', detail: 'En cours' },
-      { id: 'a2', at, kind: 'status', detail: 'En cours' },
+      { id: 'a1', at, kind: 'status', detail: null, status: 'En cours' },
+      { id: 'a2', at, kind: 'status', detail: null, status: 'En cours' },
       { id: 'a3', at, kind: 'commit', detail: 'fix' },
     ],
     repository: [{ id: 'r1', path: '/r/app', label: 'app' }],
