@@ -1,5 +1,5 @@
 import type { StoredType } from '@bidule/sdk/objects'
-import type { LogEntry, LogLine, TaskGroup, TimeLog } from '@bidule/sdk/tasks'
+import type { LogEntry, LogLine, TaskGroup } from '@bidule/sdk/tasks'
 import { Days, type DayLog, type Work, type WorkBranch } from '../server/days.ts'
 import type { WorkEvent } from '../server/engine.ts'
 import { DEFAULT_SETTINGS, type TempsSettings } from '../server/settings.ts'
@@ -201,7 +201,7 @@ export class FakeTimeLog implements TimeLog {
 }
 
 // A Time Log with a task and a share only (no labels, no reading back).
-export class PlainTimeLog implements TimeLog {
+export class PlainTimeLog implements DayLog {
   readonly name = 'Plain'
   async configured() {
     return true

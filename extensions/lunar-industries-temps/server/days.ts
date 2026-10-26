@@ -1,4 +1,4 @@
-import type { LogEntry, LogFields, LogLine, TimeLog } from '@bidule/sdk/tasks'
+import type { LogEntry, LogFields, LogLine } from '@bidule/sdk/tasks'
 import type { DayLine, DayState, DaySummary, DayView, LineInput, Summary } from '../contract.ts'
 import {
   addDays,
@@ -58,7 +58,17 @@ export type WorkTask = { title: string; ref: string | null; url: string | null }
 
 // The Time Log as the days use it: the user's entries of a period and, when its provider offers them, its fields and
 // a whole day written at once.
-export type DayLog = Pick<TimeLog, 'name' | 'configured' | 'read' | 'fields' | 'sendDay'>
+export type DayLog = {
+  // The tool, as the interface names it (« Notion »).
+  name: string
+  configured(): Promise<boolean>
+  // What a line can carry (a label among the log's, other properties).
+  fields?(): Promise<LogFields>
+  // The user's own entries between two days (both included).
+  read?(from: string, to: string): Promise<LogEntry[]>
+  // A whole day: one entry per (task, label); the day's entries as the log has them now.
+  sendDay?(day: string, lines: LogLine[]): Promise<LogEntry[]>
+}
 type ReadingLog = DayLog & Required<Pick<DayLog, 'read'>>
 const reads = (log: DayLog | null): log is ReadingLog => typeof log?.read === 'function'
 type SendingLog = DayLog & Required<Pick<DayLog, 'sendDay'>>

@@ -733,26 +733,10 @@ export class TerminalTabs {
     term.focus()
   }
 
-  // The marks other extensions put on the tabs of a folder (Claude Code waiting for an answer there…).
-  #marks = new Map<string, { state: TerminalMark; label: string | null }>()
-
-  mark(folder: string, state: TerminalMark | null, label?: string): void {
-    if (state) this.#marks.set(folder, { state, label: label ?? null })
-    else this.#marks.delete(folder)
-    this.#changed()
-  }
-
-  // A tab's mark: the one of the folder it works in (what an extension says, Claude Code waiting…), else a command
-  // of its own that ended out of sight.
+  // A tab's mark: a program of the tab waiting for the user (its notification), or a command of its own that ended out
+  // of sight.
   markOf(tab: TerminalTab): { state: TerminalMark; label: string | null } | null {
-    // A program of the tab waiting for the user comes first: it is what the user has to do.
-    if (tab.notice?.state === 'waiting') return tab.notice
-    return (tab.folder ? this.#marks.get(tab.folder) : undefined) ?? tab.notice
-  }
-
-  // The folders of the tabs still running (the Claude page shows which task folders have one).
-  folders(): Set<string> {
-    return new Set(this.tabs.filter((t) => t.folder && t.panes[0]?.state !== 'exited').map((t) => t.folder!))
+    return tab.notice
   }
 
   #makeTerm(ghostty: Ghostty, theme: ITheme): Terminal {

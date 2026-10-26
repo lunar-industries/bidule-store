@@ -1,5 +1,5 @@
 import { navigate, react, type ExtensionUi } from '@bidule/sdk'
-import type { TerminalMark } from '../contract.ts'
+import '../contract.ts'
 import { PAGE } from './page.ts'
 import { syncScripts } from './script-commands.ts'
 import { TerminalPage } from './TerminalPage.tsx'
@@ -25,11 +25,6 @@ const ui: ExtensionUi = {
       const { session, title, folder } = args as { session: string; title: string; folder?: string }
       await terminals.add({ session }, title, folder)
       navigate(PAGE)
-    },
-    'terminal.folders': () => [...terminals.folders()],
-    'terminal.mark': (args) => {
-      const { folder, state, label } = args as { folder: string; state: TerminalMark | null; label?: string }
-      terminals.mark(folder, state, label)
     },
     // Git's page: a shell on a branch, named after it.
     'terminal.branch': async (args) => {

@@ -7,19 +7,13 @@ export type TerminalMark = 'working' | 'waiting' | 'done' | 'failed'
 declare module '@bidule/sdk/contracts' {
   interface Commands {
     'terminal.new': (args: void) => void
-    // A tab with a prepared command; `folder` says where it works (the Claude page shows which folders have one).
+    // A tab with a prepared command; `folder` says where it works (its tab is named after it).
     'terminal.open': (args: { session: string; title: string; folder?: string }) => void
-    // The folders of the tabs still running (interface only).
-    'terminal.folders': (args: void) => string[]
-    // A mark on the tabs working in `folder` (what a session there is doing: Claude Code waits for an answer…), or
-    // none (`state` null). Interface only.
-    'terminal.mark': (args: { folder: string; state: TerminalMark | null; label?: string }) => void
-    // A shell where a task is worked on (the worktree of its branch, else its repo), the tab named after it: the
-    // Kanban's right click. Interface only.
+    // A shell where a task is worked on (the worktree of its branch, else its repo), the tab named after it: a task
+    // card's menu. Interface only.
     'terminal.task': (args: { taskId: string }) => void
     // A shell on a branch (by its id in the core: the worktree it is checked out in, else its repo's main copy), the
     // tab named after it: Git's page. A command of the role `terminal`, whoever holds it. Interface only.
     'terminal.branch': (args: { branchId: string }) => void
   }
 }
-

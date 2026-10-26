@@ -50,18 +50,6 @@
         "hidden": true
       },
       {
-        "id": "terminal.folders",
-        "title": "Dossiers des onglets ouverts",
-        "group": "Terminal",
-        "hidden": true
-      },
-      {
-        "id": "terminal.mark",
-        "title": "Marquer les onglets d’un dossier",
-        "group": "Terminal",
-        "hidden": true
-      },
-      {
         "id": "terminal.task",
         "title": "Ouvrir un terminal sur la tâche",
         "group": "Terminal",
